@@ -32,5 +32,5 @@
 extern crate alloc;
 
 pub mod vm;
-#[cfg(test)]
-pub mod tests;
+pub mod wasmi;
+

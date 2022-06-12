@@ -28,7 +28,6 @@
 
 use crate::vm::*;
 use alloc::borrow::ToOwned;
-use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::String;
@@ -46,26 +45,27 @@ use wasmi::NopExternals;
 use wasmi::RuntimeValue;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-struct WasmiFunctionName(String);
-type WasmiFunctionArgs<'a> = &'a [RuntimeValue];
+pub struct WasmiFunctionName(String);
+pub type WasmiFunctionArgs<'a> = &'a [RuntimeValue];
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-struct WasmiModuleName(String);
+pub struct WasmiModuleName(String);
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-struct WasmiHostFunctionIndex(usize);
-type WasmiHostFunction =
-    fn(&mut WasmiVM, &[RuntimeValue]) -> Result<Option<RuntimeValue>, WasmiVMError>;
-type WasmiHostModule = BTreeMap<WasmiFunctionName, (WasmiHostFunctionIndex, WasmiHostFunction)>;
+pub struct WasmiHostFunctionIndex(usize);
+pub type WasmiHostFunction<T> =
+    fn(&mut T, &[RuntimeValue]) -> Result<Option<RuntimeValue>, WasmiVMError>;
+pub type WasmiHostModule<T> =
+    BTreeMap<WasmiFunctionName, (WasmiHostFunctionIndex, WasmiHostFunction<T>)>;
 
 #[derive(Debug)]
-struct WasmiModule {
+pub struct WasmiModule {
     inner_module: ModuleRef,
     memory: MemoryRef,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-struct WasmiModuleId(u32);
+pub struct WasmiModuleId(u32);
 #[derive(PartialEq, Eq, Debug)]
-enum WasmiVMError {
+pub enum WasmiVMError {
     WasmiError(wasmi::Error),
     WasmiTrap(wasmi::Trap),
     ModuleNotFound,
@@ -91,30 +91,31 @@ impl Display for WasmiVMError {
 }
 impl HostError for WasmiVMError {}
 
-struct WasmiVM {
-    codes: BTreeMap<WasmiModuleId, Vec<u8>>,
-    loaded_modules: BTreeMap<WasmiModuleId, WasmiModule>,
-    host_functions_definitions: BTreeMap<WasmiModuleName, WasmiHostModule>,
-    host_functions: BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction>,
-    counter: u32,
+pub struct AsWasmiVM<T>(T);
+
+pub trait IsWasmiVM<T> {
+    fn codes(&self) -> &BTreeMap<WasmiModuleId, Vec<u8>>;
+    fn host_functions_definitions(&self) -> &BTreeMap<WasmiModuleName, WasmiHostModule<T>>;
+    fn host_functions(&self) -> &BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<T>>;
 }
 
-impl Externals for WasmiVM {
+impl<T: IsWasmiVM<T>> Externals for AsWasmiVM<T> {
     fn invoke_index(
         &mut self,
         index: usize,
         args: wasmi::RuntimeArgs,
     ) -> Result<Option<RuntimeValue>, wasmi::Trap> {
         Ok((self
-            .host_functions
+            .0
+            .host_functions()
             .get(&WasmiHostFunctionIndex(index))
             .ok_or(WasmiVMError::HostFunctionNotFound(
-            WasmiHostFunctionIndex(index),
-        ))?)(self, args.as_ref())?)
+                WasmiHostFunctionIndex(index),
+            ))?)(&mut self.0, args.as_ref())?)
     }
 }
 
-impl ImportResolver for WasmiVM {
+impl<T: IsWasmiVM<T>> ImportResolver for AsWasmiVM<T> {
     fn resolve_func(
         &self,
         module_name: &str,
@@ -122,7 +123,8 @@ impl ImportResolver for WasmiVM {
         signature: &wasmi::Signature,
     ) -> Result<wasmi::FuncRef, wasmi::Error> {
         let module = self
-            .host_functions_definitions
+            .0
+            .host_functions_definitions()
             .get(&WasmiModuleName(module_name.to_owned()))
             .ok_or(wasmi::Error::Instantiation(format!(
                 "A module tried to load an unknown host module: {}",
@@ -170,7 +172,8 @@ impl ImportResolver for WasmiVM {
         ))
     }
 }
-impl VM for WasmiVM {
+
+impl<T: IsWasmiVM<T>> VM for AsWasmiVM<T> {
     type FunctionName = WasmiFunctionName;
     type FunctionArgs<'a> = WasmiFunctionArgs<'a>;
     type RawOutput<'a> = Either<&'a MemoryRef, (&'a MemoryRef, RuntimeValue)>;
@@ -188,7 +191,8 @@ impl VM for WasmiVM {
         Self::Error: From<E>,
     {
         let module_code = self
-            .codes
+            .0
+            .codes()
             .get(module_id)
             .ok_or(WasmiVMError::ModuleNotFound)?;
         let wasmi_module = wasmi::Module::from_buffer(&module_code)?;
@@ -233,104 +237,140 @@ impl TryFrom<Either<&MemoryRef, (&MemoryRef, RuntimeValue)>> for DummyOutput {
     }
 }
 
-const NOT_IMPLEMENTED: &'static str = "NOT_IMPLEMENTED_MAGICC0DE";
-fn env_assert(_: &mut WasmiVM, _: &[RuntimeValue]) -> Result<Option<RuntimeValue>, WasmiVMError> {
-    Err(WasmiVMError::HostFunctionFailure(
-        NOT_IMPLEMENTED.to_owned(),
-    ))
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::boxed::Box;
 
-fn env_increment(
-    vm: &mut WasmiVM,
-    _: &[RuntimeValue],
-) -> Result<Option<RuntimeValue>, WasmiVMError> {
-    vm.counter += 1;
-    Ok(None)
-}
+    struct SimpleWasmiVM {
+        codes: BTreeMap<WasmiModuleId, Vec<u8>>,
+        host_functions_definitions: BTreeMap<WasmiModuleName, WasmiHostModule<Self>>,
+        host_functions: BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<Self>>,
+        counter: u32,
+    }
 
-#[test]
-fn test() {
-    let wat = r#"
-        (module
-            (import "env" "assert" (func $assert (param i32)))
-            (import "env" "increment" (func $increment))
-            (memory (export "memory") 2 3)
-            (func (export "increment")
-              (call $increment))
-			      (func (export "call") (param $x i32) (param $y i64)
-				      ;; assert that $x = 0x12345678
-				      (call $assert
-					      (i32.eq
-						      (get_local $x)
-						      (i32.const 0x12345678)
-					      )
-				      )
-				      (call $assert
-					      (i64.eq
-						      (get_local $y)
-						      (i64.const 0x1234567887654321)
-					      )
-				      )
-			      )
-        )
-    "#;
-    let code = wat::parse_str(wat).unwrap();
-    // module -> function -> (index, ptr)
-    let host_functions_definitions = BTreeMap::from([(
-        WasmiModuleName("env".to_owned()),
-        BTreeMap::from([
-            (
-                WasmiFunctionName("assert".to_owned()),
+    impl IsWasmiVM<SimpleWasmiVM> for SimpleWasmiVM {
+        fn codes(&self) -> &BTreeMap<WasmiModuleId, Vec<u8>> {
+            &self.codes
+        }
+
+        fn host_functions_definitions(
+            &self,
+        ) -> &BTreeMap<WasmiModuleName, WasmiHostModule<SimpleWasmiVM>> {
+            &self.host_functions_definitions
+        }
+
+        fn host_functions(
+            &self,
+        ) -> &BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<SimpleWasmiVM>> {
+            &self.host_functions
+        }
+    }
+
+    const NOT_IMPLEMENTED: &'static str = "NOT_IMPLEMENTED_MAGICC0DE";
+    fn env_assert(
+        _: &mut SimpleWasmiVM,
+        _: &[RuntimeValue],
+    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
+        Err(WasmiVMError::HostFunctionFailure(
+            NOT_IMPLEMENTED.to_owned(),
+        ))
+    }
+
+    fn env_increment(
+        vm: &mut SimpleWasmiVM,
+        _: &[RuntimeValue],
+    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
+        vm.counter += 1;
+        Ok(None)
+    }
+
+    #[test]
+    fn test() {
+        let wat = r#"
+            (module
+                (import "env" "assert" (func $assert (param i32)))
+                (import "env" "increment" (func $increment))
+                (memory (export "memory") 2 3)
+                (func (export "increment")
+                  (call $increment))
+			          (func (export "call") (param $x i32) (param $y i64)
+				          ;; assert that $x = 0x12345678
+				          (call $assert
+					          (i32.eq
+						          (get_local $x)
+						          (i32.const 0x12345678)
+					          )
+				          )
+				          (call $assert
+					          (i64.eq
+						          (get_local $y)
+						          (i64.const 0x1234567887654321)
+					          )
+				          )
+			          )
+            )
+        "#;
+        let code = wat::parse_str(wat).unwrap();
+        // module -> function -> (index, ptr)
+        let host_functions_definitions = BTreeMap::from([(
+            WasmiModuleName("env".to_owned()),
+            BTreeMap::from([
                 (
-                    WasmiHostFunctionIndex(0x0001),
-                    env_assert as WasmiHostFunction,
+                    WasmiFunctionName("assert".to_owned()),
+                    (
+                        WasmiHostFunctionIndex(0x0001),
+                        env_assert as WasmiHostFunction<SimpleWasmiVM>,
+                    ),
+                ),
+                (
+                    WasmiFunctionName("increment".to_owned()),
+                    (
+                        WasmiHostFunctionIndex(0x0002),
+                        env_increment as WasmiHostFunction<SimpleWasmiVM>,
+                    ),
+                ),
+            ]),
+        )]);
+        let mut vm = AsWasmiVM(SimpleWasmiVM {
+            codes: BTreeMap::from([(WasmiModuleId(0xDEADC0DE), code)]),
+            host_functions_definitions: host_functions_definitions.clone(),
+            host_functions: host_functions_definitions
+                .into_iter()
+                .map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
+                .flatten()
+                .collect(),
+            counter: 0,
+        });
+        assert_eq!(
+            vm.call::<DummyInput, DummyOutput, _>(
+                &WasmiModuleId(0),
+                DummyInput("bar".to_owned(), &[]),
+            ),
+            Err(WasmiVMError::ModuleNotFound)
+        );
+        assert_eq!(
+            vm.call::<DummyInput, DummyOutput, _>(
+                &WasmiModuleId(0xDEADC0DE),
+                DummyInput(
+                    "call".to_owned(),
+                    &[RuntimeValue::I32(0x1337), RuntimeValue::I64(0x3771)]
                 ),
             ),
-            (
-                WasmiFunctionName("increment".to_owned()),
-                (
-                    WasmiHostFunctionIndex(0x0002),
-                    env_increment as WasmiHostFunction,
-                ),
-            ),
-        ]),
-    )]);
-    let mut vm = WasmiVM {
-        loaded_modules: Default::default(),
-        codes: BTreeMap::from([(WasmiModuleId(0xDEADC0DE), code)]),
-        host_functions_definitions: host_functions_definitions.clone(),
-        host_functions: host_functions_definitions
-            .into_iter()
-            .map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
-            .flatten()
-            .collect(),
-        counter: 0,
-    };
-    assert_eq!(
-        vm.call::<DummyInput, DummyOutput, _>(&WasmiModuleId(0), DummyInput("bar".to_owned(), &[]),),
-        Err(WasmiVMError::ModuleNotFound)
-    );
-    assert_eq!(
-        vm.call::<DummyInput, DummyOutput, _>(
-            &WasmiModuleId(0xDEADC0DE),
-            DummyInput(
-                "call".to_owned(),
-                &[RuntimeValue::I32(0x1337), RuntimeValue::I64(0x3771)]
-            ),
-        ),
-        Err(WasmiVMError::WasmiError(wasmi::Error::Trap(
-            wasmi::Trap::Host(Box::new(WasmiVMError::HostFunctionFailure(
-                NOT_IMPLEMENTED.to_owned()
+            Err(WasmiVMError::WasmiError(wasmi::Error::Trap(
+                wasmi::Trap::Host(Box::new(WasmiVMError::HostFunctionFailure(
+                    NOT_IMPLEMENTED.to_owned()
+                )))
             )))
-        )))
-    );
-    assert_eq!(vm.counter, 0);
-    assert_eq!(
-        vm.call::<DummyInput, DummyOutput, _>(
-            &WasmiModuleId(0xDEADC0DE),
-            DummyInput("increment".to_owned(), &[]),
-        ),
-        Ok(DummyOutput)
-    );
-    assert_eq!(vm.counter, 1);
+        );
+        assert_eq!(vm.0.counter, 0);
+        assert_eq!(
+            vm.call::<DummyInput, DummyOutput, _>(
+                &WasmiModuleId(0xDEADC0DE),
+                DummyInput("increment".to_owned(), &[]),
+            ),
+            Ok(DummyOutput)
+        );
+        assert_eq!(vm.0.counter, 1);
+    }
 }
