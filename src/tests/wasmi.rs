@@ -96,6 +96,7 @@ struct WasmiVM {
     loaded_modules: BTreeMap<WasmiModuleId, WasmiModule>,
     host_functions_definitions: BTreeMap<WasmiModuleName, WasmiHostModule>,
     host_functions: BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction>,
+    counter: u32,
 }
 
 impl Externals for WasmiVM {
@@ -239,12 +240,23 @@ fn env_assert(_: &mut WasmiVM, _: &[RuntimeValue]) -> Result<Option<RuntimeValue
     ))
 }
 
+fn env_increment(
+    vm: &mut WasmiVM,
+    _: &[RuntimeValue],
+) -> Result<Option<RuntimeValue>, WasmiVMError> {
+    vm.counter += 1;
+    Ok(None)
+}
+
 #[test]
 fn test() {
     let wat = r#"
         (module
             (import "env" "assert" (func $assert (param i32)))
+            (import "env" "increment" (func $increment))
             (memory (export "memory") 2 3)
+            (func (export "increment")
+              (call $increment))
 			      (func (export "call") (param $x i32) (param $y i64)
 				      ;; assert that $x = 0x12345678
 				      (call $assert
@@ -266,13 +278,22 @@ fn test() {
     // module -> function -> (index, ptr)
     let host_functions_definitions = BTreeMap::from([(
         WasmiModuleName("env".to_owned()),
-        BTreeMap::from([(
-            WasmiFunctionName("assert".to_owned()),
+        BTreeMap::from([
             (
-                WasmiHostFunctionIndex(0x0001),
-                env_assert as WasmiHostFunction,
+                WasmiFunctionName("assert".to_owned()),
+                (
+                    WasmiHostFunctionIndex(0x0001),
+                    env_assert as WasmiHostFunction,
+                ),
             ),
-        )]),
+            (
+                WasmiFunctionName("increment".to_owned()),
+                (
+                    WasmiHostFunctionIndex(0x0002),
+                    env_increment as WasmiHostFunction,
+                ),
+            ),
+        ]),
     )]);
     let mut vm = WasmiVM {
         loaded_modules: Default::default(),
@@ -283,6 +304,7 @@ fn test() {
             .map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
             .flatten()
             .collect(),
+        counter: 0,
     };
     assert_eq!(
         vm.call::<DummyInput, DummyOutput, _>(&WasmiModuleId(0), DummyInput("bar".to_owned(), &[]),),
@@ -302,4 +324,13 @@ fn test() {
             )))
         )))
     );
+    assert_eq!(vm.counter, 0);
+    assert_eq!(
+        vm.call::<DummyInput, DummyOutput, _>(
+            &WasmiModuleId(0xDEADC0DE),
+            DummyInput("increment".to_owned(), &[]),
+        ),
+        Ok(DummyOutput)
+    );
+    assert_eq!(vm.counter, 1);
 }
