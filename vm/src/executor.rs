@@ -26,12 +26,22 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use core::{fmt::Debug, marker::PhantomData};
+
 use crate::{
     input::{Input, OutputOf},
-    memory::{Pointable, ReadableMemory},
+    memory::{
+        LimitedRead, Pointable, RawFromRegion, RawIntoRegion, ReadWriteMemory, ReadableMemory,
+        WritableMemory, Write,
+    },
+    tagged::Tagged,
     vm::{Module, VM},
 };
-use cosmwasm_minimal_std::WasmMsg;
+use cosmwasm_minimal_std::{
+    DeserializeLimit, Env, ExecuteResult, InstantiateResult, MessageInfo, QueryResult, ReadLimit,
+    ReplyResult,
+};
+use serde::de::DeserializeOwned;
 use wasmi::RuntimeValue;
 
 pub trait Environment {
@@ -42,41 +52,209 @@ pub trait Environment {
 
 type ErrorOf<T> = <T as VM>::Error;
 type ModuleOf<T> = <T as VM>::Module;
+type ModuleMemoryOf<T> = <ModuleOf<T> as Module>::Memory;
 type ModuleErrorOf<T> = <ModuleOf<T> as Module>::Error;
 type ModuleInputOf<'a, T> = <ModuleOf<T> as Module>::Input<'a>;
 type ModuleOutputOf<'a, T> = <ModuleOf<T> as Module>::Output<'a>;
 
-pub struct AllocateInput<Pointer>(Pointer);
+pub struct AllocateInput<Pointer>(pub Pointer);
 impl<Pointer> Input for AllocateInput<Pointer> {
     type Output = Pointer;
 }
 
-pub enum SimpleExecutorError {}
-pub struct AsSimpleExecutor<T>(T);
+pub struct DeallocateInput<Pointer>(pub Pointer);
+impl<Pointer> Input for DeallocateInput<Pointer> {
+    type Output = Pointer;
+}
+
+pub struct CosmwasmQueryInput<'a, Pointer>(pub Tagged<Pointer, Env>, pub Tagged<Pointer, &'a [u8]>);
+impl<'a, Pointer> Input for CosmwasmQueryInput<'a, Pointer> {
+    type Output = Pointer;
+}
+
+pub struct CosmwasmCallInput<'a, Pointer, I>(
+    pub Tagged<Pointer, Env>,
+    pub Tagged<Pointer, MessageInfo>,
+    pub Tagged<Pointer, &'a [u8]>,
+    pub PhantomData<I>,
+);
+impl<'a, Pointer, I: Input> Input for CosmwasmCallInput<'a, Pointer, I> {
+    type Output = Pointer;
+}
+
+pub struct InstantiateInput;
+impl Input for InstantiateInput {
+    type Output = InstantiateResult;
+}
+
+pub struct ExecuteInput;
+impl Input for ExecuteInput {
+    type Output = ExecuteResult;
+}
+
+pub struct ReplyInput;
+impl Input for ReplyInput {
+    type Output = ReplyResult;
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum SimpleExecutorError {
+    FailedToSerialize,
+    FailedToDeserialize,
+    ValueWouldOverflowPointer,
+}
+
+pub struct AsSimpleExecutor<T> {
+    pub vm: T,
+}
 impl<T, Pointer> AsSimpleExecutor<T>
 where
     T: VM,
-    Pointer: for<'x> TryFrom<ModuleOutputOf<'x, T>, Error = ModuleErrorOf<T>>,
+    Pointer: for<'x> TryFrom<ModuleOutputOf<'x, T>, Error = ModuleErrorOf<T>>
+        + TryFrom<usize>
+        + TryInto<usize>
+        + Copy
+        + Ord
+        + Debug,
     for<'x> ModuleOutputOf<'x, T>:
         Pointable<Pointer = Pointer> + TryInto<RuntimeValue, Error = ModuleErrorOf<T>>,
-    for<'x> ModuleInputOf<'x, T>: TryFrom<AllocateInput<Pointer>, Error = ErrorOf<T>>,
+    ErrorOf<T>: From<SimpleExecutorError>,
 {
-    fn allocate<L, E>(&mut self, module: &ModuleOf<T>, len: L) -> Result<Pointer, ErrorOf<T>>
+    pub fn allocate<L>(&mut self, module: &ModuleOf<T>, len: L) -> Result<Pointer, ErrorOf<T>>
     where
-        Pointer: TryFrom<L, Error = E>,
-        ErrorOf<T>: From<E>,
+        for<'x> ModuleInputOf<'x, T>: TryFrom<AllocateInput<Pointer>, Error = ErrorOf<T>>,
+        Pointer: TryFrom<L>,
     {
-        let len_value = Pointer::try_from(len)?;
+        let len_value =
+            Pointer::try_from(len).map_err(|_| SimpleExecutorError::ValueWouldOverflowPointer)?;
         let input = AllocateInput(len_value);
         let result = self
-            .0
-            .call::<AllocateInput<Pointer>, ErrorOf<T>, ModuleErrorOf<T>>(module, input)?;
+            .vm
+            .call::<AllocateInput<Pointer>, _, _>(module, input)?;
+        log::debug!("Allocate: size={:?}, ptr={:?}", len_value, result);
         Ok(result)
     }
-}
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test() {}
+    pub fn deallocate<L>(&mut self, module: &ModuleOf<T>, ptr: L) -> Result<(), ErrorOf<T>>
+    where
+        for<'x> ModuleInputOf<'x, T>: TryFrom<DeallocateInput<Pointer>, Error = ErrorOf<T>>,
+        Pointer: TryFrom<L>,
+    {
+        log::debug!("Deallocate");
+        let ptr_value =
+            Pointer::try_from(ptr).map_err(|_| SimpleExecutorError::ValueWouldOverflowPointer)?;
+        let input = DeallocateInput(ptr_value);
+        self.vm
+            .call::<DeallocateInput<Pointer>, _, _>(module, input)?;
+        Ok(())
+    }
+
+    pub fn passthrough_in<V>(
+        &mut self,
+        module: &ModuleOf<T>,
+        data: &[u8],
+    ) -> Result<Tagged<Pointer, V>, ErrorOf<T>>
+    where
+        for<'x> ModuleInputOf<'x, T>: TryFrom<AllocateInput<Pointer>, Error = ErrorOf<T>>,
+        ModuleMemoryOf<T>: ReadWriteMemory<Pointer = Pointer>,
+        ErrorOf<T>: From<<ModuleMemoryOf<T> as WritableMemory>::Error>
+            + From<<ModuleMemoryOf<T> as ReadableMemory>::Error>
+            + From<SimpleExecutorError>,
+    {
+        log::debug!("PassthroughIn");
+        let ptr = self.allocate::<usize>(module, data.len())?;
+        let memory = module.memory();
+        match TryFrom::try_from(Write(memory, ptr, data)) {
+            Ok(RawIntoRegion) => Ok(Tagged::new(ptr)),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub fn marshall_in<V>(
+        &mut self,
+        module: &ModuleOf<T>,
+        x: &V,
+    ) -> Result<Tagged<Pointer, V>, ErrorOf<T>>
+    where
+        for<'x> ModuleInputOf<'x, T>: TryFrom<AllocateInput<Pointer>, Error = ErrorOf<T>>,
+        ModuleMemoryOf<T>: ReadWriteMemory<Pointer = Pointer>,
+        ErrorOf<T>: From<<ModuleMemoryOf<T> as WritableMemory>::Error>
+            + From<<ModuleMemoryOf<T> as ReadableMemory>::Error>
+            + From<SimpleExecutorError>,
+        V: serde::ser::Serialize + Sized,
+    {
+        log::debug!("MarshallIn");
+        let serialized =
+            serde_json::to_vec(x).map_err(|_| SimpleExecutorError::FailedToSerialize)?;
+        Ok(self.passthrough_in(module, &serialized)?)
+    }
+
+    pub fn cosmwasm_call<I>(
+        &mut self,
+        module: &ModuleOf<T>,
+        env: Env,
+        info: MessageInfo,
+        message: &[u8],
+    ) -> Result<I::Output, ErrorOf<T>>
+    where
+        for<'x> ModuleInputOf<'x, T>: TryFrom<AllocateInput<Pointer>, Error = ErrorOf<T>>
+            + TryFrom<CosmwasmCallInput<'x, Pointer, I>, Error = ErrorOf<T>>,
+        ModuleMemoryOf<T>: ReadWriteMemory<Pointer = Pointer>,
+        ErrorOf<T>: From<<ModuleMemoryOf<T> as WritableMemory>::Error>
+            + From<<ModuleMemoryOf<T> as ReadableMemory>::Error>
+            + From<SimpleExecutorError>,
+        I: Input,
+        I::Output: DeserializeOwned + ReadLimit + DeserializeLimit,
+    {
+        log::debug!("Call");
+        let input = CosmwasmCallInput(
+            self.marshall_in(module, &env)?,
+            self.marshall_in(module, &info)?,
+            self.passthrough_in(module, message)?,
+            PhantomData,
+        );
+        let pointer = self
+            .vm
+            .call::<CosmwasmCallInput<Pointer, I>, _, _>(module, input)?;
+        let memory = module.memory();
+        let RawFromRegion(output) = RawFromRegion::try_from(LimitedRead(
+            memory,
+            pointer,
+            Pointer::try_from(<I::Output as ReadLimit>::read_limit())
+                .map_err(|_| SimpleExecutorError::ValueWouldOverflowPointer)?,
+        ))?;
+        Ok(serde_json::from_slice(&output).map_err(|_| SimpleExecutorError::FailedToSerialize)?)
+    }
+
+    pub fn cosmwasm_query(
+        &mut self,
+        module: &ModuleOf<T>,
+        env: Env,
+        message: &[u8],
+    ) -> Result<QueryResult, ErrorOf<T>>
+    where
+        for<'x> ModuleInputOf<'x, T>: TryFrom<AllocateInput<Pointer>, Error = ErrorOf<T>>
+            + TryFrom<CosmwasmQueryInput<'x, Pointer>, Error = ErrorOf<T>>,
+        ModuleMemoryOf<T>: ReadWriteMemory<Pointer = Pointer>,
+        ErrorOf<T>: From<<ModuleMemoryOf<T> as WritableMemory>::Error>
+            + From<<ModuleMemoryOf<T> as ReadableMemory>::Error>
+            + From<SimpleExecutorError>,
+    {
+        log::debug!("Query");
+        let input = CosmwasmQueryInput(
+            self.marshall_in(module, &env)?,
+            self.passthrough_in(module, message)?,
+        );
+        let pointer = self
+            .vm
+            .call::<CosmwasmQueryInput<Pointer>, _, _>(module, input)?;
+        let memory = module.memory();
+        let RawFromRegion(output) = RawFromRegion::try_from(LimitedRead(
+            memory,
+            pointer,
+            Pointer::try_from(QueryResult::read_limit())
+                .map_err(|_| SimpleExecutorError::ValueWouldOverflowPointer)?,
+        ))?;
+        Ok(serde_json::from_slice(&output).map_err(|_| SimpleExecutorError::FailedToSerialize)?)
+    }
 }

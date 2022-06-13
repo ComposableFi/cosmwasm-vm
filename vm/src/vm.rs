@@ -32,8 +32,10 @@ pub trait Module {
     type Id;
     type Input<'a>;
     type Output<'a>;
+    type Memory;
     type VM;
     type Error;
+    fn memory(&self) -> &Self::Memory;
     fn call<'a, O, E>(&self, vm: &mut Self::VM, input: Self::Input<'a>) -> Result<O, Self::Error>
     where
         O: for<'x> TryFrom<Self::Output<'x>, Error = E>,
