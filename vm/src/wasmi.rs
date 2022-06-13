@@ -90,6 +90,7 @@ impl Display for WasmiVMError {
 impl HostError for WasmiVMError {}
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[repr(transparent)]
 pub struct AsWasmiVM<T>(T);
 
 pub trait IsWasmiVM<T> {
@@ -216,7 +217,7 @@ impl<T: 'static + Externals> Module for WasmiModule<T> {
 impl<T: 'static + IsWasmiVM<T>> VM for AsWasmiVM<T> {
     type Module = WasmiModule<Self>;
     type Error = WasmiVMError;
-    fn load(&mut self, module_id: &ModuleIdOf<Self>) -> Result<Self::Module, Self::Error> {
+    fn load(&mut self, module_id: &<Self::Module as Module>::Id) -> Result<Self::Module, Self::Error> {
         let module_code = self
             .0
             .codes()
@@ -243,6 +244,7 @@ impl<T: 'static + IsWasmiVM<T>> VM for AsWasmiVM<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::input::Input;
     use alloc::boxed::Box;
 
     #[derive(Debug)]
@@ -373,11 +375,11 @@ mod tests {
             counter: 0,
         });
         assert_eq!(
-            vm.call(&WasmiModuleId(0), DummyInput("bar".to_owned(), &[]),),
+            vm.call_raw(&WasmiModuleId(0), DummyInput("bar".to_owned(), &[]),),
             Err(WasmiVMError::ModuleNotFound)
         );
         assert_eq!(
-            vm.call(
+            vm.call_raw(
                 &WasmiModuleId(0xDEADC0DE),
                 DummyInput(
                     "call".to_owned(),
@@ -392,7 +394,7 @@ mod tests {
         );
         assert_eq!(vm.0.counter, 0);
         assert_eq!(
-            vm.call(
+            vm.call_raw(
                 &WasmiModuleId(0xDEADC0DE),
                 DummyInput("increment".to_owned(), &[])
             ),

@@ -1,4 +1,4 @@
-// lib.rs ---
+// input.rs ---
 
 // Copyright (C) 2022 Hussein Ait-Lahcen
 
@@ -26,13 +26,8 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-#![no_std]
-#![feature(generic_associated_types)]
+pub type OutputOf<T> = <T as Input>::Output;
 
-extern crate alloc;
-
-pub mod executor;
-pub mod vm;
-pub mod input;
-pub mod wasmi;
-pub mod memory;
+pub trait Input {
+  type Output;
+}

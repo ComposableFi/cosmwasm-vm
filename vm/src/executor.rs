@@ -26,5 +26,57 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-trait Executor {
+use crate::{
+    input::{Input, OutputOf},
+    memory::{Pointable, ReadableMemory},
+    vm::{Module, VM},
+};
+use cosmwasm_minimal_std::WasmMsg;
+use wasmi::RuntimeValue;
+
+pub trait Environment {
+    type Query: Input;
+    type Error;
+    fn query(query: Self::Query) -> Result<OutputOf<Self::Query>, Self::Error>;
+}
+
+type ErrorOf<T> = <T as VM>::Error;
+type ModuleOf<T> = <T as VM>::Module;
+type ModuleErrorOf<T> = <ModuleOf<T> as Module>::Error;
+type ModuleInputOf<'a, T> = <ModuleOf<T> as Module>::Input<'a>;
+type ModuleOutputOf<'a, T> = <ModuleOf<T> as Module>::Output<'a>;
+
+pub struct AllocateInput<Pointer>(Pointer);
+impl<Pointer> Input for AllocateInput<Pointer> {
+    type Output = Pointer;
+}
+
+pub enum SimpleExecutorError {}
+pub struct AsSimpleExecutor<T>(T);
+impl<T, Pointer> AsSimpleExecutor<T>
+where
+    T: VM,
+    Pointer: for<'x> TryFrom<ModuleOutputOf<'x, T>, Error = ModuleErrorOf<T>>,
+    for<'x> ModuleOutputOf<'x, T>:
+        Pointable<Pointer = Pointer> + TryInto<RuntimeValue, Error = ModuleErrorOf<T>>,
+    for<'x> ModuleInputOf<'x, T>: TryFrom<AllocateInput<Pointer>, Error = ErrorOf<T>>,
+{
+    fn allocate<L, E>(&mut self, module: &ModuleOf<T>, len: L) -> Result<Pointer, ErrorOf<T>>
+    where
+        Pointer: TryFrom<L, Error = E>,
+        ErrorOf<T>: From<E>,
+    {
+        let len_value = Pointer::try_from(len)?;
+        let input = AllocateInput(len_value);
+        let result = self
+            .0
+            .call::<AllocateInput<Pointer>, ErrorOf<T>, ModuleErrorOf<T>>(module, input)?;
+        Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test() {}
 }
