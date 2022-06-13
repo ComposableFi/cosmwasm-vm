@@ -1,4 +1,4 @@
-// lib.rs ---
+// executor.rs ---
 
 // Copyright (C) 2022 Hussein Ait-Lahcen
 
@@ -26,11 +26,5 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-#![no_std]
-#![feature(generic_associated_types)]
-
-extern crate alloc;
-
-pub mod vm;
-pub mod wasmi;
-
+trait Executor {
+}

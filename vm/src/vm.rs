@@ -26,32 +26,46 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-pub trait VM {
-    type ModuleId;
-    type FunctionName;
-    type FunctionArgs<'a>;
-    type RawOutput<'a>;
+pub trait Input {
+    type Output;
+}
+
+pub trait Module {
+    type Id;
+    type Input<'a>;
+    type Output<'a>;
+    type VM;
     type Error;
-    fn call<'a: 'b, 'b, I, O, E>(
-        &'a mut self,
-        module_id: &Self::ModuleId,
-        input: I,
-    ) -> Result<O, Self::Error>
+    fn call<'a, O, E>(&self, vm: &mut Self::VM, input: Self::Input<'a>) -> Result<O, Self::Error>
     where
-        I: Into<(Self::FunctionName, Self::FunctionArgs<'b>)>,
-        O: for<'x> TryFrom<Self::RawOutput<'x>, Error = E>,
-        Self::Error: From<E>,
-    {
-        let (function, args) = input.into();
-        Ok(self.raw_call::<O, E>(module_id, function, args)?)
-    }
-    fn raw_call<'a: 'b, 'b, O, E>(
-        &'a mut self,
-        module_id: &Self::ModuleId,
-        function_name: Self::FunctionName,
-        function_args: Self::FunctionArgs<'b>,
-    ) -> Result<O, Self::Error>
-    where
-        O: for<'x> TryFrom<Self::RawOutput<'x>, Error = E>,
+        O: for<'x> TryFrom<Self::Output<'x>, Error = E>,
         Self::Error: From<E>;
+}
+
+pub type ModuleOf<T> = <T as VM>::Module;
+pub type ModuleIdOf<T> = <ModuleOf<T> as Module>::Id;
+pub type ModuleInputOf<'a, T> = <ModuleOf<T> as Module>::Input<'a>;
+pub type ModuleOutputOf<'a, T> = <ModuleOf<T> as Module>::Output<'a>;
+pub type ModuleErrorOf<T> = <ModuleOf<T> as Module>::Error;
+pub type ErrorOf<T> = <T as VM>::Error;
+
+pub trait VM {
+    type Module: Module<VM = Self>;
+    type Error: From<ModuleErrorOf<Self>>;
+    fn load(&mut self, module_id: &ModuleIdOf<Self>) -> Result<Self::Module, Self::Error>;
+    fn call<'a, I, IE, OE>(
+        &mut self,
+        module_id: &ModuleIdOf<Self>,
+        input: I,
+    ) -> Result<I::Output, Self::Error>
+    where
+        I: Input + TryInto<ModuleInputOf<'a, Self>, Error = IE>,
+        I::Output: for<'x> TryFrom<ModuleOutputOf<'x, Self>, Error = OE>,
+        ErrorOf<Self>: From<IE>,
+        ModuleErrorOf<Self>: From<OE>,
+    {
+        let module = self.load(module_id)?;
+        let input = input.try_into()?;
+        Ok(module.call::<I::Output, OE>(self, input)?)
+    }
 }

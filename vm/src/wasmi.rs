@@ -34,13 +34,12 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::fmt::Display;
+use core::marker::PhantomData;
 use either::Either;
 use wasmi::Externals;
 use wasmi::FuncInstance;
 use wasmi::HostError;
 use wasmi::ImportResolver;
-use wasmi::MemoryRef;
-use wasmi::ModuleRef;
 use wasmi::NopExternals;
 use wasmi::RuntimeValue;
 
@@ -56,23 +55,22 @@ pub type WasmiHostFunction<T> =
 pub type WasmiHostModule<T> =
     BTreeMap<WasmiFunctionName, (WasmiHostFunctionIndex, WasmiHostFunction<T>)>;
 
-#[derive(Debug)]
-pub struct WasmiModule {
-    inner_module: ModuleRef,
-    memory: MemoryRef,
-}
-
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct WasmiModuleId(u32);
 #[derive(PartialEq, Eq, Debug)]
 pub enum WasmiVMError {
     WasmiError(wasmi::Error),
-    WasmiTrap(wasmi::Trap),
+    WasmiModuleError(WasmiModuleError),
     ModuleNotFound,
     MemoryNotExported,
     MemoryExportedIsNotMemory,
     HostFunctionNotFound(WasmiHostFunctionIndex),
     HostFunctionFailure(String),
+}
+impl From<WasmiModuleError> for WasmiVMError {
+    fn from(e: WasmiModuleError) -> Self {
+        WasmiVMError::WasmiModuleError(e)
+    }
 }
 impl From<wasmi::Error> for WasmiVMError {
     fn from(e: wasmi::Error) -> Self {
@@ -81,7 +79,7 @@ impl From<wasmi::Error> for WasmiVMError {
 }
 impl From<wasmi::Trap> for WasmiVMError {
     fn from(e: wasmi::Trap) -> Self {
-        WasmiVMError::WasmiTrap(e)
+        wasmi::Error::from(e).into()
     }
 }
 impl Display for WasmiVMError {
@@ -91,6 +89,7 @@ impl Display for WasmiVMError {
 }
 impl HostError for WasmiVMError {}
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct AsWasmiVM<T>(T);
 
 pub trait IsWasmiVM<T> {
@@ -155,7 +154,7 @@ impl<T: IsWasmiVM<T>> ImportResolver for AsWasmiVM<T> {
         _: &str,
         _: &str,
         _: &wasmi::MemoryDescriptor,
-    ) -> Result<MemoryRef, wasmi::Error> {
+    ) -> Result<wasmi::MemoryRef, wasmi::Error> {
         Err(wasmi::Error::Instantiation(
             "A CosmWasm contract is not allowed to import a memory.".to_owned(),
         ))
@@ -173,67 +172,71 @@ impl<T: IsWasmiVM<T>> ImportResolver for AsWasmiVM<T> {
     }
 }
 
-impl<T: IsWasmiVM<T>> VM for AsWasmiVM<T> {
-    type FunctionName = WasmiFunctionName;
-    type FunctionArgs<'a> = WasmiFunctionArgs<'a>;
-    type RawOutput<'a> = Either<&'a MemoryRef, (&'a MemoryRef, RuntimeValue)>;
-    type ModuleId = WasmiModuleId;
-    type Error = WasmiVMError;
+#[derive(PartialEq, Eq, Debug)]
+pub enum WasmiModuleError {
+    WasmiError(wasmi::Error),
+}
+impl From<wasmi::Error> for WasmiModuleError {
+    fn from(e: wasmi::Error) -> Self {
+        WasmiModuleError::WasmiError(e)
+    }
+}
 
-    fn raw_call<'a: 'b, 'b, O, E>(
-        &'a mut self,
-        module_id: &Self::ModuleId,
-        WasmiFunctionName(function_name): Self::FunctionName,
-        function_args: Self::FunctionArgs<'b>,
+pub struct WasmiModule<T> {
+    module: wasmi::ModuleRef,
+    memory: wasmi::MemoryRef,
+    _marker: PhantomData<T>,
+}
+
+impl<T: 'static + Externals> Module for WasmiModule<T> {
+    type Id = WasmiModuleId;
+    type Input<'a> = (WasmiFunctionName, WasmiFunctionArgs<'a>);
+    type Output<'a> = Either<&'a wasmi::MemoryRef, (&'a wasmi::MemoryRef, RuntimeValue)>;
+    type VM = T;
+    type Error = WasmiModuleError;
+    fn call<'a, O, E>(
+        &self,
+        runtime: &mut Self::VM,
+        (WasmiFunctionName(function_name), function_args): Self::Input<'a>,
     ) -> Result<O, Self::Error>
     where
-        O: for<'x> TryFrom<Self::RawOutput<'x>, Error = E>,
+        O: for<'x> TryFrom<Self::Output<'x>, Error = E>,
         Self::Error: From<E>,
     {
+        let value = self
+            .module
+            .invoke_export(&function_name, function_args, runtime)?;
+        Ok(O::try_from(match value {
+            Some(non_unit) => Either::Right((&self.memory, non_unit)),
+            None => Either::Left(&self.memory),
+        })?)
+    }
+}
+
+impl<T: 'static + IsWasmiVM<T>> VM for AsWasmiVM<T> {
+    type Module = WasmiModule<Self>;
+    type Error = WasmiVMError;
+    fn load(&mut self, module_id: &ModuleIdOf<Self>) -> Result<Self::Module, Self::Error> {
         let module_code = self
             .0
             .codes()
             .get(module_id)
             .ok_or(WasmiVMError::ModuleNotFound)?;
         let wasmi_module = wasmi::Module::from_buffer(&module_code)?;
-        let not_started_instance = wasmi::ModuleInstance::new(&wasmi_module, self)?;
-        let instance = not_started_instance.run_start(&mut NopExternals)?;
-        let memory_exported = instance
+        let not_started_module_instance = wasmi::ModuleInstance::new(&wasmi_module, self)?;
+        let module_instance = not_started_module_instance.run_start(&mut NopExternals)?;
+        let memory_exported = module_instance
             .export_by_name("memory")
             .ok_or(WasmiVMError::MemoryNotExported)?;
         let memory = match memory_exported {
             wasmi::ExternVal::Memory(mem) => Ok(mem),
             _ => Err(WasmiVMError::MemoryExportedIsNotMemory),
         }?;
-        let loaded_module = WasmiModule {
-            inner_module: instance,
+        Ok(WasmiModule {
+            module: module_instance,
             memory,
-        };
-        let value =
-            loaded_module
-                .inner_module
-                .invoke_export(&function_name, function_args, self)?;
-        Ok(O::try_from(match value {
-            Some(non_unit) => Either::Right((&loaded_module.memory, non_unit)),
-            None => Either::Left(&loaded_module.memory),
-        })?)
-    }
-}
-
-#[derive(Debug)]
-struct DummyInput<'a>(String, &'a [RuntimeValue]);
-impl<'a> From<DummyInput<'a>> for (WasmiFunctionName, &'a [RuntimeValue]) {
-    fn from(DummyInput(function_name, args): DummyInput<'a>) -> Self {
-        (WasmiFunctionName(function_name), args)
-    }
-}
-
-#[derive(PartialEq, Eq, Debug)]
-struct DummyOutput;
-impl TryFrom<Either<&MemoryRef, (&MemoryRef, RuntimeValue)>> for DummyOutput {
-    type Error = WasmiVMError;
-    fn try_from(_: Either<&MemoryRef, (&MemoryRef, RuntimeValue)>) -> Result<Self, Self::Error> {
-        Ok(DummyOutput)
+            _marker: PhantomData,
+        })
     }
 }
 
@@ -241,6 +244,33 @@ impl TryFrom<Either<&MemoryRef, (&MemoryRef, RuntimeValue)>> for DummyOutput {
 mod tests {
     use super::*;
     use alloc::boxed::Box;
+
+    #[derive(Debug)]
+    struct DummyInput<'a>(String, &'a [RuntimeValue]);
+    impl<'a> TryFrom<DummyInput<'a>> for (WasmiFunctionName, &'a [RuntimeValue]) {
+        type Error = WasmiVMError;
+        fn try_from(
+            DummyInput(function_name, function_args): DummyInput<'a>,
+        ) -> Result<Self, Self::Error> {
+            Ok((WasmiFunctionName(function_name), function_args))
+        }
+    }
+    impl<'a> Input for DummyInput<'a> {
+        type Output = DummyOutput;
+    }
+
+    #[derive(PartialEq, Eq, Debug)]
+    struct DummyOutput;
+    impl<'x> TryFrom<Either<&'x wasmi::MemoryRef, (&'x wasmi::MemoryRef, RuntimeValue)>>
+        for DummyOutput
+    {
+        type Error = WasmiModuleError;
+        fn try_from(
+            _: Either<&'x wasmi::MemoryRef, (&'x wasmi::MemoryRef, RuntimeValue)>,
+        ) -> Result<Self, Self::Error> {
+            Ok(DummyOutput)
+        }
+    }
 
     struct SimpleWasmiVM {
         codes: BTreeMap<WasmiModuleId, Vec<u8>>,
@@ -343,31 +373,28 @@ mod tests {
             counter: 0,
         });
         assert_eq!(
-            vm.call::<DummyInput, DummyOutput, _>(
-                &WasmiModuleId(0),
-                DummyInput("bar".to_owned(), &[]),
-            ),
+            vm.call(&WasmiModuleId(0), DummyInput("bar".to_owned(), &[]),),
             Err(WasmiVMError::ModuleNotFound)
         );
         assert_eq!(
-            vm.call::<DummyInput, DummyOutput, _>(
+            vm.call(
                 &WasmiModuleId(0xDEADC0DE),
                 DummyInput(
                     "call".to_owned(),
-                    &[RuntimeValue::I32(0x1337), RuntimeValue::I64(0x3771)]
+                    &[RuntimeValue::I32(0x1337), RuntimeValue::I64(0x3771)],
                 ),
             ),
-            Err(WasmiVMError::WasmiError(wasmi::Error::Trap(
-                wasmi::Trap::Host(Box::new(WasmiVMError::HostFunctionFailure(
-                    NOT_IMPLEMENTED.to_owned()
-                )))
-            )))
+            Err(WasmiVMError::WasmiModuleError(
+                WasmiModuleError::WasmiError(wasmi::Error::Trap(wasmi::Trap::Host(Box::new(
+                    WasmiVMError::HostFunctionFailure(NOT_IMPLEMENTED.to_owned())
+                ))))
+            ))
         );
         assert_eq!(vm.0.counter, 0);
         assert_eq!(
-            vm.call::<DummyInput, DummyOutput, _>(
+            vm.call(
                 &WasmiModuleId(0xDEADC0DE),
-                DummyInput("increment".to_owned(), &[]),
+                DummyInput("increment".to_owned(), &[])
             ),
             Ok(DummyOutput)
         );

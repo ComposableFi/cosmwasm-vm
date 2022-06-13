@@ -1,0 +1,12 @@
+[package]
+name = "cosmwasm-vm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+either = { version = "1.6", default-features = false }
+wasmi = { git = "https://github.com/hussein-aitlahcen/wasmi", rev = "411cb956a8183e482d58e22791a9c85d97566284" }
+cosmwasm-minimal-std =  { path = "../std" }
+
+[dev-dependencies]
+wat = "1.0"
