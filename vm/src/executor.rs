@@ -163,10 +163,8 @@ where
         log::debug!("PassthroughIn");
         let ptr = self.allocate::<usize>(module, data.len())?;
         let memory = module.memory();
-        match TryFrom::try_from(Write(memory, ptr, data)) {
-            Ok(RawIntoRegion) => Ok(Tagged::new(ptr)),
-            Err(e) => Err(e.into()),
-        }
+        RawIntoRegion::try_from(Write(memory, ptr, data))?;
+        Ok(Tagged::new(ptr))
     }
 
     fn marshall_in<V>(
