@@ -37,4 +37,3 @@ pub mod input;
 pub mod wasmi;
 pub mod memory;
 pub mod tagged;
-pub mod system;

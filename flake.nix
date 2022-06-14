@@ -39,6 +39,7 @@
                 "rustfmt"
               ])
             ];
+            RUST_LOG="debug";
           };
         }
     );
