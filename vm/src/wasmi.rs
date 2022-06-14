@@ -26,18 +26,24 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::executor::SimpleExecutorError;
+use crate::executor::AllocateInput;
+use crate::executor::CosmwasmQueryInput;
+use crate::executor::Executor;
+use crate::executor::ExecutorError;
+use crate::executor::ExecutorPointer;
 use crate::memory::MemoryReadError;
 use crate::memory::MemoryWriteError;
 use crate::memory::Pointable;
 use crate::memory::ReadWriteMemory;
 use crate::memory::ReadableMemory;
 use crate::memory::WritableMemory;
+use crate::tagged::Tagged;
 use crate::vm::*;
 use alloc::borrow::ToOwned;
 use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::fmt::Display;
@@ -74,7 +80,7 @@ pub enum WasmiVMError {
     MemoryExportedIsNotMemory,
     HostFunctionNotFound(WasmiHostFunctionIndex),
     HostFunctionFailure(String),
-    ExecutorError(SimpleExecutorError),
+    ExecutorError(ExecutorError),
     InvalidPointer,
 }
 impl From<WasmiModuleError> for WasmiVMError {
@@ -92,8 +98,8 @@ impl From<wasmi::Trap> for WasmiVMError {
         wasmi::Error::from(e).into()
     }
 }
-impl From<SimpleExecutorError> for WasmiVMError {
-    fn from(e: SimpleExecutorError) -> Self {
+impl From<ExecutorError> for WasmiVMError {
+    fn from(e: ExecutorError) -> Self {
         WasmiVMError::ExecutorError(e)
     }
 }
@@ -227,9 +233,6 @@ impl From<MemoryReadError> for WasmiModuleError {
 pub struct WasmiModuleOutput<'a>(
     Either<&'a wasmi::MemoryRef, (&'a wasmi::MemoryRef, RuntimeValue)>,
 );
-impl<'a> Pointable for WasmiModuleOutput<'a> {
-    type Pointer = u32;
-}
 
 pub struct WasmiModuleInput<'a>(WasmiFunctionName, WasmiFunctionArgs<'a>);
 
@@ -260,6 +263,54 @@ impl WritableMemory for wasmi::MemoryRef {
 }
 
 impl ReadWriteMemory for wasmi::MemoryRef {}
+
+impl<'a> TryFrom<WasmiModuleOutput<'a>> for RuntimeValue {
+    type Error = WasmiModuleError;
+    fn try_from(WasmiModuleOutput(value): WasmiModuleOutput<'a>) -> Result<Self, Self::Error> {
+        match value {
+            Either::Left(_) => Err(WasmiModuleError::NoRuntimeValueReturned),
+            Either::Right((_, rt_value)) => Ok(rt_value),
+        }
+    }
+}
+
+impl<'a> TryFrom<WasmiModuleOutput<'a>> for u32 {
+    type Error = WasmiModuleError;
+    fn try_from(WasmiModuleOutput(value): WasmiModuleOutput<'a>) -> Result<Self, Self::Error> {
+        match value {
+            Either::Right((_, RuntimeValue::I32(rt_value))) => Ok(rt_value as u32),
+            _ => Err(WasmiModuleError::NoRuntimeValueReturned),
+        }
+    }
+}
+
+impl<'a> TryFrom<AllocateInput<u32>> for WasmiModuleInput<'a> {
+    type Error = WasmiVMError;
+    fn try_from(AllocateInput(ptr): AllocateInput<u32>) -> Result<Self, Self::Error> {
+        Ok(WasmiModuleInput(
+            WasmiFunctionName("allocate".to_owned()),
+            (vec![RuntimeValue::I32(ptr as i32)], PhantomData),
+        ))
+    }
+}
+
+impl<'a> TryFrom<CosmwasmQueryInput<'a, u32>> for WasmiModuleInput<'a> {
+    type Error = WasmiVMError;
+    fn try_from(
+        CosmwasmQueryInput(Tagged(env_ptr, _), Tagged(msg_ptr, _)): CosmwasmQueryInput<'a, u32>,
+    ) -> Result<Self, Self::Error> {
+        Ok(WasmiModuleInput(
+            WasmiFunctionName("query".to_owned()),
+            (
+                vec![
+                    RuntimeValue::I32(env_ptr as i32),
+                    RuntimeValue::I32(msg_ptr as i32),
+                ],
+                PhantomData,
+            ),
+        ))
+    }
+}
 
 impl<T> Module for WasmiModule<T>
 where
@@ -326,63 +377,24 @@ where
     }
 }
 
+impl<T> ExecutorPointer<AsWasmiVM<T>> for u32 where T: 'static + IsWasmiVM<T> {}
+
+impl<T, Pointer> Executor<Pointer> for AsWasmiVM<T>
+where
+    T: 'static + IsWasmiVM<T>,
+    Pointer: ExecutorPointer<Self>,
+{
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        executor::{AllocateInput, AsSimpleExecutor, CosmwasmQueryInput},
+        executor::{AllocateInput, CosmwasmQueryInput, Executor},
         tagged::Tagged,
     };
     use alloc::vec;
     use cosmwasm_minimal_std::{Addr, BlockInfo, ContractInfo, Env, Timestamp};
-
-    impl<'a> TryFrom<WasmiModuleOutput<'a>> for RuntimeValue {
-        type Error = WasmiModuleError;
-        fn try_from(WasmiModuleOutput(value): WasmiModuleOutput<'a>) -> Result<Self, Self::Error> {
-            match value {
-                Either::Left(_) => Err(WasmiModuleError::NoRuntimeValueReturned),
-                Either::Right((_, rt_value)) => Ok(rt_value),
-            }
-        }
-    }
-
-    impl<'a> TryFrom<WasmiModuleOutput<'a>> for u32 {
-        type Error = WasmiModuleError;
-        fn try_from(WasmiModuleOutput(value): WasmiModuleOutput<'a>) -> Result<Self, Self::Error> {
-            match value {
-                Either::Right((_, RuntimeValue::I32(rt_value))) => Ok(rt_value as u32),
-                _ => Err(WasmiModuleError::NoRuntimeValueReturned),
-            }
-        }
-    }
-
-    impl<'a> TryFrom<AllocateInput<u32>> for WasmiModuleInput<'a> {
-        type Error = WasmiVMError;
-        fn try_from(AllocateInput(ptr): AllocateInput<u32>) -> Result<Self, Self::Error> {
-            Ok(WasmiModuleInput(
-                WasmiFunctionName("allocate".to_owned()),
-                (vec![RuntimeValue::I32(ptr as i32)], PhantomData),
-            ))
-        }
-    }
-
-    impl<'a> TryFrom<CosmwasmQueryInput<'a, u32>> for WasmiModuleInput<'a> {
-        type Error = WasmiVMError;
-        fn try_from(
-            CosmwasmQueryInput(Tagged(env_ptr, _), Tagged(msg_ptr, _)): CosmwasmQueryInput<'a, u32>,
-        ) -> Result<Self, Self::Error> {
-            Ok(WasmiModuleInput(
-                WasmiFunctionName("query".to_owned()),
-                (
-                    vec![
-                        RuntimeValue::I32(env_ptr as i32),
-                        RuntimeValue::I32(msg_ptr as i32),
-                    ],
-                    PhantomData,
-                ),
-            ))
-        }
-    }
 
     struct SimpleWasmiVM {
         codes: BTreeMap<WasmiModuleId, Vec<u8>>,
@@ -652,24 +664,22 @@ mod tests {
                 .flatten()
                 .collect(),
         });
-        let mut executor = AsSimpleExecutor { vm };
-        let module = executor.vm.load(&WasmiModuleId(0xDEADC0DE)).unwrap();
-        executor
-            .cosmwasm_query(
-                &module,
-                Env {
-                    block: BlockInfo {
-                        height: 0,
-                        time: Timestamp(0),
-                        chain_id: "".into(),
-                    },
-                    transaction: None,
-                    contract: ContractInfo {
-                        address: Addr::unchecked(""),
-                    },
+        let module = vm.load(&WasmiModuleId(0xDEADC0DE)).unwrap();
+        vm.cosmwasm_query(
+            &module,
+            Env {
+                block: BlockInfo {
+                    height: 0,
+                    time: Timestamp(0),
+                    chain_id: "".into(),
                 },
-                r#"{ "token_info": {} }"#.as_bytes(),
-            )
-            .unwrap();
+                transaction: None,
+                contract: ContractInfo {
+                    address: Addr::unchecked(""),
+                },
+            },
+            r#"{ "token_info": {} }"#.as_bytes(),
+        )
+        .unwrap();
     }
 }
