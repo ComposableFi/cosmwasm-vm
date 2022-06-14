@@ -2,11 +2,13 @@
 
 Experimental, minimalistic, `no_std` friendly abstract virtual machine for CosmWasm contracts execution.
 
-# Getting started
+### Getting started
 
 - [Install Nix](https://nixos.org/download.html)
 - [Install Nix Flakes](https://nixos.wiki/wiki/Flakes)
 - Enter the dev env with: `nix develop`
 - Run test suite using: `cargo test`
 
-NOTE: the usage of GAT require nightly for now.
+### NOTE
+
+The usage of GAT require nightly for now.
