@@ -1,4 +1,4 @@
-// lib.rs ---
+// transaction.rs ---
 
 // Copyright (C) 2022 Hussein Ait-Lahcen
 
@@ -26,18 +26,11 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-#![no_std]
-#![feature(generic_associated_types)]
-#![cfg_attr(test, feature(assert_matches))]
+pub type TransactionlErrorOf<T> = <T as Transactional>::Error;
 
-extern crate alloc;
-
-pub mod executor;
-pub mod input;
-pub mod memory;
-pub mod system;
-pub mod tagged;
-pub mod vm;
-pub mod wasmi;
-pub mod host;
-pub mod transaction;
+pub trait Transactional {
+  type Error;
+  fn transaction_begin();
+  fn transaction_commit();
+  fn transaction_abort();
+}

@@ -27,14 +27,20 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::{
-    executor::{Executor, ExecutorError},
+    executor::{Executor, ExecutorError, ExecutorMemoryOf},
+    memory::{ReadableMemoryErrorOf, WritableMemoryErrorOf},
+    transaction::{Transactional, TransactionlErrorOf},
     vm::VmErrorOf,
 };
 
 pub enum SystemError {}
 
-pub trait System: Executor
+pub trait System: Executor + Transactional
 where
-    VmErrorOf<Self>: From<ExecutorError> + From<SystemError>,
+    for<'x> VmErrorOf<Self>: From<ReadableMemoryErrorOf<ExecutorMemoryOf<'x, Self>>>
+        + From<WritableMemoryErrorOf<ExecutorMemoryOf<'x, Self>>>
+        + From<ExecutorError>
+        + From<SystemError>
+        + From<TransactionlErrorOf<Self>>,
 {
 }
