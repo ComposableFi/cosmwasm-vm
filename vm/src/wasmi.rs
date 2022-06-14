@@ -653,7 +653,7 @@ mod host_functions {
     }
 }
 
-pub fn vm_new<T>(code: &[u8]) -> Result<AsWasmiVM<T>, WasmiVMError>
+pub fn new_vm<T>(code: &[u8]) -> Result<AsWasmiVM<T>, WasmiVMError>
 where
     T: 'static + IsWasmiVM<T> + WasmiHost,
 {
@@ -744,12 +744,7 @@ mod tests {
     fn test() {
         env_logger::builder().init();
         let code = include_bytes!("../../fixtures/cw20_base.wasm").to_vec();
-        let host_functions_definitions = host_functions::definitions::<SimpleWasmiVM>();
-        let mut vm = <AsWasmiVM<SimpleWasmiVM>>::load((
-            WasmiImportResolver(&host_functions_definitions),
-            &code,
-        ))
-        .unwrap();
+        let mut vm = new_vm::<SimpleWasmiVM>(&code).unwrap();
         let env = Env {
             block: BlockInfo {
                 height: 0,
