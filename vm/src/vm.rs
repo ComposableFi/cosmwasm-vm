@@ -28,58 +28,29 @@
 
 use crate::input::Input;
 
-pub trait Module {
-    type Id;
-    type Input<'a>;
-    type Output<'a>;
-    type Memory;
-    type VM;
-    type Error;
-    fn memory(&self) -> &Self::Memory;
-    fn call<'a, O, E>(&self, vm: &mut Self::VM, input: Self::Input<'a>) -> Result<O, Self::Error>
-    where
-        O: for<'x> TryFrom<Self::Output<'x>, Error = E>,
-        Self::Error: From<E>;
-}
-
-type ModuleOf<T> = <T as VM>::Module;
-type ModuleIdOf<T> = <ModuleOf<T> as Module>::Id;
-type ModuleInputOf<'a, T> = <ModuleOf<T> as Module>::Input<'a>;
-type ModuleOutputOf<'a, T> = <ModuleOf<T> as Module>::Output<'a>;
-type ModuleErrorOf<T> = <ModuleOf<T> as Module>::Error;
+pub type VmInputOf<'a, T> = <T as VM>::Input<'a>;
+pub type VmOutputOf<'a, T> = <T as VM>::Output<'a>;
 pub type VmErrorOf<T> = <T as VM>::Error;
 
 pub trait VM {
-    type Module: Module<VM = Self>;
-    type Error: From<ModuleErrorOf<Self>>;
-    fn load(&mut self, module_id: &ModuleIdOf<Self>) -> Result<Self::Module, Self::Error>;
-    fn call<'a, I, IE, OE>(
-        &mut self,
-        module: &Self::Module,
-        input: I,
-    ) -> Result<I::Output, Self::Error>
+    type Input<'a>;
+    type Output<'a>;
+    type Error;
+    type Code<'a>;
+    fn load<'a>(code: Self::Code<'a>) -> Result<Self, Self::Error>
     where
-        I: Input + TryInto<ModuleInputOf<'a, Self>, Error = IE>,
-        I::Output: for<'x> TryFrom<ModuleOutputOf<'x, Self>, Error = OE>,
-        VmErrorOf<Self>: From<IE>,
-        ModuleErrorOf<Self>: From<OE>,
+        Self: Sized;
+    fn call<'a, I, IE, OE>(&mut self, input: I) -> Result<I::Output, Self::Error>
+    where
+        I: Input + TryInto<VmInputOf<'a, Self>, Error = IE>,
+        I::Output: for<'x> TryFrom<VmOutputOf<'x, Self>, Error = OE>,
+        VmErrorOf<Self>: From<IE> + From<OE>,
     {
         let input = input.try_into()?;
-        Ok(module.call::<I::Output, OE>(self, input)?)
+        Ok(self.raw_call::<I::Output, OE>(input)?)
     }
-    fn call_raw<'a, I, IE, OE>(
-        &mut self,
-        module_id: &ModuleIdOf<Self>,
-        input: I,
-    ) -> Result<I::Output, Self::Error>
+    fn raw_call<'a, O, E>(&mut self, input: Self::Input<'a>) -> Result<O, Self::Error>
     where
-        I: Input + TryInto<ModuleInputOf<'a, Self>, Error = IE>,
-        I::Output: for<'x> TryFrom<ModuleOutputOf<'x, Self>, Error = OE>,
-        VmErrorOf<Self>: From<IE>,
-        ModuleErrorOf<Self>: From<OE>,
-    {
-        let module = self.load(module_id)?;
-        let input = input.try_into()?;
-        Ok(module.call::<I::Output, OE>(self, input)?)
-    }
+        O: for<'x> TryFrom<Self::Output<'x>, Error = E>,
+        Self::Error: From<E>;
 }

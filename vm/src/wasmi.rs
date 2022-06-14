@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::executor::AllocateInput;
+use crate::executor::AsFunctionName;
+use crate::executor::CosmwasmCallInput;
 use crate::executor::CosmwasmQueryInput;
 use crate::executor::Executor;
 use crate::executor::ExecutorError;
@@ -69,24 +71,23 @@ pub type WasmiHostFunction<T> =
 pub type WasmiHostModule<T> =
     BTreeMap<WasmiFunctionName, (WasmiHostFunctionIndex, WasmiHostFunction<T>)>;
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub struct WasmiModuleId(u32);
 #[derive(PartialEq, Eq, Debug)]
 pub enum WasmiVMError {
     WasmiError(wasmi::Error),
-    WasmiModuleError(WasmiModuleError),
+    ExecutorError(ExecutorError),
+    MemoryReadError(MemoryReadError),
+    MemoryWriteError(MemoryWriteError),
+    HostFunctionNotFound(WasmiHostFunctionIndex),
+    HostFunctionFailure(String),
     ModuleNotFound,
     MemoryNotExported,
     MemoryExportedIsNotMemory,
-    HostFunctionNotFound(WasmiHostFunctionIndex),
-    HostFunctionFailure(String),
-    ExecutorError(ExecutorError),
+    LowLevelMemoryReadError,
+    LowLevelMemoryWriteError,
     InvalidPointer,
-}
-impl From<WasmiModuleError> for WasmiVMError {
-    fn from(e: WasmiModuleError) -> Self {
-        WasmiVMError::WasmiModuleError(e)
-    }
+    UnexpectedUnit,
+    StorageKeyNotFound(Vec<u8>),
+    InvalidHostSignature,
 }
 impl From<wasmi::Error> for WasmiVMError {
     fn from(e: wasmi::Error) -> Self {
@@ -101,6 +102,16 @@ impl From<wasmi::Trap> for WasmiVMError {
 impl From<ExecutorError> for WasmiVMError {
     fn from(e: ExecutorError) -> Self {
         WasmiVMError::ExecutorError(e)
+    }
+}
+impl From<MemoryReadError> for WasmiVMError {
+    fn from(e: MemoryReadError) -> Self {
+        WasmiVMError::MemoryReadError(e)
+    }
+}
+impl From<MemoryWriteError> for WasmiVMError {
+    fn from(e: MemoryWriteError) -> Self {
+        WasmiVMError::MemoryWriteError(e)
     }
 }
 impl From<TryFromIntError> for WasmiVMError {
@@ -119,12 +130,13 @@ impl HostError for WasmiVMError {}
 #[repr(transparent)]
 pub struct AsWasmiVM<T>(T);
 
-pub trait IsWasmiVM<T> {
-    fn codes(&self) -> &BTreeMap<WasmiModuleId, Vec<u8>>;
+pub trait IsWasmiVM<T>: for<'x> From<(Self::Resolver<'x>, WasmiModule)> {
+    type Resolver<'a>: ImportResolver;
     fn host_functions_definitions(
         &self,
     ) -> &BTreeMap<WasmiModuleName, WasmiHostModule<AsWasmiVM<T>>>;
     fn host_functions(&self) -> &BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<AsWasmiVM<T>>>;
+    fn module(&self) -> WasmiModule;
 }
 
 impl<T> Externals for AsWasmiVM<T>
@@ -146,24 +158,20 @@ where
     }
 }
 
-impl<T> ImportResolver for AsWasmiVM<T>
-where
-    T: IsWasmiVM<T>,
-{
+pub struct WasmiImportResolver<'a, T>(&'a BTreeMap<WasmiModuleName, WasmiHostModule<T>>);
+impl<'a, T> ImportResolver for WasmiImportResolver<'a, T> {
     fn resolve_func(
         &self,
         module_name: &str,
         field_name: &str,
         signature: &wasmi::Signature,
     ) -> Result<wasmi::FuncRef, wasmi::Error> {
-        let module = self
-            .0
-            .host_functions_definitions()
-            .get(&WasmiModuleName(module_name.to_owned()))
-            .ok_or(wasmi::Error::Instantiation(format!(
+        let module = self.0.get(&WasmiModuleName(module_name.to_owned())).ok_or(
+            wasmi::Error::Instantiation(format!(
                 "A module tried to load an unknown host module: {}",
                 module_name
-            )))?;
+            )),
+        )?;
         let (WasmiHostFunctionIndex(function_index), _) = *module
             .get(&WasmiFunctionName(field_name.to_owned()))
             .ok_or(wasmi::Error::Instantiation(format!(
@@ -207,41 +215,14 @@ where
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
-pub enum WasmiModuleError {
-    WasmiError(wasmi::Error),
-    MemoryWriteError(MemoryWriteError),
-    MemoryReadError(MemoryReadError),
-    WasmiMemoryWriteFailure,
-    WasmiMemoryReadFailure,
-    NoRuntimeValueReturned,
-}
-impl From<wasmi::Error> for WasmiModuleError {
-    fn from(e: wasmi::Error) -> Self {
-        WasmiModuleError::WasmiError(e)
-    }
-}
-impl From<MemoryWriteError> for WasmiModuleError {
-    fn from(e: MemoryWriteError) -> Self {
-        WasmiModuleError::MemoryWriteError(e)
-    }
-}
-impl From<MemoryReadError> for WasmiModuleError {
-    fn from(e: MemoryReadError) -> Self {
-        WasmiModuleError::MemoryReadError(e)
-    }
-}
+pub struct WasmiOutput<'a>(Either<&'a wasmi::MemoryRef, (&'a wasmi::MemoryRef, RuntimeValue)>);
 
-pub struct WasmiModuleOutput<'a>(
-    Either<&'a wasmi::MemoryRef, (&'a wasmi::MemoryRef, RuntimeValue)>,
-);
+pub struct WasmiInput<'a>(WasmiFunctionName, WasmiFunctionArgs<'a>);
 
-pub struct WasmiModuleInput<'a>(WasmiFunctionName, WasmiFunctionArgs<'a>);
-
-pub struct WasmiModule<T> {
+#[derive(Clone)]
+pub struct WasmiModule {
     module: wasmi::ModuleRef,
     memory: wasmi::MemoryRef,
-    _marker: PhantomData<T>,
 }
 
 impl Pointable for wasmi::MemoryRef {
@@ -249,59 +230,59 @@ impl Pointable for wasmi::MemoryRef {
 }
 
 impl ReadableMemory for wasmi::MemoryRef {
-    type Error = WasmiModuleError;
+    type Error = WasmiVMError;
     fn read(&self, offset: Self::Pointer, buffer: &mut [u8]) -> Result<(), Self::Error> {
         self.get_into(offset, buffer)
-            .map_err(|_| WasmiModuleError::WasmiMemoryReadFailure)
+            .map_err(|_| WasmiVMError::LowLevelMemoryReadError)
     }
 }
 
 impl WritableMemory for wasmi::MemoryRef {
-    type Error = WasmiModuleError;
+    type Error = WasmiVMError;
     fn write(&self, offset: Self::Pointer, buffer: &[u8]) -> Result<(), Self::Error> {
         self.set(offset, buffer)
-            .map_err(|_| WasmiModuleError::WasmiMemoryWriteFailure)
+            .map_err(|_| WasmiVMError::LowLevelMemoryWriteError)
     }
 }
 
 impl ReadWriteMemory for wasmi::MemoryRef {}
 
-impl<'a> TryFrom<WasmiModuleOutput<'a>> for RuntimeValue {
-    type Error = WasmiModuleError;
-    fn try_from(WasmiModuleOutput(value): WasmiModuleOutput<'a>) -> Result<Self, Self::Error> {
+impl<'a> TryFrom<WasmiOutput<'a>> for RuntimeValue {
+    type Error = WasmiVMError;
+    fn try_from(WasmiOutput(value): WasmiOutput<'a>) -> Result<Self, Self::Error> {
         match value {
-            Either::Left(_) => Err(WasmiModuleError::NoRuntimeValueReturned),
+            Either::Left(_) => Err(WasmiVMError::UnexpectedUnit),
             Either::Right((_, rt_value)) => Ok(rt_value),
         }
     }
 }
 
-impl<'a> TryFrom<WasmiModuleOutput<'a>> for u32 {
-    type Error = WasmiModuleError;
-    fn try_from(WasmiModuleOutput(value): WasmiModuleOutput<'a>) -> Result<Self, Self::Error> {
+impl<'a> TryFrom<WasmiOutput<'a>> for u32 {
+    type Error = WasmiVMError;
+    fn try_from(WasmiOutput(value): WasmiOutput<'a>) -> Result<Self, Self::Error> {
         match value {
             Either::Right((_, RuntimeValue::I32(rt_value))) => Ok(rt_value as u32),
-            _ => Err(WasmiModuleError::NoRuntimeValueReturned),
+            _ => Err(WasmiVMError::UnexpectedUnit),
         }
     }
 }
 
-impl<'a> TryFrom<AllocateInput<u32>> for WasmiModuleInput<'a> {
+impl<'a> TryFrom<AllocateInput<u32>> for WasmiInput<'a> {
     type Error = WasmiVMError;
     fn try_from(AllocateInput(ptr): AllocateInput<u32>) -> Result<Self, Self::Error> {
-        Ok(WasmiModuleInput(
+        Ok(WasmiInput(
             WasmiFunctionName("allocate".to_owned()),
             (vec![RuntimeValue::I32(ptr as i32)], PhantomData),
         ))
     }
 }
 
-impl<'a> TryFrom<CosmwasmQueryInput<'a, u32>> for WasmiModuleInput<'a> {
+impl<'a> TryFrom<CosmwasmQueryInput<'a, u32>> for WasmiInput<'a> {
     type Error = WasmiVMError;
     fn try_from(
         CosmwasmQueryInput(Tagged(env_ptr, _), Tagged(msg_ptr, _)): CosmwasmQueryInput<'a, u32>,
     ) -> Result<Self, Self::Error> {
-        Ok(WasmiModuleInput(
+        Ok(WasmiInput(
             WasmiFunctionName("query".to_owned()),
             (
                 vec![
@@ -314,35 +295,25 @@ impl<'a> TryFrom<CosmwasmQueryInput<'a, u32>> for WasmiModuleInput<'a> {
     }
 }
 
-impl<T> Module for WasmiModule<T>
+impl<'a, I> TryFrom<CosmwasmCallInput<'a, u32, I>> for WasmiInput<'a>
 where
-    T: 'static + Externals,
+    I: AsFunctionName,
 {
-    type Id = WasmiModuleId;
-    type Input<'a> = WasmiModuleInput<'a>;
-    type Output<'a> = WasmiModuleOutput<'a>;
-    type VM = T;
-    type Memory = wasmi::MemoryRef;
-    type Error = WasmiModuleError;
-    fn memory(&self) -> &Self::Memory {
-        &self.memory
-    }
-    fn call<'a, O, E>(
-        &self,
-        runtime: &mut Self::VM,
-        WasmiModuleInput(WasmiFunctionName(function_name), (function_args, _)): Self::Input<'a>,
-    ) -> Result<O, Self::Error>
-    where
-        O: for<'x> TryFrom<Self::Output<'x>, Error = E>,
-        Self::Error: From<E>,
-    {
-        let value = self
-            .module
-            .invoke_export(&function_name, &function_args, runtime)?;
-        Ok(O::try_from(WasmiModuleOutput(match value {
-            Some(non_unit) => Either::Right((&self.memory, non_unit)),
-            None => Either::Left(&self.memory),
-        }))?)
+    type Error = WasmiVMError;
+    fn try_from(
+        CosmwasmCallInput(Tagged(env_ptr, _), Tagged(info_ptr, _), Tagged(msg_ptr, _), _): CosmwasmCallInput<'a, u32, I>,
+    ) -> Result<Self, Self::Error> {
+        Ok(WasmiInput(
+            WasmiFunctionName(I::name().into()),
+            (
+                vec![
+                    RuntimeValue::I32(env_ptr as i32),
+                    RuntimeValue::I32(info_ptr as i32),
+                    RuntimeValue::I32(msg_ptr as i32),
+                ],
+                PhantomData,
+            ),
+        ))
     }
 }
 
@@ -350,19 +321,14 @@ impl<T> VM for AsWasmiVM<T>
 where
     T: 'static + IsWasmiVM<T>,
 {
-    type Module = WasmiModule<Self>;
+    type Input<'a> = WasmiInput<'a>;
+    type Output<'a> = WasmiOutput<'a>;
     type Error = WasmiVMError;
-    fn load(
-        &mut self,
-        module_id: &<Self::Module as Module>::Id,
-    ) -> Result<Self::Module, Self::Error> {
-        let module_code = self
-            .0
-            .codes()
-            .get(module_id)
-            .ok_or(WasmiVMError::ModuleNotFound)?;
-        let wasmi_module = wasmi::Module::from_buffer(&module_code)?;
-        let not_started_module_instance = wasmi::ModuleInstance::new(&wasmi_module, self)?;
+    type Code<'a> = (T::Resolver<'a>, &'a [u8]);
+    fn load<'a>((import_resolver, code): Self::Code<'a>) -> Result<Self, Self::Error> {
+        let wasmi_module = wasmi::Module::from_buffer(code)?;
+        let not_started_module_instance =
+            wasmi::ModuleInstance::new(&wasmi_module, &import_resolver)?;
         let module_instance = not_started_module_instance.run_start(&mut NopExternals)?;
         let memory_exported = module_instance
             .export_by_name("memory")
@@ -371,40 +337,91 @@ where
             wasmi::ExternVal::Memory(mem) => Ok(mem),
             _ => Err(WasmiVMError::MemoryExportedIsNotMemory),
         }?;
-        Ok(WasmiModule {
-            module: module_instance,
-            memory,
-            _marker: PhantomData,
-        })
+        Ok(AsWasmiVM(
+            (
+                import_resolver,
+                WasmiModule {
+                    module: module_instance,
+                    memory,
+                },
+            )
+                .into(),
+        ))
+    }
+    fn raw_call<'a, O, E>(
+        &mut self,
+        WasmiInput(WasmiFunctionName(function_name), (function_args, _)): Self::Input<'a>,
+    ) -> Result<O, Self::Error>
+    where
+        O: for<'x> TryFrom<Self::Output<'x>, Error = E>,
+        Self::Error: From<E>,
+    {
+        let WasmiModule { module, memory } = self.0.module();
+        let value = module.invoke_export(&function_name, &function_args, self)?;
+        Ok(O::try_from(WasmiOutput(match value {
+            Some(non_unit) => Either::Right((&memory, non_unit)),
+            None => Either::Left(&memory),
+        }))?)
     }
 }
 
 impl<T> ExecutorPointer<AsWasmiVM<T>> for u32 where T: 'static + IsWasmiVM<T> {}
-
 impl<T> Executor for AsWasmiVM<T>
 where
     T: 'static + IsWasmiVM<T>,
 {
-  type Pointer = u32;
+    type Pointer = u32;
+    type Memory<'a> = wasmi::MemoryRef;
+    fn memory<'a>(&mut self) -> Self::Memory<'a> {
+        self.0.module().memory.clone()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::executor::{constants, ConstantReadLimit, InstantiateInput};
+    use core::assert_matches::assert_matches;
     use cosmwasm_minimal_std::{
-        Addr, BlockInfo, ContractInfo, CosmwasmQueryResult, Env, QueryResult, Timestamp,
+        Addr, Binary, BlockInfo, ContractInfo, CosmwasmExecutionResult, CosmwasmQueryResult, Env,
+        InstantiateResult, MessageInfo, QueryResult, Timestamp,
     };
 
     struct SimpleWasmiVM {
-        codes: BTreeMap<WasmiModuleId, Vec<u8>>,
         host_functions_definitions: BTreeMap<WasmiModuleName, WasmiHostModule<AsWasmiVM<Self>>>,
         host_functions: BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<AsWasmiVM<Self>>>,
+        storage: BTreeMap<Vec<u8>, Vec<u8>>,
+        executing_module: WasmiModule,
+    }
+
+    impl<'a>
+        From<(
+            WasmiImportResolver<'a, AsWasmiVM<SimpleWasmiVM>>,
+            WasmiModule,
+        )> for SimpleWasmiVM
+    {
+        fn from(
+            (WasmiImportResolver(host_functions_definitions), executing_module): (
+                WasmiImportResolver<'a, AsWasmiVM<SimpleWasmiVM>>,
+                WasmiModule,
+            ),
+        ) -> Self {
+            SimpleWasmiVM {
+                host_functions_definitions: host_functions_definitions.clone(),
+                host_functions: host_functions_definitions
+                    .clone()
+                    .into_iter()
+                    .map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
+                    .flatten()
+                    .collect(),
+                storage: Default::default(),
+                executing_module,
+            }
+        }
     }
 
     impl IsWasmiVM<SimpleWasmiVM> for SimpleWasmiVM {
-        fn codes(&self) -> &BTreeMap<WasmiModuleId, Vec<u8>> {
-            &self.codes
-        }
+        type Resolver<'a> = WasmiImportResolver<'a, AsWasmiVM<Self>>;
 
         fn host_functions_definitions(
             &self,
@@ -418,22 +435,55 @@ mod tests {
         {
             &self.host_functions
         }
+
+        fn module(&self) -> WasmiModule {
+            self.executing_module.clone()
+        }
     }
 
     fn env_db_read(
-        _: &mut AsWasmiVM<SimpleWasmiVM>,
-        _: &[RuntimeValue],
+        vm: &mut AsWasmiVM<SimpleWasmiVM>,
+        values: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, WasmiVMError> {
         log::debug!("db_read");
-        Ok(Some(RuntimeValue::I32(0)))
+        match &values[..] {
+            [RuntimeValue::I32(key_pointer)] => {
+                let key = vm
+                    .passthrough_out::<ConstantReadLimit<{ constants::MAX_LENGTH_DB_KEY }>>(
+                        *key_pointer as u32,
+                    )?;
+                let value =
+                    vm.0.storage
+                        .get(&key)
+                        .ok_or(WasmiVMError::StorageKeyNotFound(key))?
+                        .clone();
+                let Tagged(value_pointer, _) = vm.passthrough_in::<()>(&value)?;
+                Ok(Some(RuntimeValue::I32(value_pointer as i32)))
+            }
+            _ => Err(WasmiVMError::InvalidHostSignature),
+        }
     }
 
     fn env_db_write(
-        _: &mut AsWasmiVM<SimpleWasmiVM>,
-        _: &[RuntimeValue],
+        vm: &mut AsWasmiVM<SimpleWasmiVM>,
+        values: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, WasmiVMError> {
         log::debug!("db_write");
-        Ok(None)
+        match &values[..] {
+            [RuntimeValue::I32(key_pointer), RuntimeValue::I32(value_pointer)] => {
+                let key = vm
+                    .passthrough_out::<ConstantReadLimit<{ constants::MAX_LENGTH_DB_KEY }>>(
+                        *key_pointer as u32,
+                    )?;
+                let value = vm
+                    .passthrough_out::<ConstantReadLimit<{ constants::MAX_LENGTH_DB_VALUE }>>(
+                        *value_pointer as u32,
+                    )?;
+                vm.0.storage.insert(key, value);
+                Ok(None)
+            }
+            _ => Err(WasmiVMError::InvalidHostSignature),
+        }
     }
 
     fn env_db_remove(
@@ -655,19 +705,45 @@ mod tests {
                 ),
             ]),
         )]);
-        let mut vm = AsWasmiVM(SimpleWasmiVM {
-            codes: BTreeMap::from([(WasmiModuleId(0xDEADC0DE), code)]),
-            host_functions_definitions: host_functions_definitions.clone(),
-            host_functions: host_functions_definitions
-                .into_iter()
-                .map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
-                .flatten()
-                .collect(),
-        });
-        let module = vm.load(&WasmiModuleId(0xDEADC0DE)).unwrap();
+        let mut vm = <AsWasmiVM<SimpleWasmiVM>>::load((
+            WasmiImportResolver(&host_functions_definitions),
+            &code,
+        ))
+        .unwrap();
+        let env = Env {
+            block: BlockInfo {
+                height: 0,
+                time: Timestamp(0),
+                chain_id: "".into(),
+            },
+            transaction: None,
+            contract: ContractInfo {
+                address: Addr::unchecked(""),
+            },
+        };
+        let info = MessageInfo {
+            sender: Addr::unchecked(""),
+            funds: Default::default(),
+        };
+        assert_matches!(
+            vm.cosmwasm_call::<InstantiateInput>(
+                env.clone(),
+                info.clone(),
+                r#"{
+                  "name": "Picasso",
+                  "symbol": "PICA",
+                  "decimals": 12,
+                  "initial_balances": [],
+                  "mint": null,
+                  "marketing": null
+                }"#
+                .as_bytes(),
+            )
+            .unwrap(),
+            InstantiateResult(CosmwasmExecutionResult::Ok(_))
+        );
         assert_eq!(
             vm.cosmwasm_query(
-                &module,
                 Env {
                     block: BlockInfo {
                         height: 0,
@@ -682,9 +758,11 @@ mod tests {
                 r#"{ "token_info": {} }"#.as_bytes(),
             )
             .unwrap(),
-            QueryResult(CosmwasmQueryResult::Err(
-                "cw20_base::state::TokenInfo not found".into()
-            ))
-        )
+            QueryResult(CosmwasmQueryResult::Ok(Binary(
+                r#"{"name":"Picasso","symbol":"PICA","decimals":12,"total_supply":"0"}"#
+                    .as_bytes()
+                    .to_vec()
+            )))
+        );
     }
 }

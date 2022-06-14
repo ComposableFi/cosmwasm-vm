@@ -26,16 +26,17 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use core::{fmt::Debug, marker::PhantomData};
 use crate::{
     input::{Input, OutputOf},
     memory::{
-        LimitedRead, RawFromRegion, RawIntoRegion, ReadWriteMemory, ReadableMemory,
-        WritableMemory, Write,
+        LimitedRead, RawFromRegion, RawIntoRegion, ReadWriteMemory, ReadableMemory, WritableMemory,
+        Write,
     },
     tagged::Tagged,
-    vm::{Module, VM, VmErrorOf},
+    vm::{VmErrorOf, VmInputOf, VmOutputOf, VM},
 };
+use alloc::vec::Vec;
+use core::{fmt::Debug, marker::PhantomData};
 use cosmwasm_minimal_std::{
     DeserializeLimit, Env, ExecuteResult, InstantiateResult, MessageInfo, QueryResult, ReadLimit,
     ReplyResult,
@@ -47,12 +48,6 @@ pub trait Environment {
     type Error;
     fn query(query: Self::Query) -> Result<OutputOf<Self::Query>, Self::Error>;
 }
-
-type ModuleOf<T> = <T as VM>::Module;
-type ModuleMemoryOf<T> = <ModuleOf<T> as Module>::Memory;
-type ModuleErrorOf<T> = <ModuleOf<T> as Module>::Error;
-type ModuleInputOf<'a, T> = <ModuleOf<T> as Module>::Input<'a>;
-type ModuleOutputOf<'a, T> = <ModuleOf<T> as Module>::Output<'a>;
 
 pub struct AllocateInput<Pointer>(pub Pointer);
 impl<Pointer> Input for AllocateInput<Pointer> {
@@ -83,15 +78,34 @@ pub struct InstantiateInput;
 impl Input for InstantiateInput {
     type Output = InstantiateResult;
 }
+impl AsFunctionName for InstantiateInput {
+    fn name() -> &'static str {
+        "instantiate"
+    }
+}
 
 pub struct ExecuteInput;
 impl Input for ExecuteInput {
     type Output = ExecuteResult;
 }
+impl AsFunctionName for ExecuteInput {
+    fn name() -> &'static str {
+        "execute"
+    }
+}
 
 pub struct ReplyInput;
 impl Input for ReplyInput {
     type Output = ReplyResult;
+}
+impl AsFunctionName for ReplyInput {
+    fn name() -> &'static str {
+        "reply"
+    }
+}
+
+pub trait AsFunctionName {
+    fn name() -> &'static str;
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -105,7 +119,7 @@ pub enum ExecutorError {
 }
 
 pub trait ExecutorPointer<T>:
-    for<'x> TryFrom<ModuleOutputOf<'x, T>, Error = ModuleErrorOf<T>>
+    for<'x> TryFrom<VmOutputOf<'x, T>, Error = VmErrorOf<T>>
     + TryFrom<usize>
     + TryInto<usize>
     + Copy
@@ -116,137 +130,169 @@ where
 {
 }
 
+pub mod constants {
+    /// A kibi (kilo binary)
+    pub const KI: u32 = 1024;
+    /// A mibi (mega binary)
+    pub const MI: u32 = 1024 * 1024;
+    /// Max key length for db_write/db_read/db_remove/db_scan (when VM reads the key argument from Wasm
+    /// memory)
+    pub const MAX_LENGTH_DB_KEY: u32 = 64 * KI;
+    /// Max value length for db_write (when VM reads the value argument from Wasm memory)
+    pub const MAX_LENGTH_DB_VALUE: u32 = 128 * KI;
+    /// Typically 20 (Cosmos SDK, Ethereum), 32 (Nano, Substrate) or 54 (MockApi)
+    pub const MAX_LENGTH_CANONICAL_ADDRESS: u32 = 64;
+    /// The max length of human address inputs (in bytes).
+    /// The maximum allowed size for [bech32](https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki#bech32)
+    /// is 90 characters and we're adding some safety margin around that for other formats.
+    pub const MAX_LENGTH_HUMAN_ADDRESS: u32 = 256;
+    pub const MAX_LENGTH_QUERY_CHAIN_REQUEST: u32 = 64 * KI;
+    /// Length of a serialized Ed25519  signature
+    pub const MAX_LENGTH_ED25519_SIGNATURE: u32 = 64;
+    /// Max length of a Ed25519 message in bytes.
+    /// This is an arbitrary value, for performance / memory contraints. If you need to verify larger
+    /// messages, let us know.
+    pub const MAX_LENGTH_ED25519_MESSAGE: u32 = 128 * 1024;
+    /// Max number of batch Ed25519 messages / signatures / public_keys.
+    /// This is an arbitrary value, for performance / memory contraints. If you need to batch-verify a
+    /// larger number of signatures, let us know.
+    pub const MAX_COUNT_ED25519_BATCH: u32 = 256;
+
+    /// Max length for a debug message
+    pub const MAX_LENGTH_DEBUG: u32 = 2 * MI;
+}
+
+pub struct ConstantReadLimit<const K: u32>;
+impl<const K: u32> ReadLimit for ConstantReadLimit<K> {
+    fn read_limit() -> usize {
+        K as usize
+    }
+}
+
 pub trait Executor: VM
 where
-    VmErrorOf<Self>: From<ExecutorError>,
+    for<'x> VmErrorOf<Self>: From<<Self::Memory<'x> as WritableMemory>::Error>
+        + From<<Self::Memory<'x> as ReadableMemory>::Error>
+        + From<ExecutorError>,
 {
     type Pointer: ExecutorPointer<Self>;
+    type Memory<'a>: ReadWriteMemory<Pointer = Self::Pointer>;
 
-    fn allocate<L>(&mut self, module: &ModuleOf<Self>, len: L) -> Result<Self::Pointer, VmErrorOf<Self>>
+    fn memory<'a>(&mut self) -> Self::Memory<'a>;
+
+    fn allocate<L>(&mut self, len: L) -> Result<Self::Pointer, VmErrorOf<Self>>
     where
-        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>,
+        for<'x> VmInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>,
         Self::Pointer: TryFrom<L>,
     {
         let len_value =
             Self::Pointer::try_from(len).map_err(|_| ExecutorError::AllocationWouldOverflow)?;
         let input = AllocateInput(len_value);
-        let result = self.call::<AllocateInput<Self::Pointer>, _, _>(module, input)?;
-        log::debug!("Allocate: size={:?}, ptr={:?}", len_value, result);
+        let result = self.call::<AllocateInput<Self::Pointer>, _, _>(input)?;
+        log::debug!("Allocate: size={:?}, pointer={:?}", len_value, result);
         Ok(result)
     }
 
-    fn deallocate<L>(&mut self, module: &ModuleOf<Self>, ptr: L) -> Result<(), VmErrorOf<Self>>
+    fn deallocate<L>(&mut self, pointer: L) -> Result<(), VmErrorOf<Self>>
     where
-        for<'x> ModuleInputOf<'x, Self>: TryFrom<DeallocateInput<Self::Pointer>, Error = VmErrorOf<Self>>,
+        for<'x> VmInputOf<'x, Self>:
+            TryFrom<DeallocateInput<Self::Pointer>, Error = VmErrorOf<Self>>,
         Self::Pointer: TryFrom<L>,
     {
         log::debug!("Deallocate");
-        let ptr_value =
-            Self::Pointer::try_from(ptr).map_err(|_| ExecutorError::DeallocationWouldOverflow)?;
-        let input = DeallocateInput(ptr_value);
-        self.call::<DeallocateInput<Self::Pointer>, _, _>(module, input)?;
+        let pointer_value = Self::Pointer::try_from(pointer)
+            .map_err(|_| ExecutorError::DeallocationWouldOverflow)?;
+        let input = DeallocateInput(pointer_value);
+        self.call::<DeallocateInput<Self::Pointer>, _, _>(input)?;
         Ok(())
     }
 
     fn passthrough_in<V>(
         &mut self,
-        module: &ModuleOf<Self>,
         data: &[u8],
     ) -> Result<Tagged<Self::Pointer, V>, VmErrorOf<Self>>
     where
-        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>,
-        ModuleMemoryOf<Self>: ReadWriteMemory<Pointer = Self::Pointer>,
-        VmErrorOf<Self>: From<<ModuleMemoryOf<Self> as WritableMemory>::Error>
-            + From<<ModuleMemoryOf<Self> as ReadableMemory>::Error>
-            + From<ExecutorError>,
+        for<'x> VmInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>,
     {
         log::debug!("PassthroughIn");
-        let ptr = self.allocate::<usize>(module, data.len())?;
-        let memory = module.memory();
-        RawIntoRegion::try_from(Write(memory, ptr, data))?;
-        Ok(Tagged::new(ptr))
+        let pointer = self.allocate::<usize>(data.len())?;
+        let memory = &self.memory();
+        RawIntoRegion::try_from(Write(memory, pointer, data))?;
+        Ok(Tagged::new(pointer))
     }
 
-    fn marshall_in<V>(
-        &mut self,
-        module: &ModuleOf<Self>,
-        x: &V,
-    ) -> Result<Tagged<Self::Pointer, V>, VmErrorOf<Self>>
+    fn passthrough_out<V>(&mut self, pointer: Self::Pointer) -> Result<Vec<u8>, VmErrorOf<Self>>
     where
-        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>,
-        ModuleMemoryOf<Self>: ReadWriteMemory<Pointer = Self::Pointer>,
-        VmErrorOf<Self>: From<<ModuleMemoryOf<Self> as WritableMemory>::Error>
-            + From<<ModuleMemoryOf<Self> as ReadableMemory>::Error>
-            + From<ExecutorError>,
+        V: ReadLimit,
+    {
+        log::debug!("PassthroughOut");
+        let memory = &self.memory();
+        let RawFromRegion(buffer) = RawFromRegion::try_from(LimitedRead(
+            memory,
+            pointer,
+            Self::Pointer::try_from(V::read_limit())
+                .map_err(|_| ExecutorError::CallReadLimitWouldOverflow)?,
+        ))?;
+        Ok(buffer)
+    }
+
+    fn marshall_in<V>(&mut self, x: &V) -> Result<Tagged<Self::Pointer, V>, VmErrorOf<Self>>
+    where
+        for<'x> VmInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>,
         V: serde::ser::Serialize + Sized,
     {
         log::debug!("MarshallIn");
         let serialized = serde_json::to_vec(x).map_err(|_| ExecutorError::FailedToSerialize)?;
-        Ok(self.passthrough_in(module, &serialized)?)
+        Ok(self.passthrough_in(&serialized)?)
     }
 
-    fn cosmwasm_call<I>(
-        &mut self,
-        module: &ModuleOf<Self>,
-        env: Env,
-        info: MessageInfo,
-        message: &[u8],
-    ) -> Result<I::Output, VmErrorOf<Self>>
+    fn marshall_out<V>(&mut self, pointer: Self::Pointer) -> Result<V, VmErrorOf<Self>>
     where
-        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>
-            + TryFrom<CosmwasmCallInput<'x, Self::Pointer, I>, Error = VmErrorOf<Self>>,
-        ModuleMemoryOf<Self>: ReadWriteMemory<Pointer = Self::Pointer>,
-        VmErrorOf<Self>: From<<ModuleMemoryOf<Self> as WritableMemory>::Error>
-            + From<<ModuleMemoryOf<Self> as ReadableMemory>::Error>
-            + From<ExecutorError>,
-        I: Input,
-        I::Output: DeserializeOwned + ReadLimit + DeserializeLimit,
+        for<'x> VmInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>,
+        V: serde::de::DeserializeOwned + ReadLimit + DeserializeLimit,
     {
-        log::debug!("Call");
-        let input = CosmwasmCallInput(
-            self.marshall_in(module, &env)?,
-            self.marshall_in(module, &info)?,
-            self.passthrough_in(module, message)?,
-            PhantomData,
-        );
-        let pointer = self.call::<CosmwasmCallInput<Self::Pointer, I>, _, _>(module, input)?;
-        let memory = module.memory();
+        log::debug!("MarshallOut");
+        let memory = &self.memory();
         let RawFromRegion(output) = RawFromRegion::try_from(LimitedRead(
             memory,
             pointer,
-            Self::Pointer::try_from(<I::Output as ReadLimit>::read_limit())
+            Self::Pointer::try_from(V::read_limit())
                 .map_err(|_| ExecutorError::CallReadLimitWouldOverflow)?,
         ))?;
         Ok(serde_json::from_slice(&output).map_err(|_| ExecutorError::FailedToDeserialize)?)
     }
 
-    fn cosmwasm_query(
+    fn cosmwasm_call<I>(
         &mut self,
-        module: &ModuleOf<Self>,
         env: Env,
+        info: MessageInfo,
         message: &[u8],
-    ) -> Result<QueryResult, VmErrorOf<Self>>
+    ) -> Result<I::Output, VmErrorOf<Self>>
     where
-        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>
+        for<'x> VmInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>
+            + TryFrom<CosmwasmCallInput<'x, Self::Pointer, I>, Error = VmErrorOf<Self>>,
+        I: Input,
+        I::Output: DeserializeOwned + ReadLimit + DeserializeLimit,
+    {
+        log::debug!("Call");
+        let input = CosmwasmCallInput(
+            self.marshall_in(&env)?,
+            self.marshall_in(&info)?,
+            self.passthrough_in(message)?,
+            PhantomData,
+        );
+        let pointer = self.call::<CosmwasmCallInput<Self::Pointer, _>, _, _>(input)?;
+        self.marshall_out(pointer)
+    }
+
+    fn cosmwasm_query(&mut self, env: Env, message: &[u8]) -> Result<QueryResult, VmErrorOf<Self>>
+    where
+        for<'x> VmInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>
             + TryFrom<CosmwasmQueryInput<'x, Self::Pointer>, Error = VmErrorOf<Self>>,
-        ModuleMemoryOf<Self>: ReadWriteMemory<Pointer = Self::Pointer>,
-        VmErrorOf<Self>: From<<ModuleMemoryOf<Self> as WritableMemory>::Error>
-            + From<<ModuleMemoryOf<Self> as ReadableMemory>::Error>
-            + From<ExecutorError>,
     {
         log::debug!("Query");
-        let input = CosmwasmQueryInput(
-            self.marshall_in(module, &env)?,
-            self.passthrough_in(module, message)?,
-        );
-        let pointer = self.call::<CosmwasmQueryInput<Self::Pointer>, _, _>(module, input)?;
-        let memory = module.memory();
-        let RawFromRegion(output) = RawFromRegion::try_from(LimitedRead(
-            memory,
-            pointer,
-            Self::Pointer::try_from(QueryResult::read_limit())
-                .map_err(|_| ExecutorError::QueryReadLimitWouldOverflow)?,
-        ))?;
-        Ok(serde_json::from_slice(&output).map_err(|_| ExecutorError::FailedToDeserialize)?)
+        let input = CosmwasmQueryInput(self.marshall_in(&env)?, self.passthrough_in(message)?);
+        let pointer = self.call::<CosmwasmQueryInput<Self::Pointer>, _, _>(input)?;
+        self.marshall_out(pointer)
     }
 }
