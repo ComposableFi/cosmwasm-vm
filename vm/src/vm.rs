@@ -37,7 +37,11 @@ pub trait VM {
     type Output<'a>;
     type Error;
     type Code<'a>;
-    fn load<'a>(code: Self::Code<'a>) -> Result<Self, Self::Error>
+    type Extension<'a>;
+    fn load<'a>(
+        code: Self::Code<'a>,
+        extension: Self::Extension<'a>,
+    ) -> Result<Self, Self::Error>
     where
         Self: Sized;
     fn call<'a, I, IE, OE>(&mut self, input: I) -> Result<I::Output, Self::Error>

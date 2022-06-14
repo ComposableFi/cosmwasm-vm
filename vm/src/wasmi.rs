@@ -132,7 +132,13 @@ impl HostError for WasmiVMError {}
 pub struct AsWasmiVM<T>(T);
 
 pub trait IsWasmiVM<T>:
-    WasmiHost + for<'x> From<(WasmiImportResolver<'x, AsWasmiVM<T>>, WasmiModule)>
+    WasmiHost
+    + HasExtension
+    + for<'x> From<(
+        <Self as HasExtension>::Extension<'x>,
+        WasmiImportResolver<AsWasmiVM<T>>,
+        WasmiModule,
+    )>
 {
     fn host_functions_definitions(
         &self,
@@ -160,8 +166,8 @@ where
     }
 }
 
-pub struct WasmiImportResolver<'a, T>(&'a BTreeMap<WasmiModuleName, WasmiHostModule<T>>);
-impl<'a, T> ImportResolver for WasmiImportResolver<'a, T> {
+pub struct WasmiImportResolver<T>(BTreeMap<WasmiModuleName, WasmiHostModule<T>>);
+impl<T> ImportResolver for WasmiImportResolver<T> {
     fn resolve_func(
         &self,
         module_name: &str,
@@ -321,6 +327,10 @@ where
 
 pub trait WasmiHost: Host<Key = Vec<u8>, Value = Vec<u8>, Error = WasmiVMError> {}
 
+pub trait HasExtension {
+    type Extension<'a>;
+}
+
 impl<T> VM for AsWasmiVM<T>
 where
     T: 'static + IsWasmiVM<T>,
@@ -328,8 +338,12 @@ where
     type Input<'a> = WasmiInput<'a>;
     type Output<'a> = WasmiOutput<'a>;
     type Error = WasmiVMError;
-    type Code<'a> = (WasmiImportResolver<'a, Self>, &'a [u8]);
-    fn load<'a>((resolver, code): Self::Code<'a>) -> Result<Self, Self::Error> {
+    type Code<'a> = (WasmiImportResolver<Self>, &'a [u8]);
+    type Extension<'a> = T::Extension<'a>;
+    fn load<'a>(
+        (resolver, code): Self::Code<'a>,
+        extension: Self::Extension<'a>,
+    ) -> Result<Self, Self::Error> {
         let wasmi_module = wasmi::Module::from_buffer(code)?;
         let not_started_module_instance = wasmi::ModuleInstance::new(&wasmi_module, &resolver)?;
         let module_instance = not_started_module_instance.run_start(&mut NopExternals)?;
@@ -342,6 +356,7 @@ where
         }?;
         Ok(AsWasmiVM(
             (
+                extension,
                 resolver,
                 WasmiModule {
                     module: module_instance,
@@ -653,12 +668,20 @@ mod host_functions {
     }
 }
 
-pub fn new_vm<T>(code: &[u8]) -> Result<AsWasmiVM<T>, WasmiVMError>
+pub fn new_vm<'a, T>(
+    code: &'a [u8],
+    extension: T::Extension<'a>,
+) -> Result<AsWasmiVM<T>, WasmiVMError>
 where
     T: 'static + IsWasmiVM<T> + WasmiHost,
 {
-    let host_functions_definitions = host_functions::definitions::<T>();
-    <AsWasmiVM<T>>::load((WasmiImportResolver(&host_functions_definitions), code))
+    <AsWasmiVM<T>>::load(
+        (
+            WasmiImportResolver(host_functions::definitions::<T>()),
+            code,
+        ),
+        extension,
+    )
 }
 
 #[cfg(test)]
@@ -680,13 +703,15 @@ mod tests {
 
     impl<'a>
         From<(
-            WasmiImportResolver<'a, AsWasmiVM<SimpleWasmiVM>>,
+            (),
+            WasmiImportResolver<AsWasmiVM<SimpleWasmiVM>>,
             WasmiModule,
         )> for SimpleWasmiVM
     {
         fn from(
-            (WasmiImportResolver(host_functions_definitions), executing_module): (
-                WasmiImportResolver<'a, AsWasmiVM<SimpleWasmiVM>>,
+            (_, WasmiImportResolver(host_functions_definitions), executing_module): (
+                (),
+                WasmiImportResolver<AsWasmiVM<SimpleWasmiVM>>,
                 WasmiModule,
             ),
         ) -> Self {
@@ -723,6 +748,10 @@ mod tests {
         }
     }
 
+    impl HasExtension for SimpleWasmiVM {
+        type Extension<'a> = ();
+    }
+
     impl Host for SimpleWasmiVM {
         type Key = Vec<u8>;
         type Value = Vec<u8>;
@@ -738,13 +767,14 @@ mod tests {
             Ok(())
         }
     }
+
     impl WasmiHost for SimpleWasmiVM {}
 
     #[test]
     fn test() {
         env_logger::builder().init();
         let code = include_bytes!("../../fixtures/cw20_base.wasm").to_vec();
-        let mut vm = new_vm::<SimpleWasmiVM>(&code).unwrap();
+        let mut vm = new_vm::<SimpleWasmiVM>(&code, ()).unwrap();
         let env = Env {
             block: BlockInfo {
                 height: 0,
