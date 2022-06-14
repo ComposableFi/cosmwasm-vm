@@ -29,8 +29,8 @@
 use crate::{
     input::{Input, OutputOf},
     memory::{
-        LimitedRead, RawFromRegion, RawIntoRegion, ReadWriteMemory, ReadableMemory, WritableMemory,
-        Write,
+        LimitedRead, RawFromRegion, RawIntoRegion, ReadWriteMemory,
+        ReadableMemoryErrorOf, WritableMemoryErrorOf, Write,
     },
     tagged::Tagged,
     vm::{VmErrorOf, VmInputOf, VmOutputOf, VM},
@@ -169,10 +169,13 @@ impl<const K: u32> ReadLimit for ConstantReadLimit<K> {
     }
 }
 
+pub type ExecutorPointerOf<T> = <T as Executor>::Pointer;
+pub type ExecutorMemoryOf<'a, T> = <T as Executor>::Memory<'a>;
+
 pub trait Executor: VM
 where
-    for<'x> VmErrorOf<Self>: From<<Self::Memory<'x> as WritableMemory>::Error>
-        + From<<Self::Memory<'x> as ReadableMemory>::Error>
+    for<'x> VmErrorOf<Self>: From<ReadableMemoryErrorOf<Self::Memory<'x>>>
+        + From<WritableMemoryErrorOf<Self::Memory<'x>>>
         + From<ExecutorError>,
 {
     type Pointer: ExecutorPointer<Self>;

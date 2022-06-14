@@ -41,11 +41,13 @@ pub trait ReadWriteMemory:
 {
 }
 
+pub type ReadableMemoryErrorOf<T> = <T as ReadableMemory>::Error;
 pub trait ReadableMemory: Pointable {
     type Error: From<MemoryReadError>;
     fn read(&self, offset: Self::Pointer, buffer: &mut [u8]) -> Result<(), Self::Error>;
 }
 
+pub type WritableMemoryErrorOf<T> = <T as WritableMemory>::Error;
 pub trait WritableMemory: Pointable {
     type Error: From<MemoryWriteError>;
     fn write(&self, offset: Self::Pointer, buffer: &[u8]) -> Result<(), Self::Error>;
