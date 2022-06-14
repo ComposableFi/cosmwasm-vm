@@ -33,6 +33,7 @@ use crate::executor::CosmwasmQueryInput;
 use crate::executor::Executor;
 use crate::executor::ExecutorError;
 use crate::executor::ExecutorPointer;
+use crate::host::Host;
 use crate::memory::MemoryReadError;
 use crate::memory::MemoryWriteError;
 use crate::memory::Pointable;
@@ -130,8 +131,9 @@ impl HostError for WasmiVMError {}
 #[repr(transparent)]
 pub struct AsWasmiVM<T>(T);
 
-pub trait IsWasmiVM<T>: for<'x> From<(Self::Resolver<'x>, WasmiModule)> {
-    type Resolver<'a>: ImportResolver;
+pub trait IsWasmiVM<T>:
+    WasmiHost + for<'x> From<(WasmiImportResolver<'x, AsWasmiVM<T>>, WasmiModule)>
+{
     fn host_functions_definitions(
         &self,
     ) -> &BTreeMap<WasmiModuleName, WasmiHostModule<AsWasmiVM<T>>>;
@@ -317,6 +319,8 @@ where
     }
 }
 
+pub trait WasmiHost: Host<Key = Vec<u8>, Value = Vec<u8>, Error = WasmiVMError> {}
+
 impl<T> VM for AsWasmiVM<T>
 where
     T: 'static + IsWasmiVM<T>,
@@ -324,11 +328,10 @@ where
     type Input<'a> = WasmiInput<'a>;
     type Output<'a> = WasmiOutput<'a>;
     type Error = WasmiVMError;
-    type Code<'a> = (T::Resolver<'a>, &'a [u8]);
-    fn load<'a>((import_resolver, code): Self::Code<'a>) -> Result<Self, Self::Error> {
+    type Code<'a> = (WasmiImportResolver<'a, Self>, &'a [u8]);
+    fn load<'a>((resolver, code): Self::Code<'a>) -> Result<Self, Self::Error> {
         let wasmi_module = wasmi::Module::from_buffer(code)?;
-        let not_started_module_instance =
-            wasmi::ModuleInstance::new(&wasmi_module, &import_resolver)?;
+        let not_started_module_instance = wasmi::ModuleInstance::new(&wasmi_module, &resolver)?;
         let module_instance = not_started_module_instance.run_start(&mut NopExternals)?;
         let memory_exported = module_instance
             .export_by_name("memory")
@@ -339,7 +342,7 @@ where
         }?;
         Ok(AsWasmiVM(
             (
-                import_resolver,
+                resolver,
                 WasmiModule {
                     module: module_instance,
                     memory,
@@ -377,10 +380,291 @@ where
     }
 }
 
+#[allow(dead_code)]
+mod host_functions {
+    use super::*;
+    use crate::executor::{constants, ConstantReadLimit};
+
+    pub fn definitions<T>() -> BTreeMap<WasmiModuleName, WasmiHostModule<AsWasmiVM<T>>>
+    where
+        T: 'static + IsWasmiVM<T>,
+    {
+        BTreeMap::from([(
+            WasmiModuleName("env".to_owned()),
+            BTreeMap::from([
+                (
+                    WasmiFunctionName("db_read".to_owned()),
+                    (
+                        WasmiHostFunctionIndex(0x0001),
+                        env_db_read::<T> as WasmiHostFunction<AsWasmiVM<T>>,
+                    ),
+                ),
+                (
+                    WasmiFunctionName("db_write".to_owned()),
+                    (
+                        WasmiHostFunctionIndex(0x0002),
+                        env_db_write::<T> as WasmiHostFunction<AsWasmiVM<T>>,
+                    ),
+                ),
+                (
+                    WasmiFunctionName("db_remove".to_owned()),
+                    (
+                        WasmiHostFunctionIndex(0x0003),
+                        env_db_remove::<T> as WasmiHostFunction<AsWasmiVM<T>>,
+                    ),
+                ),
+                (
+                    WasmiFunctionName("db_scan".to_owned()),
+                    (
+                        WasmiHostFunctionIndex(0x0004),
+                        env_db_scan::<T> as WasmiHostFunction<AsWasmiVM<T>>,
+                    ),
+                ),
+                (
+                    WasmiFunctionName("db_next".to_owned()),
+                    (
+                        WasmiHostFunctionIndex(0x0005),
+                        env_db_next::<T> as WasmiHostFunction<AsWasmiVM<T>>,
+                    ),
+                ),
+                (
+                    WasmiFunctionName("addr_validate".to_owned()),
+                    (
+                        WasmiHostFunctionIndex(0x0006),
+                        env_addr_validate::<T> as WasmiHostFunction<AsWasmiVM<T>>,
+                    ),
+                ),
+                (
+                    WasmiFunctionName("addr_canonicalize".to_owned()),
+                    (
+                        WasmiHostFunctionIndex(0x0007),
+                        env_addr_canonicalize::<T> as WasmiHostFunction<AsWasmiVM<T>>,
+                    ),
+                ),
+                (
+                    WasmiFunctionName("addr_humanize".to_owned()),
+                    (
+                        WasmiHostFunctionIndex(0x0008),
+                        env_addr_humanize::<T> as WasmiHostFunction<AsWasmiVM<T>>,
+                    ),
+                ),
+                (
+                    WasmiFunctionName("secp256k1_verify".to_owned()),
+                    (
+                        WasmiHostFunctionIndex(0x0009),
+                        env_secp256k1_verify::<T> as WasmiHostFunction<AsWasmiVM<T>>,
+                    ),
+                ),
+                (
+                    WasmiFunctionName("secp256k1_batch_verify".to_owned()),
+                    (
+                        WasmiHostFunctionIndex(0x000A),
+                        env_secp256k1_batch_verify::<T> as WasmiHostFunction<AsWasmiVM<T>>,
+                    ),
+                ),
+                (
+                    WasmiFunctionName("secp256k1_recover_pubkey".to_owned()),
+                    (
+                        WasmiHostFunctionIndex(0x000B),
+                        env_secp256k1_recove_pubkey::<T> as WasmiHostFunction<AsWasmiVM<T>>,
+                    ),
+                ),
+                (
+                    WasmiFunctionName("ed25519_verify".to_owned()),
+                    (
+                        WasmiHostFunctionIndex(0x000C),
+                        env_ed25519_verify::<T> as WasmiHostFunction<AsWasmiVM<T>>,
+                    ),
+                ),
+                (
+                    WasmiFunctionName("ed25519_batch_verify".to_owned()),
+                    (
+                        WasmiHostFunctionIndex(0x000D),
+                        env_ed25519_batch_verify::<T> as WasmiHostFunction<AsWasmiVM<T>>,
+                    ),
+                ),
+                (
+                    WasmiFunctionName("debug".to_owned()),
+                    (
+                        WasmiHostFunctionIndex(0x000E),
+                        env_debug::<T> as WasmiHostFunction<AsWasmiVM<T>>,
+                    ),
+                ),
+                (
+                    WasmiFunctionName("query_chain".to_owned()),
+                    (
+                        WasmiHostFunctionIndex(0x000F),
+                        env_query_chain::<T> as WasmiHostFunction<AsWasmiVM<T>>,
+                    ),
+                ),
+            ]),
+        )])
+    }
+
+    fn env_db_read<T>(
+        vm: &mut AsWasmiVM<T>,
+        values: &[RuntimeValue],
+    ) -> Result<Option<RuntimeValue>, WasmiVMError>
+    where
+        T: IsWasmiVM<T> + 'static,
+    {
+        log::debug!("db_read");
+        match &values[..] {
+            [RuntimeValue::I32(key_pointer)] => {
+                let key = vm
+                    .passthrough_out::<ConstantReadLimit<{ constants::MAX_LENGTH_DB_KEY }>>(
+                        *key_pointer as u32,
+                    )?;
+                let value = vm.0.db_read(key)?;
+                let Tagged(value_pointer, _) = vm.passthrough_in::<()>(&value)?;
+                Ok(Some(RuntimeValue::I32(value_pointer as i32)))
+            }
+            _ => Err(WasmiVMError::InvalidHostSignature),
+        }
+    }
+
+    fn env_db_write<T>(
+        vm: &mut AsWasmiVM<T>,
+        values: &[RuntimeValue],
+    ) -> Result<Option<RuntimeValue>, WasmiVMError>
+    where
+        T: IsWasmiVM<T> + 'static,
+    {
+        log::debug!("db_write");
+        match &values[..] {
+            [RuntimeValue::I32(key_pointer), RuntimeValue::I32(value_pointer)] => {
+                let key = vm
+                    .passthrough_out::<ConstantReadLimit<{ constants::MAX_LENGTH_DB_KEY }>>(
+                        *key_pointer as u32,
+                    )?;
+                let value = vm
+                    .passthrough_out::<ConstantReadLimit<{ constants::MAX_LENGTH_DB_VALUE }>>(
+                        *value_pointer as u32,
+                    )?;
+                vm.0.db_write(key, value)?;
+                Ok(None)
+            }
+            _ => Err(WasmiVMError::InvalidHostSignature),
+        }
+    }
+
+    fn env_db_remove<T>(
+        _: &mut AsWasmiVM<T>,
+        _: &[RuntimeValue],
+    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
+        log::debug!("db_remove");
+        Ok(None)
+    }
+
+    fn env_db_scan<T>(
+        _: &mut AsWasmiVM<T>,
+        _: &[RuntimeValue],
+    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
+        log::debug!("db_scan");
+        Ok(None)
+    }
+
+    fn env_db_next<T>(
+        _: &mut AsWasmiVM<T>,
+        _: &[RuntimeValue],
+    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
+        log::debug!("db_next");
+        Ok(None)
+    }
+
+    fn env_addr_validate<T>(
+        _: &mut AsWasmiVM<T>,
+        _: &[RuntimeValue],
+    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
+        log::debug!("addr_validate");
+        Ok(None)
+    }
+
+    fn env_addr_canonicalize<T>(
+        _: &mut AsWasmiVM<T>,
+        _: &[RuntimeValue],
+    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
+        log::debug!("addr_canonicalize");
+        Ok(None)
+    }
+
+    fn env_addr_humanize<T>(
+        _: &mut AsWasmiVM<T>,
+        _: &[RuntimeValue],
+    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
+        log::debug!("addr_humanize");
+        Ok(None)
+    }
+
+    fn env_secp256k1_verify<T>(
+        _: &mut AsWasmiVM<T>,
+        _: &[RuntimeValue],
+    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
+        log::debug!("secp256k1_verify");
+        Ok(None)
+    }
+
+    fn env_secp256k1_batch_verify<T>(
+        _: &mut AsWasmiVM<T>,
+        _: &[RuntimeValue],
+    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
+        log::debug!("secp256k1_batch_verify");
+        Ok(None)
+    }
+
+    fn env_secp256k1_recove_pubkey<T>(
+        _: &mut AsWasmiVM<T>,
+        _: &[RuntimeValue],
+    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
+        log::debug!("secp256k1_recove_pubkey");
+        Ok(None)
+    }
+
+    fn env_ed25519_verify<T>(
+        _: &mut AsWasmiVM<T>,
+        _: &[RuntimeValue],
+    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
+        log::debug!("ed25519_verify");
+        Ok(None)
+    }
+
+    fn env_ed25519_batch_verify<T>(
+        _: &mut AsWasmiVM<T>,
+        _: &[RuntimeValue],
+    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
+        log::debug!("ed25519_batch_verify");
+        Ok(None)
+    }
+
+    fn env_debug<T>(
+        _: &mut AsWasmiVM<T>,
+        _: &[RuntimeValue],
+    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
+        log::debug!("debug");
+        Ok(None)
+    }
+
+    fn env_query_chain<T>(
+        _: &mut AsWasmiVM<T>,
+        _: &[RuntimeValue],
+    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
+        log::debug!("query_chain");
+        Ok(None)
+    }
+}
+
+pub fn vm_new<T>(code: &[u8]) -> Result<AsWasmiVM<T>, WasmiVMError>
+where
+    T: 'static + IsWasmiVM<T> + WasmiHost,
+{
+    let host_functions_definitions = host_functions::definitions::<T>();
+    <AsWasmiVM<T>>::load((WasmiImportResolver(&host_functions_definitions), code))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::executor::{constants, ConstantReadLimit, InstantiateInput};
+    use crate::executor::InstantiateInput;
     use core::assert_matches::assert_matches;
     use cosmwasm_minimal_std::{
         Addr, Binary, BlockInfo, ContractInfo, CosmwasmExecutionResult, CosmwasmQueryResult, Env,
@@ -421,8 +705,6 @@ mod tests {
     }
 
     impl IsWasmiVM<SimpleWasmiVM> for SimpleWasmiVM {
-        type Resolver<'a> = WasmiImportResolver<'a, AsWasmiVM<Self>>;
-
         fn host_functions_definitions(
             &self,
         ) -> &BTreeMap<WasmiModuleName, WasmiHostModule<AsWasmiVM<SimpleWasmiVM>>> {
@@ -441,270 +723,28 @@ mod tests {
         }
     }
 
-    fn env_db_read(
-        vm: &mut AsWasmiVM<SimpleWasmiVM>,
-        values: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
-        log::debug!("db_read");
-        match &values[..] {
-            [RuntimeValue::I32(key_pointer)] => {
-                let key = vm
-                    .passthrough_out::<ConstantReadLimit<{ constants::MAX_LENGTH_DB_KEY }>>(
-                        *key_pointer as u32,
-                    )?;
-                let value =
-                    vm.0.storage
-                        .get(&key)
-                        .ok_or(WasmiVMError::StorageKeyNotFound(key))?
-                        .clone();
-                let Tagged(value_pointer, _) = vm.passthrough_in::<()>(&value)?;
-                Ok(Some(RuntimeValue::I32(value_pointer as i32)))
-            }
-            _ => Err(WasmiVMError::InvalidHostSignature),
+    impl Host for SimpleWasmiVM {
+        type Key = Vec<u8>;
+        type Value = Vec<u8>;
+        type Error = WasmiVMError;
+        fn db_read(&mut self, key: Self::Key) -> Result<Self::Value, Self::Error> {
+            self.storage
+                .get(&key)
+                .ok_or(WasmiVMError::StorageKeyNotFound(key))
+                .cloned()
+        }
+        fn db_write(&mut self, key: Self::Key, value: Self::Value) -> Result<(), Self::Error> {
+            self.storage.insert(key, value);
+            Ok(())
         }
     }
-
-    fn env_db_write(
-        vm: &mut AsWasmiVM<SimpleWasmiVM>,
-        values: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
-        log::debug!("db_write");
-        match &values[..] {
-            [RuntimeValue::I32(key_pointer), RuntimeValue::I32(value_pointer)] => {
-                let key = vm
-                    .passthrough_out::<ConstantReadLimit<{ constants::MAX_LENGTH_DB_KEY }>>(
-                        *key_pointer as u32,
-                    )?;
-                let value = vm
-                    .passthrough_out::<ConstantReadLimit<{ constants::MAX_LENGTH_DB_VALUE }>>(
-                        *value_pointer as u32,
-                    )?;
-                vm.0.storage.insert(key, value);
-                Ok(None)
-            }
-            _ => Err(WasmiVMError::InvalidHostSignature),
-        }
-    }
-
-    fn env_db_remove(
-        _: &mut AsWasmiVM<SimpleWasmiVM>,
-        _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
-        log::debug!("db_remove");
-        Ok(None)
-    }
-
-    fn env_db_scan(
-        _: &mut AsWasmiVM<SimpleWasmiVM>,
-        _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
-        log::debug!("db_scan");
-        Ok(None)
-    }
-
-    fn env_db_next(
-        _: &mut AsWasmiVM<SimpleWasmiVM>,
-        _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
-        log::debug!("db_next");
-        Ok(None)
-    }
-
-    fn env_addr_validate(
-        _: &mut AsWasmiVM<SimpleWasmiVM>,
-        _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
-        log::debug!("addr_validate");
-        Ok(None)
-    }
-
-    fn env_addr_canonicalize(
-        _: &mut AsWasmiVM<SimpleWasmiVM>,
-        _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
-        log::debug!("addr_canonicalize");
-        Ok(None)
-    }
-
-    fn env_addr_humanize(
-        _: &mut AsWasmiVM<SimpleWasmiVM>,
-        _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
-        log::debug!("addr_humanize");
-        Ok(None)
-    }
-
-    fn env_secp256k1_verify(
-        _: &mut AsWasmiVM<SimpleWasmiVM>,
-        _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
-        log::debug!("secp256k1_verify");
-        Ok(None)
-    }
-
-    fn env_secp256k1_batch_verify(
-        _: &mut AsWasmiVM<SimpleWasmiVM>,
-        _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
-        log::debug!("secp256k1_batch_verify");
-        Ok(None)
-    }
-
-    fn env_secp256k1_recove_pubkey(
-        _: &mut AsWasmiVM<SimpleWasmiVM>,
-        _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
-        log::debug!("secp256k1_recove_pubkey");
-        Ok(None)
-    }
-
-    fn env_ed25519_verify(
-        _: &mut AsWasmiVM<SimpleWasmiVM>,
-        _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
-        log::debug!("ed25519_verify");
-        Ok(None)
-    }
-
-    fn env_ed25519_batch_verify(
-        _: &mut AsWasmiVM<SimpleWasmiVM>,
-        _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
-        log::debug!("ed25519_batch_verify");
-        Ok(None)
-    }
-
-    fn env_debug(
-        _: &mut AsWasmiVM<SimpleWasmiVM>,
-        _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
-        log::debug!("debug");
-        Ok(None)
-    }
-
-    fn env_query_chain(
-        _: &mut AsWasmiVM<SimpleWasmiVM>,
-        _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, WasmiVMError> {
-        log::debug!("query_chain");
-        Ok(None)
-    }
+    impl WasmiHost for SimpleWasmiVM {}
 
     #[test]
     fn test() {
         env_logger::builder().init();
         let code = include_bytes!("../../fixtures/cw20_base.wasm").to_vec();
-        // module -> function -> (index, ptr)
-        let host_functions_definitions = BTreeMap::from([(
-            WasmiModuleName("env".to_owned()),
-            BTreeMap::from([
-                (
-                    WasmiFunctionName("db_read".to_owned()),
-                    (
-                        WasmiHostFunctionIndex(0x0001),
-                        env_db_read as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
-                    ),
-                ),
-                (
-                    WasmiFunctionName("db_write".to_owned()),
-                    (
-                        WasmiHostFunctionIndex(0x0002),
-                        env_db_write as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
-                    ),
-                ),
-                (
-                    WasmiFunctionName("db_remove".to_owned()),
-                    (
-                        WasmiHostFunctionIndex(0x0003),
-                        env_db_remove as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
-                    ),
-                ),
-                (
-                    WasmiFunctionName("db_scan".to_owned()),
-                    (
-                        WasmiHostFunctionIndex(0x0004),
-                        env_db_scan as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
-                    ),
-                ),
-                (
-                    WasmiFunctionName("db_next".to_owned()),
-                    (
-                        WasmiHostFunctionIndex(0x0005),
-                        env_db_next as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
-                    ),
-                ),
-                (
-                    WasmiFunctionName("addr_validate".to_owned()),
-                    (
-                        WasmiHostFunctionIndex(0x0006),
-                        env_addr_validate as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
-                    ),
-                ),
-                (
-                    WasmiFunctionName("addr_canonicalize".to_owned()),
-                    (
-                        WasmiHostFunctionIndex(0x0007),
-                        env_addr_canonicalize as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
-                    ),
-                ),
-                (
-                    WasmiFunctionName("addr_humanize".to_owned()),
-                    (
-                        WasmiHostFunctionIndex(0x0008),
-                        env_addr_humanize as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
-                    ),
-                ),
-                (
-                    WasmiFunctionName("secp256k1_verify".to_owned()),
-                    (
-                        WasmiHostFunctionIndex(0x0009),
-                        env_secp256k1_verify as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
-                    ),
-                ),
-                (
-                    WasmiFunctionName("secp256k1_batch_verify".to_owned()),
-                    (
-                        WasmiHostFunctionIndex(0x000A),
-                        env_secp256k1_batch_verify as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
-                    ),
-                ),
-                (
-                    WasmiFunctionName("secp256k1_recover_pubkey".to_owned()),
-                    (
-                        WasmiHostFunctionIndex(0x000B),
-                        env_secp256k1_recove_pubkey as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
-                    ),
-                ),
-                (
-                    WasmiFunctionName("ed25519_verify".to_owned()),
-                    (
-                        WasmiHostFunctionIndex(0x000C),
-                        env_ed25519_verify as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
-                    ),
-                ),
-                (
-                    WasmiFunctionName("ed25519_batch_verify".to_owned()),
-                    (
-                        WasmiHostFunctionIndex(0x000D),
-                        env_ed25519_batch_verify as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
-                    ),
-                ),
-                (
-                    WasmiFunctionName("debug".to_owned()),
-                    (
-                        WasmiHostFunctionIndex(0x000E),
-                        env_debug as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
-                    ),
-                ),
-                (
-                    WasmiFunctionName("query_chain".to_owned()),
-                    (
-                        WasmiHostFunctionIndex(0x000F),
-                        env_query_chain as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
-                    ),
-                ),
-            ]),
-        )]);
+        let host_functions_definitions = host_functions::definitions::<SimpleWasmiVM>();
         let mut vm = <AsWasmiVM<SimpleWasmiVM>>::load((
             WasmiImportResolver(&host_functions_definitions),
             &code,

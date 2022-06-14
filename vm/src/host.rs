@@ -1,4 +1,4 @@
-// lib.rs ---
+// host.rs ---
 
 // Copyright (C) 2022 Hussein Ait-Lahcen
 
@@ -26,17 +26,10 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-#![no_std]
-#![feature(generic_associated_types)]
-#![cfg_attr(test, feature(assert_matches))]
-
-extern crate alloc;
-
-pub mod executor;
-pub mod input;
-pub mod memory;
-pub mod system;
-pub mod tagged;
-pub mod vm;
-pub mod wasmi;
-pub mod host;
+pub trait Host {
+    type Key;
+    type Value;
+    type Error;
+    fn db_read(&mut self, key: Self::Key) -> Result<Self::Value, Self::Error>;
+    fn db_write(&mut self, key: Self::Key, value: Self::Value) -> Result<(), Self::Error>;
+}
