@@ -187,8 +187,7 @@ where
     {
         let len_value =
             Self::Pointer::try_from(len).map_err(|_| ExecutorError::AllocationWouldOverflow)?;
-        let input = AllocateInput(len_value);
-        let result = self.call::<AllocateInput<Self::Pointer>, _, _>(input)?;
+        let result = self.call(AllocateInput(len_value))?;
         log::debug!("Allocate: size={:?}, pointer={:?}", len_value, result);
         Ok(result)
     }
@@ -202,8 +201,7 @@ where
         log::debug!("Deallocate");
         let pointer_value = Self::Pointer::try_from(pointer)
             .map_err(|_| ExecutorError::DeallocationWouldOverflow)?;
-        let input = DeallocateInput(pointer_value);
-        self.call::<DeallocateInput<Self::Pointer>, _, _>(input)?;
+        self.call(DeallocateInput(pointer_value))?;
         Ok(())
     }
 
@@ -281,7 +279,7 @@ where
             self.passthrough_in(message)?,
             PhantomData,
         );
-        let pointer = self.call::<CosmwasmCallInput<Self::Pointer, _>, _, _>(input)?;
+        let pointer = self.call(input)?;
         self.marshall_out(pointer)
     }
 
@@ -292,7 +290,7 @@ where
     {
         log::debug!("Query");
         let input = CosmwasmQueryInput(self.marshall_in(&env)?, self.passthrough_in(message)?);
-        let pointer = self.call::<CosmwasmQueryInput<Self::Pointer>, _, _>(input)?;
+        let pointer = self.call(input)?;
         self.marshall_out(pointer)
     }
 }
