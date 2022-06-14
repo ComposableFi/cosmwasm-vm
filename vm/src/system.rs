@@ -1,4 +1,4 @@
-// lib.rs ---
+// actor_system.rs ---
 
 // Copyright (C) 2022 Hussein Ait-Lahcen
 
@@ -26,15 +26,15 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-#![no_std]
-#![feature(generic_associated_types)]
+use crate::{
+    executor::{Executor, ExecutorError},
+    vm::VmErrorOf,
+};
 
-extern crate alloc;
+pub enum SystemError {}
 
-pub mod executor;
-pub mod input;
-pub mod memory;
-pub mod system;
-pub mod tagged;
-pub mod vm;
-pub mod wasmi;
+pub trait System: Executor
+where
+    VmErrorOf<Self>: From<ExecutorError> + From<SystemError>,
+{
+}

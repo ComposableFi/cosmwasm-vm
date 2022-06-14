@@ -34,7 +34,7 @@ use crate::{
         WritableMemory, Write,
     },
     tagged::Tagged,
-    vm::{Module, VM},
+    vm::{Module, VM, VmErrorOf},
 };
 use cosmwasm_minimal_std::{
     DeserializeLimit, Env, ExecuteResult, InstantiateResult, MessageInfo, QueryResult, ReadLimit,
@@ -48,7 +48,6 @@ pub trait Environment {
     fn query(query: Self::Query) -> Result<OutputOf<Self::Query>, Self::Error>;
 }
 
-type ErrorOf<T> = <T as VM>::Error;
 type ModuleOf<T> = <T as VM>::Module;
 type ModuleMemoryOf<T> = <ModuleOf<T> as Module>::Memory;
 type ModuleErrorOf<T> = <ModuleOf<T> as Module>::Error;
@@ -119,13 +118,13 @@ where
 
 pub trait Executor: VM
 where
-    ErrorOf<Self>: From<ExecutorError>,
+    VmErrorOf<Self>: From<ExecutorError>,
 {
     type Pointer: ExecutorPointer<Self>;
 
-    fn allocate<L>(&mut self, module: &ModuleOf<Self>, len: L) -> Result<Self::Pointer, ErrorOf<Self>>
+    fn allocate<L>(&mut self, module: &ModuleOf<Self>, len: L) -> Result<Self::Pointer, VmErrorOf<Self>>
     where
-        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = ErrorOf<Self>>,
+        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>,
         Self::Pointer: TryFrom<L>,
     {
         let len_value =
@@ -136,9 +135,9 @@ where
         Ok(result)
     }
 
-    fn deallocate<L>(&mut self, module: &ModuleOf<Self>, ptr: L) -> Result<(), ErrorOf<Self>>
+    fn deallocate<L>(&mut self, module: &ModuleOf<Self>, ptr: L) -> Result<(), VmErrorOf<Self>>
     where
-        for<'x> ModuleInputOf<'x, Self>: TryFrom<DeallocateInput<Self::Pointer>, Error = ErrorOf<Self>>,
+        for<'x> ModuleInputOf<'x, Self>: TryFrom<DeallocateInput<Self::Pointer>, Error = VmErrorOf<Self>>,
         Self::Pointer: TryFrom<L>,
     {
         log::debug!("Deallocate");
@@ -153,11 +152,11 @@ where
         &mut self,
         module: &ModuleOf<Self>,
         data: &[u8],
-    ) -> Result<Tagged<Self::Pointer, V>, ErrorOf<Self>>
+    ) -> Result<Tagged<Self::Pointer, V>, VmErrorOf<Self>>
     where
-        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = ErrorOf<Self>>,
+        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>,
         ModuleMemoryOf<Self>: ReadWriteMemory<Pointer = Self::Pointer>,
-        ErrorOf<Self>: From<<ModuleMemoryOf<Self> as WritableMemory>::Error>
+        VmErrorOf<Self>: From<<ModuleMemoryOf<Self> as WritableMemory>::Error>
             + From<<ModuleMemoryOf<Self> as ReadableMemory>::Error>
             + From<ExecutorError>,
     {
@@ -174,11 +173,11 @@ where
         &mut self,
         module: &ModuleOf<Self>,
         x: &V,
-    ) -> Result<Tagged<Self::Pointer, V>, ErrorOf<Self>>
+    ) -> Result<Tagged<Self::Pointer, V>, VmErrorOf<Self>>
     where
-        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = ErrorOf<Self>>,
+        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>,
         ModuleMemoryOf<Self>: ReadWriteMemory<Pointer = Self::Pointer>,
-        ErrorOf<Self>: From<<ModuleMemoryOf<Self> as WritableMemory>::Error>
+        VmErrorOf<Self>: From<<ModuleMemoryOf<Self> as WritableMemory>::Error>
             + From<<ModuleMemoryOf<Self> as ReadableMemory>::Error>
             + From<ExecutorError>,
         V: serde::ser::Serialize + Sized,
@@ -194,12 +193,12 @@ where
         env: Env,
         info: MessageInfo,
         message: &[u8],
-    ) -> Result<I::Output, ErrorOf<Self>>
+    ) -> Result<I::Output, VmErrorOf<Self>>
     where
-        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = ErrorOf<Self>>
-            + TryFrom<CosmwasmCallInput<'x, Self::Pointer, I>, Error = ErrorOf<Self>>,
+        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>
+            + TryFrom<CosmwasmCallInput<'x, Self::Pointer, I>, Error = VmErrorOf<Self>>,
         ModuleMemoryOf<Self>: ReadWriteMemory<Pointer = Self::Pointer>,
-        ErrorOf<Self>: From<<ModuleMemoryOf<Self> as WritableMemory>::Error>
+        VmErrorOf<Self>: From<<ModuleMemoryOf<Self> as WritableMemory>::Error>
             + From<<ModuleMemoryOf<Self> as ReadableMemory>::Error>
             + From<ExecutorError>,
         I: Input,
@@ -228,12 +227,12 @@ where
         module: &ModuleOf<Self>,
         env: Env,
         message: &[u8],
-    ) -> Result<QueryResult, ErrorOf<Self>>
+    ) -> Result<QueryResult, VmErrorOf<Self>>
     where
-        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = ErrorOf<Self>>
-            + TryFrom<CosmwasmQueryInput<'x, Self::Pointer>, Error = ErrorOf<Self>>,
+        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>
+            + TryFrom<CosmwasmQueryInput<'x, Self::Pointer>, Error = VmErrorOf<Self>>,
         ModuleMemoryOf<Self>: ReadWriteMemory<Pointer = Self::Pointer>,
-        ErrorOf<Self>: From<<ModuleMemoryOf<Self> as WritableMemory>::Error>
+        VmErrorOf<Self>: From<<ModuleMemoryOf<Self> as WritableMemory>::Error>
             + From<<ModuleMemoryOf<Self> as ReadableMemory>::Error>
             + From<ExecutorError>,
     {

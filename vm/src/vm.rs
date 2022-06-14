@@ -47,7 +47,7 @@ type ModuleIdOf<T> = <ModuleOf<T> as Module>::Id;
 type ModuleInputOf<'a, T> = <ModuleOf<T> as Module>::Input<'a>;
 type ModuleOutputOf<'a, T> = <ModuleOf<T> as Module>::Output<'a>;
 type ModuleErrorOf<T> = <ModuleOf<T> as Module>::Error;
-type ErrorOf<T> = <T as VM>::Error;
+pub type VmErrorOf<T> = <T as VM>::Error;
 
 pub trait VM {
     type Module: Module<VM = Self>;
@@ -61,7 +61,7 @@ pub trait VM {
     where
         I: Input + TryInto<ModuleInputOf<'a, Self>, Error = IE>,
         I::Output: for<'x> TryFrom<ModuleOutputOf<'x, Self>, Error = OE>,
-        ErrorOf<Self>: From<IE>,
+        VmErrorOf<Self>: From<IE>,
         ModuleErrorOf<Self>: From<OE>,
     {
         let input = input.try_into()?;
@@ -75,7 +75,7 @@ pub trait VM {
     where
         I: Input + TryInto<ModuleInputOf<'a, Self>, Error = IE>,
         I::Output: for<'x> TryFrom<ModuleOutputOf<'x, Self>, Error = OE>,
-        ErrorOf<Self>: From<IE>,
+        VmErrorOf<Self>: From<IE>,
         ModuleErrorOf<Self>: From<OE>,
     {
         let module = self.load(module_id)?;
