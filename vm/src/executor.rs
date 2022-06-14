@@ -117,34 +117,35 @@ where
 {
 }
 
-pub trait Executor<Pointer>: VM
+pub trait Executor: VM
 where
-    Pointer: ExecutorPointer<Self>,
     ErrorOf<Self>: From<ExecutorError>,
 {
-    fn allocate<L>(&mut self, module: &ModuleOf<Self>, len: L) -> Result<Pointer, ErrorOf<Self>>
+    type Pointer: ExecutorPointer<Self>;
+
+    fn allocate<L>(&mut self, module: &ModuleOf<Self>, len: L) -> Result<Self::Pointer, ErrorOf<Self>>
     where
-        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Pointer>, Error = ErrorOf<Self>>,
-        Pointer: TryFrom<L>,
+        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = ErrorOf<Self>>,
+        Self::Pointer: TryFrom<L>,
     {
         let len_value =
-            Pointer::try_from(len).map_err(|_| ExecutorError::AllocationWouldOverflow)?;
+            Self::Pointer::try_from(len).map_err(|_| ExecutorError::AllocationWouldOverflow)?;
         let input = AllocateInput(len_value);
-        let result = self.call::<AllocateInput<Pointer>, _, _>(module, input)?;
+        let result = self.call::<AllocateInput<Self::Pointer>, _, _>(module, input)?;
         log::debug!("Allocate: size={:?}, ptr={:?}", len_value, result);
         Ok(result)
     }
 
     fn deallocate<L>(&mut self, module: &ModuleOf<Self>, ptr: L) -> Result<(), ErrorOf<Self>>
     where
-        for<'x> ModuleInputOf<'x, Self>: TryFrom<DeallocateInput<Pointer>, Error = ErrorOf<Self>>,
-        Pointer: TryFrom<L>,
+        for<'x> ModuleInputOf<'x, Self>: TryFrom<DeallocateInput<Self::Pointer>, Error = ErrorOf<Self>>,
+        Self::Pointer: TryFrom<L>,
     {
         log::debug!("Deallocate");
         let ptr_value =
-            Pointer::try_from(ptr).map_err(|_| ExecutorError::DeallocationWouldOverflow)?;
+            Self::Pointer::try_from(ptr).map_err(|_| ExecutorError::DeallocationWouldOverflow)?;
         let input = DeallocateInput(ptr_value);
-        self.call::<DeallocateInput<Pointer>, _, _>(module, input)?;
+        self.call::<DeallocateInput<Self::Pointer>, _, _>(module, input)?;
         Ok(())
     }
 
@@ -152,10 +153,10 @@ where
         &mut self,
         module: &ModuleOf<Self>,
         data: &[u8],
-    ) -> Result<Tagged<Pointer, V>, ErrorOf<Self>>
+    ) -> Result<Tagged<Self::Pointer, V>, ErrorOf<Self>>
     where
-        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Pointer>, Error = ErrorOf<Self>>,
-        ModuleMemoryOf<Self>: ReadWriteMemory<Pointer = Pointer>,
+        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = ErrorOf<Self>>,
+        ModuleMemoryOf<Self>: ReadWriteMemory<Pointer = Self::Pointer>,
         ErrorOf<Self>: From<<ModuleMemoryOf<Self> as WritableMemory>::Error>
             + From<<ModuleMemoryOf<Self> as ReadableMemory>::Error>
             + From<ExecutorError>,
@@ -173,10 +174,10 @@ where
         &mut self,
         module: &ModuleOf<Self>,
         x: &V,
-    ) -> Result<Tagged<Pointer, V>, ErrorOf<Self>>
+    ) -> Result<Tagged<Self::Pointer, V>, ErrorOf<Self>>
     where
-        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Pointer>, Error = ErrorOf<Self>>,
-        ModuleMemoryOf<Self>: ReadWriteMemory<Pointer = Pointer>,
+        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = ErrorOf<Self>>,
+        ModuleMemoryOf<Self>: ReadWriteMemory<Pointer = Self::Pointer>,
         ErrorOf<Self>: From<<ModuleMemoryOf<Self> as WritableMemory>::Error>
             + From<<ModuleMemoryOf<Self> as ReadableMemory>::Error>
             + From<ExecutorError>,
@@ -195,9 +196,9 @@ where
         message: &[u8],
     ) -> Result<I::Output, ErrorOf<Self>>
     where
-        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Pointer>, Error = ErrorOf<Self>>
-            + TryFrom<CosmwasmCallInput<'x, Pointer, I>, Error = ErrorOf<Self>>,
-        ModuleMemoryOf<Self>: ReadWriteMemory<Pointer = Pointer>,
+        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = ErrorOf<Self>>
+            + TryFrom<CosmwasmCallInput<'x, Self::Pointer, I>, Error = ErrorOf<Self>>,
+        ModuleMemoryOf<Self>: ReadWriteMemory<Pointer = Self::Pointer>,
         ErrorOf<Self>: From<<ModuleMemoryOf<Self> as WritableMemory>::Error>
             + From<<ModuleMemoryOf<Self> as ReadableMemory>::Error>
             + From<ExecutorError>,
@@ -211,12 +212,12 @@ where
             self.passthrough_in(module, message)?,
             PhantomData,
         );
-        let pointer = self.call::<CosmwasmCallInput<Pointer, I>, _, _>(module, input)?;
+        let pointer = self.call::<CosmwasmCallInput<Self::Pointer, I>, _, _>(module, input)?;
         let memory = module.memory();
         let RawFromRegion(output) = RawFromRegion::try_from(LimitedRead(
             memory,
             pointer,
-            Pointer::try_from(<I::Output as ReadLimit>::read_limit())
+            Self::Pointer::try_from(<I::Output as ReadLimit>::read_limit())
                 .map_err(|_| ExecutorError::CallReadLimitWouldOverflow)?,
         ))?;
         Ok(serde_json::from_slice(&output).map_err(|_| ExecutorError::FailedToDeserialize)?)
@@ -229,9 +230,9 @@ where
         message: &[u8],
     ) -> Result<QueryResult, ErrorOf<Self>>
     where
-        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Pointer>, Error = ErrorOf<Self>>
-            + TryFrom<CosmwasmQueryInput<'x, Pointer>, Error = ErrorOf<Self>>,
-        ModuleMemoryOf<Self>: ReadWriteMemory<Pointer = Pointer>,
+        for<'x> ModuleInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = ErrorOf<Self>>
+            + TryFrom<CosmwasmQueryInput<'x, Self::Pointer>, Error = ErrorOf<Self>>,
+        ModuleMemoryOf<Self>: ReadWriteMemory<Pointer = Self::Pointer>,
         ErrorOf<Self>: From<<ModuleMemoryOf<Self> as WritableMemory>::Error>
             + From<<ModuleMemoryOf<Self> as ReadableMemory>::Error>
             + From<ExecutorError>,
@@ -241,12 +242,12 @@ where
             self.marshall_in(module, &env)?,
             self.passthrough_in(module, message)?,
         );
-        let pointer = self.call::<CosmwasmQueryInput<Pointer>, _, _>(module, input)?;
+        let pointer = self.call::<CosmwasmQueryInput<Self::Pointer>, _, _>(module, input)?;
         let memory = module.memory();
         let RawFromRegion(output) = RawFromRegion::try_from(LimitedRead(
             memory,
             pointer,
-            Pointer::try_from(QueryResult::read_limit())
+            Self::Pointer::try_from(QueryResult::read_limit())
                 .map_err(|_| ExecutorError::QueryReadLimitWouldOverflow)?,
         ))?;
         Ok(serde_json::from_slice(&output).map_err(|_| ExecutorError::FailedToDeserialize)?)

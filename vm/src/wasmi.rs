@@ -381,11 +381,11 @@ where
 
 impl<T> ExecutorPointer<AsWasmiVM<T>> for u32 where T: 'static + IsWasmiVM<T> {}
 
-impl<T, Pointer> Executor<Pointer> for AsWasmiVM<T>
+impl<T> Executor for AsWasmiVM<T>
 where
     T: 'static + IsWasmiVM<T>,
-    Pointer: ExecutorPointer<Self>,
 {
+  type Pointer = u32;
 }
 
 #[cfg(test)]
