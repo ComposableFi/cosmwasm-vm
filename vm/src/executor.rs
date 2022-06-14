@@ -27,11 +27,10 @@
 // DEALINGS IN THE SOFTWARE.
 
 use core::{fmt::Debug, marker::PhantomData};
-
 use crate::{
     input::{Input, OutputOf},
     memory::{
-        LimitedRead, Pointable, RawFromRegion, RawIntoRegion, ReadWriteMemory, ReadableMemory,
+        LimitedRead, RawFromRegion, RawIntoRegion, ReadWriteMemory, ReadableMemory,
         WritableMemory, Write,
     },
     tagged::Tagged,

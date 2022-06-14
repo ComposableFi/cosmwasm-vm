@@ -121,8 +121,10 @@ pub struct AsWasmiVM<T>(T);
 
 pub trait IsWasmiVM<T> {
     fn codes(&self) -> &BTreeMap<WasmiModuleId, Vec<u8>>;
-    fn host_functions_definitions(&self) -> &BTreeMap<WasmiModuleName, WasmiHostModule<T>>;
-    fn host_functions(&self) -> &BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<T>>;
+    fn host_functions_definitions(
+        &self,
+    ) -> &BTreeMap<WasmiModuleName, WasmiHostModule<AsWasmiVM<T>>>;
+    fn host_functions(&self) -> &BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<AsWasmiVM<T>>>;
 }
 
 impl<T> Externals for AsWasmiVM<T>
@@ -140,7 +142,7 @@ where
             .get(&WasmiHostFunctionIndex(index))
             .ok_or(WasmiVMError::HostFunctionNotFound(
                 WasmiHostFunctionIndex(index),
-            ))?)(&mut self.0, args.as_ref())?)
+            ))?)(self, args.as_ref())?)
     }
 }
 
@@ -389,17 +391,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        executor::{AllocateInput, CosmwasmQueryInput, Executor},
-        tagged::Tagged,
+    use cosmwasm_minimal_std::{
+        Addr, BlockInfo, ContractInfo, CosmwasmQueryResult, Env, QueryResult, Timestamp,
     };
-    use alloc::vec;
-    use cosmwasm_minimal_std::{Addr, BlockInfo, ContractInfo, Env, Timestamp};
 
     struct SimpleWasmiVM {
         codes: BTreeMap<WasmiModuleId, Vec<u8>>,
-        host_functions_definitions: BTreeMap<WasmiModuleName, WasmiHostModule<Self>>,
-        host_functions: BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<Self>>,
+        host_functions_definitions: BTreeMap<WasmiModuleName, WasmiHostModule<AsWasmiVM<Self>>>,
+        host_functions: BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<AsWasmiVM<Self>>>,
     }
 
     impl IsWasmiVM<SimpleWasmiVM> for SimpleWasmiVM {
@@ -409,27 +408,28 @@ mod tests {
 
         fn host_functions_definitions(
             &self,
-        ) -> &BTreeMap<WasmiModuleName, WasmiHostModule<SimpleWasmiVM>> {
+        ) -> &BTreeMap<WasmiModuleName, WasmiHostModule<AsWasmiVM<SimpleWasmiVM>>> {
             &self.host_functions_definitions
         }
 
         fn host_functions(
             &self,
-        ) -> &BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<SimpleWasmiVM>> {
+        ) -> &BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>>
+        {
             &self.host_functions
         }
     }
 
     fn env_db_read(
-        _: &mut SimpleWasmiVM,
+        _: &mut AsWasmiVM<SimpleWasmiVM>,
         _: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, WasmiVMError> {
         log::debug!("db_read");
-        Ok(None)
+        Ok(Some(RuntimeValue::I32(0)))
     }
 
     fn env_db_write(
-        _: &mut SimpleWasmiVM,
+        _: &mut AsWasmiVM<SimpleWasmiVM>,
         _: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, WasmiVMError> {
         log::debug!("db_write");
@@ -437,7 +437,7 @@ mod tests {
     }
 
     fn env_db_remove(
-        _: &mut SimpleWasmiVM,
+        _: &mut AsWasmiVM<SimpleWasmiVM>,
         _: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, WasmiVMError> {
         log::debug!("db_remove");
@@ -445,7 +445,7 @@ mod tests {
     }
 
     fn env_db_scan(
-        _: &mut SimpleWasmiVM,
+        _: &mut AsWasmiVM<SimpleWasmiVM>,
         _: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, WasmiVMError> {
         log::debug!("db_scan");
@@ -453,7 +453,7 @@ mod tests {
     }
 
     fn env_db_next(
-        _: &mut SimpleWasmiVM,
+        _: &mut AsWasmiVM<SimpleWasmiVM>,
         _: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, WasmiVMError> {
         log::debug!("db_next");
@@ -461,7 +461,7 @@ mod tests {
     }
 
     fn env_addr_validate(
-        _: &mut SimpleWasmiVM,
+        _: &mut AsWasmiVM<SimpleWasmiVM>,
         _: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, WasmiVMError> {
         log::debug!("addr_validate");
@@ -469,7 +469,7 @@ mod tests {
     }
 
     fn env_addr_canonicalize(
-        _: &mut SimpleWasmiVM,
+        _: &mut AsWasmiVM<SimpleWasmiVM>,
         _: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, WasmiVMError> {
         log::debug!("addr_canonicalize");
@@ -477,7 +477,7 @@ mod tests {
     }
 
     fn env_addr_humanize(
-        _: &mut SimpleWasmiVM,
+        _: &mut AsWasmiVM<SimpleWasmiVM>,
         _: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, WasmiVMError> {
         log::debug!("addr_humanize");
@@ -485,7 +485,7 @@ mod tests {
     }
 
     fn env_secp256k1_verify(
-        _: &mut SimpleWasmiVM,
+        _: &mut AsWasmiVM<SimpleWasmiVM>,
         _: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, WasmiVMError> {
         log::debug!("secp256k1_verify");
@@ -493,7 +493,7 @@ mod tests {
     }
 
     fn env_secp256k1_batch_verify(
-        _: &mut SimpleWasmiVM,
+        _: &mut AsWasmiVM<SimpleWasmiVM>,
         _: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, WasmiVMError> {
         log::debug!("secp256k1_batch_verify");
@@ -501,7 +501,7 @@ mod tests {
     }
 
     fn env_secp256k1_recove_pubkey(
-        _: &mut SimpleWasmiVM,
+        _: &mut AsWasmiVM<SimpleWasmiVM>,
         _: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, WasmiVMError> {
         log::debug!("secp256k1_recove_pubkey");
@@ -509,7 +509,7 @@ mod tests {
     }
 
     fn env_ed25519_verify(
-        _: &mut SimpleWasmiVM,
+        _: &mut AsWasmiVM<SimpleWasmiVM>,
         _: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, WasmiVMError> {
         log::debug!("ed25519_verify");
@@ -517,7 +517,7 @@ mod tests {
     }
 
     fn env_ed25519_batch_verify(
-        _: &mut SimpleWasmiVM,
+        _: &mut AsWasmiVM<SimpleWasmiVM>,
         _: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, WasmiVMError> {
         log::debug!("ed25519_batch_verify");
@@ -525,7 +525,7 @@ mod tests {
     }
 
     fn env_debug(
-        _: &mut SimpleWasmiVM,
+        _: &mut AsWasmiVM<SimpleWasmiVM>,
         _: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, WasmiVMError> {
         log::debug!("debug");
@@ -533,7 +533,7 @@ mod tests {
     }
 
     fn env_query_chain(
-        _: &mut SimpleWasmiVM,
+        _: &mut AsWasmiVM<SimpleWasmiVM>,
         _: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, WasmiVMError> {
         log::debug!("query_chain");
@@ -552,105 +552,105 @@ mod tests {
                     WasmiFunctionName("db_read".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0001),
-                        env_db_read as WasmiHostFunction<SimpleWasmiVM>,
+                        env_db_read as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
                     ),
                 ),
                 (
                     WasmiFunctionName("db_write".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0002),
-                        env_db_write as WasmiHostFunction<SimpleWasmiVM>,
+                        env_db_write as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
                     ),
                 ),
                 (
                     WasmiFunctionName("db_remove".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0003),
-                        env_db_remove as WasmiHostFunction<SimpleWasmiVM>,
+                        env_db_remove as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
                     ),
                 ),
                 (
                     WasmiFunctionName("db_scan".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0004),
-                        env_db_scan as WasmiHostFunction<SimpleWasmiVM>,
+                        env_db_scan as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
                     ),
                 ),
                 (
                     WasmiFunctionName("db_next".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0005),
-                        env_db_next as WasmiHostFunction<SimpleWasmiVM>,
+                        env_db_next as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
                     ),
                 ),
                 (
                     WasmiFunctionName("addr_validate".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0006),
-                        env_addr_validate as WasmiHostFunction<SimpleWasmiVM>,
+                        env_addr_validate as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
                     ),
                 ),
                 (
                     WasmiFunctionName("addr_canonicalize".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0007),
-                        env_addr_canonicalize as WasmiHostFunction<SimpleWasmiVM>,
+                        env_addr_canonicalize as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
                     ),
                 ),
                 (
                     WasmiFunctionName("addr_humanize".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0008),
-                        env_addr_humanize as WasmiHostFunction<SimpleWasmiVM>,
+                        env_addr_humanize as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
                     ),
                 ),
                 (
                     WasmiFunctionName("secp256k1_verify".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0009),
-                        env_secp256k1_verify as WasmiHostFunction<SimpleWasmiVM>,
+                        env_secp256k1_verify as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
                     ),
                 ),
                 (
                     WasmiFunctionName("secp256k1_batch_verify".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x000A),
-                        env_secp256k1_batch_verify as WasmiHostFunction<SimpleWasmiVM>,
+                        env_secp256k1_batch_verify as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
                     ),
                 ),
                 (
                     WasmiFunctionName("secp256k1_recover_pubkey".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x000B),
-                        env_secp256k1_recove_pubkey as WasmiHostFunction<SimpleWasmiVM>,
+                        env_secp256k1_recove_pubkey as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
                     ),
                 ),
                 (
                     WasmiFunctionName("ed25519_verify".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x000C),
-                        env_ed25519_verify as WasmiHostFunction<SimpleWasmiVM>,
+                        env_ed25519_verify as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
                     ),
                 ),
                 (
                     WasmiFunctionName("ed25519_batch_verify".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x000D),
-                        env_ed25519_batch_verify as WasmiHostFunction<SimpleWasmiVM>,
+                        env_ed25519_batch_verify as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
                     ),
                 ),
                 (
                     WasmiFunctionName("debug".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x000E),
-                        env_debug as WasmiHostFunction<SimpleWasmiVM>,
+                        env_debug as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
                     ),
                 ),
                 (
                     WasmiFunctionName("query_chain".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x000F),
-                        env_query_chain as WasmiHostFunction<SimpleWasmiVM>,
+                        env_query_chain as WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>>,
                     ),
                 ),
             ]),
@@ -665,21 +665,26 @@ mod tests {
                 .collect(),
         });
         let module = vm.load(&WasmiModuleId(0xDEADC0DE)).unwrap();
-        vm.cosmwasm_query(
-            &module,
-            Env {
-                block: BlockInfo {
-                    height: 0,
-                    time: Timestamp(0),
-                    chain_id: "".into(),
+        assert_eq!(
+            vm.cosmwasm_query(
+                &module,
+                Env {
+                    block: BlockInfo {
+                        height: 0,
+                        time: Timestamp(0),
+                        chain_id: "".into(),
+                    },
+                    transaction: None,
+                    contract: ContractInfo {
+                        address: Addr::unchecked(""),
+                    },
                 },
-                transaction: None,
-                contract: ContractInfo {
-                    address: Addr::unchecked(""),
-                },
-            },
-            r#"{ "token_info": {} }"#.as_bytes(),
+                r#"{ "token_info": {} }"#.as_bytes(),
+            )
+            .unwrap(),
+            QueryResult(CosmwasmQueryResult::Err(
+                "cw20_base::state::TokenInfo not found".into()
+            ))
         )
-        .unwrap();
     }
 }
