@@ -26,11 +26,11 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-pub type TransactionlErrorOf<T> = <T as Transactional>::Error;
+pub type TransactionalErrorOf<T> = <T as Transactional>::Error;
 
 pub trait Transactional {
-  type Error;
-  fn transaction_begin();
-  fn transaction_commit();
-  fn transaction_abort();
+    type Error;
+    fn transaction_begin(&mut self) -> Result<(), Self::Error>;
+    fn transaction_commit(&mut self) -> Result<(), Self::Error>;
+    fn transaction_abort(&mut self) -> Result<(), Self::Error>;
 }
