@@ -1,4 +1,4 @@
-// vm.rs ---
+// has.rs ---
 
 // Copyright (C) 2022 Hussein Ait-Lahcen
 
@@ -26,27 +26,6 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::input::Input;
-
-pub type VmInputOf<'a, T> = <T as VM>::Input<'a>;
-pub type VmOutputOf<'a, T> = <T as VM>::Output<'a>;
-pub type VmErrorOf<T> = <T as VM>::Error;
-
-pub trait VM {
-    type Input<'a>;
-    type Output<'a>;
-    type Error;
-    fn call<'a, I, IE, OE>(&mut self, input: I) -> Result<I::Output, Self::Error>
-    where
-        I: Input + TryInto<VmInputOf<'a, Self>, Error = IE>,
-        I::Output: for<'x> TryFrom<VmOutputOf<'x, Self>, Error = OE>,
-        VmErrorOf<Self>: From<IE> + From<OE>,
-    {
-        let input = input.try_into()?;
-        Ok(self.raw_call::<I::Output, OE>(input)?)
-    }
-    fn raw_call<'a, O, E>(&mut self, input: Self::Input<'a>) -> Result<O, Self::Error>
-    where
-        O: for<'x> TryFrom<Self::Output<'x>, Error = E>,
-        Self::Error: From<E>;
+pub trait Has<T> {
+  fn get(&self) -> T;
 }

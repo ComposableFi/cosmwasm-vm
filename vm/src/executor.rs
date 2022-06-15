@@ -29,8 +29,8 @@
 use crate::{
     input::{Input, OutputOf},
     memory::{
-        LimitedRead, RawFromRegion, RawIntoRegion, ReadWriteMemory,
-        ReadableMemoryErrorOf, WritableMemoryErrorOf, Write,
+        LimitedRead, RawFromRegion, RawIntoRegion, ReadWriteMemory, ReadableMemoryErrorOf,
+        WritableMemoryErrorOf, Write,
     },
     tagged::Tagged,
     vm::{VmErrorOf, VmInputOf, VmOutputOf, VM},

@@ -30,7 +30,7 @@ pub type LoaderCodeIdOf<T> = <T as Loader>::CodeId;
 pub type LoaderOutputOf<T> = <T as Loader>::Output;
 pub type LoaderErrorOf<T> = <T as Loader>::Error;
 
-pub trait Loader: Sized {
+pub trait Loader {
     type CodeId;
     type Error;
     type Output;

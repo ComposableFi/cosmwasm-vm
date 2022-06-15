@@ -36,6 +36,7 @@ pub mod executor;
 pub mod input;
 pub mod memory;
 pub mod system;
+pub mod has;
 pub mod tagged;
 pub mod vm;
 pub mod loader;
