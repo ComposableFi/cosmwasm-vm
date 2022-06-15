@@ -27,20 +27,41 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::{
-    executor::{Executor, ExecutorError, ExecutorMemoryOf},
+    executor::{AllocateInput, CosmwasmCallInput, Executor, ExecutorError, ExecutorMemoryOf},
+    input::Input,
+    loader::{Loader, LoaderCodeIdOf, LoaderErrorOf},
     memory::{ReadableMemoryErrorOf, WritableMemoryErrorOf},
-    transaction::{Transactional, TransactionlErrorOf},
-    vm::VmErrorOf,
+    transaction::{Transactional, TransactionalErrorOf},
+    vm::{VmErrorOf, VmInputOf},
 };
+use cosmwasm_minimal_std::{DeserializeLimit, Env, MessageInfo, ReadLimit};
+use serde::de::DeserializeOwned;
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum SystemError {}
 
-pub trait System: Executor + Transactional
+pub trait System: Executor + Transactional + Loader + Sized
 where
     for<'x> VmErrorOf<Self>: From<ReadableMemoryErrorOf<ExecutorMemoryOf<'x, Self>>>
         + From<WritableMemoryErrorOf<ExecutorMemoryOf<'x, Self>>>
         + From<ExecutorError>
         + From<SystemError>
-        + From<TransactionlErrorOf<Self>>,
+        + From<TransactionalErrorOf<Self>>
+        + From<LoaderErrorOf<Self>>,
+    for<'x> u64: From<LoaderCodeIdOf<Self>>,
 {
+    fn cosmwasm_orchestrate<I>(
+        &mut self,
+        _: Env,
+        _: MessageInfo,
+        _: &[u8],
+    ) -> Result<I::Output, VmErrorOf<Self>>
+    where
+        for<'x> VmInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>
+            + TryFrom<CosmwasmCallInput<'x, Self::Pointer, I>, Error = VmErrorOf<Self>>,
+        I: Input,
+        I::Output: DeserializeOwned + ReadLimit + DeserializeLimit,
+    {
+        todo!()
+    }
 }
