@@ -73,6 +73,11 @@ impl ReadLimit for ReplyResult {
         read_limits::RESULT_REPLY
     }
 }
+impl Into<ContractResult<Response>> for ReplyResult {
+    fn into(self) -> ContractResult<Response> {
+      self.0
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct QueryResult(pub CosmwasmQueryResult);
@@ -99,6 +104,11 @@ impl ReadLimit for ExecuteResult {
         read_limits::RESULT_EXECUTE
     }
 }
+impl Into<ContractResult<Response>> for ExecuteResult {
+  fn into(self) -> ContractResult<Response> {
+    self.0
+  }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct InstantiateResult(pub CosmwasmExecutionResult);
@@ -111,6 +121,11 @@ impl ReadLimit for InstantiateResult {
     fn read_limit() -> usize {
         read_limits::RESULT_INSTANTIATE
     }
+}
+impl Into<ContractResult<Response>> for InstantiateResult {
+  fn into(self) -> ContractResult<Response> {
+    self.0
+  }
 }
 
 #[non_exhaustive]
@@ -427,6 +442,12 @@ pub struct Event {
     ///
     /// [*Cosmos SDK* docs]: https://docs.cosmos.network/master/core/events.html
     pub attributes: Vec<Attribute>,
+}
+
+impl Event {
+  pub fn new(ty: String, attributes: Vec<Attribute>) -> Self {
+    Event { ty, attributes }
+  }
 }
 
 /// An key value pair that is used in the context of event attributes in logs
