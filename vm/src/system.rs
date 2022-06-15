@@ -40,7 +40,7 @@ use serde::de::DeserializeOwned;
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum SystemError {}
 
-pub trait System: Executor + Transactional + Loader + Sized
+pub trait System: Executor + Transactional + Loader<Output = Self> + Sized
 where
     for<'x> VmErrorOf<Self>: From<ReadableMemoryErrorOf<ExecutorMemoryOf<'x, Self>>>
         + From<WritableMemoryErrorOf<ExecutorMemoryOf<'x, Self>>>
