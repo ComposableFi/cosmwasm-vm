@@ -28,6 +28,8 @@
 
 use crate::input::Input;
 
+pub type VmExtensionOf<'a, T> = <T as VM>::Extension<'a>;
+pub type VmCodeOf<'a, T> = <T as VM>::Code<'a>;
 pub type VmInputOf<'a, T> = <T as VM>::Input<'a>;
 pub type VmOutputOf<'a, T> = <T as VM>::Output<'a>;
 pub type VmErrorOf<T> = <T as VM>::Error;
@@ -38,10 +40,8 @@ pub trait VM {
     type Error;
     type Code<'a>;
     type Extension<'a>;
-    fn load<'a>(
-        code: Self::Code<'a>,
-        extension: Self::Extension<'a>,
-    ) -> Result<Self, Self::Error>
+    fn extension<'a>(&mut self) -> Self::Extension<'a>;
+    fn new<'a>(code: Self::Code<'a>, extension: Self::Extension<'a>) -> Result<Self, Self::Error>
     where
         Self: Sized;
     fn call<'a, I, IE, OE>(&mut self, input: I) -> Result<I::Output, Self::Error>

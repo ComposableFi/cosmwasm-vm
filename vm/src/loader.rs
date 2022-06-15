@@ -1,4 +1,4 @@
-// lib.rs ---
+// loader.rs ---
 
 // Copyright (C) 2022 Hussein Ait-Lahcen
 
@@ -26,19 +26,13 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-#![no_std]
-#![feature(generic_associated_types)]
-#![cfg_attr(test, feature(assert_matches))]
+pub type LoaderCodeIdOf<T> = <T as Loader>::CodeId;
+pub type LoaderOutputOf<T> = <T as Loader>::Output;
+pub type LoaderErrorOf<T> = <T as Loader>::Error;
 
-extern crate alloc;
-
-pub mod executor;
-pub mod input;
-pub mod memory;
-pub mod system;
-pub mod tagged;
-pub mod vm;
-pub mod loader;
-pub mod wasmi;
-pub mod host;
-pub mod transaction;
+pub trait Loader: Sized {
+    type CodeId;
+    type Error;
+    type Output;
+    fn load(&mut self, code_id: Self::CodeId) -> Result<Self::Output, Self::Error>;
+}
