@@ -51,6 +51,7 @@ use crate::system::Bank;
 use crate::system::BankAccountIdOf;
 use crate::system::BankErrorOf;
 use crate::system::CosmwasmCodeId;
+use crate::system::LoadContract;
 use crate::system::Peripherals;
 use crate::system::PeripheralsErrorOf;
 use crate::system::System;
@@ -541,7 +542,7 @@ where
         &mut self,
         from: &Self::AccountId,
         to: &Self::AccountId,
-        funds: Vec<cosmwasm_minimal_std::Coin>,
+        funds: &[cosmwasm_minimal_std::Coin],
     ) -> Result<(), Self::Error> {
         self.0.transfer(from, to, funds)
     }
@@ -563,7 +564,7 @@ impl<T> System for AsWasmiVM<T>
 where
     T: IsWasmiVM<T>
         + Transactional
-        + Loader<CodeId = CosmwasmCodeId, Output = Self>
+        + Loader<CodeId = LoadContract, Output = Self>
         + SystemEnv
         + Bank
         + Peripherals<AccountId = BankAccountIdOf<T>, CodeId = CosmwasmCodeId>,
@@ -974,6 +975,7 @@ mod tests {
         host_functions:
             BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<AsWasmiVM<Self>, WasmiVMError>>,
         executing_module: WasmiModule,
+        load_info: LoadContract,
         extension: Rc<RefCell<SimpleWasmiVMExtension>>,
     }
 
@@ -1024,10 +1026,13 @@ mod tests {
     impl WasmiHost for SimpleWasmiVM {}
 
     impl Loader for SimpleWasmiVM {
-        type CodeId = CosmwasmCodeId;
+        type CodeId = LoadContract;
         type Error = WasmiVMError;
         type Output = AsWasmiVM<SimpleWasmiVM>;
-        fn load(&mut self, code_id: Self::CodeId) -> Result<Self::Output, Self::Error> {
+        fn load(
+            &mut self,
+            LoadContract { env, info, code_id }: Self::CodeId,
+        ) -> Result<Self::Output, Self::Error> {
             log::debug!("Load");
             let code = self
                 .extension
@@ -1049,6 +1054,7 @@ mod tests {
                             .flatten()
                             .collect(),
                         executing_module: module,
+                        load_info: LoadContract { env, info, code_id },
                         extension,
                     }
                 },
@@ -1065,7 +1071,7 @@ mod tests {
             &mut self,
             from: &Self::AccountId,
             to: &Self::AccountId,
-            funds: Vec<cosmwasm_minimal_std::Coin>,
+            funds: &[cosmwasm_minimal_std::Coin],
         ) -> Result<(), Self::Error> {
             log::debug!("Transfer: {:?} -> {:?}\n{:?}", from, to, funds);
             Ok(())
@@ -1081,25 +1087,12 @@ mod tests {
 
     impl Has<Env> for SimpleWasmiVM {
         fn get(&self) -> Env {
-            Env {
-                block: BlockInfo {
-                    height: 0,
-                    time: Timestamp(0),
-                    chain_id: "".into(),
-                },
-                transaction: None,
-                contract: ContractInfo {
-                    address: Addr::unchecked(""),
-                },
-            }
+            self.load_info.env.clone()
         }
     }
     impl Has<MessageInfo> for SimpleWasmiVM {
         fn get(&self) -> MessageInfo {
-            MessageInfo {
-                sender: Addr::unchecked(""),
-                funds: Default::default(),
-            }
+            self.load_info.info.clone()
         }
     }
     impl SystemEnv for SimpleWasmiVM {}
@@ -1149,6 +1142,24 @@ mod tests {
                     .flatten()
                     .collect(),
                 executing_module: module,
+                load_info: LoadContract {
+                    env: Env {
+                        block: BlockInfo {
+                            height: 0,
+                            time: Timestamp(0),
+                            chain_id: "".into(),
+                        },
+                        transaction: None,
+                        contract: ContractInfo {
+                            address: Addr::unchecked(""),
+                        },
+                    },
+                    info: MessageInfo {
+                        sender: Addr::unchecked(""),
+                        funds: Default::default(),
+                    },
+                    code_id: 0xDEADC0DE,
+                },
                 extension,
             },
         )
@@ -1170,8 +1181,8 @@ mod tests {
         };
         assert_matches!(
             vm.cosmwasm_call::<InstantiateInput>(
-                env.clone(),
-                info.clone(),
+                &env,
+                &info,
                 r#"{
                   "name": "Picasso",
                   "symbol": "PICA",
@@ -1186,21 +1197,8 @@ mod tests {
             InstantiateResult(CosmwasmExecutionResult::Ok(_))
         );
         assert_eq!(
-            vm.cosmwasm_query(
-                Env {
-                    block: BlockInfo {
-                        height: 0,
-                        time: Timestamp(0),
-                        chain_id: "".into(),
-                    },
-                    transaction: None,
-                    contract: ContractInfo {
-                        address: Addr::unchecked(""),
-                    },
-                },
-                r#"{ "token_info": {} }"#.as_bytes(),
-            )
-            .unwrap(),
+            vm.cosmwasm_query(&env, r#"{ "token_info": {} }"#.as_bytes(),)
+                .unwrap(),
             QueryResult(CosmwasmQueryResult::Ok(Binary(
                 r#"{"name":"Picasso","symbol":"PICA","decimals":12,"total_supply":"0"}"#
                     .as_bytes()
@@ -1229,6 +1227,24 @@ mod tests {
                     .flatten()
                     .collect(),
                 executing_module: module,
+                load_info: LoadContract {
+                    env: Env {
+                        block: BlockInfo {
+                            height: 0,
+                            time: Timestamp(0),
+                            chain_id: "".into(),
+                        },
+                        transaction: None,
+                        contract: ContractInfo {
+                            address: Addr::unchecked(""),
+                        },
+                    },
+                    info: MessageInfo {
+                        sender: Addr::unchecked(""),
+                        funds: Default::default(),
+                    },
+                    code_id: 0xDEADC0DE,
+                },
                 extension,
             },
         )
@@ -1305,6 +1321,24 @@ mod tests {
                     .flatten()
                     .collect(),
                 executing_module: module,
+                load_info: LoadContract {
+                    env: Env {
+                        block: BlockInfo {
+                            height: 0,
+                            time: Timestamp(0),
+                            chain_id: "".into(),
+                        },
+                        transaction: None,
+                        contract: ContractInfo {
+                            address: Addr::unchecked(""),
+                        },
+                    },
+                    info: MessageInfo {
+                        sender: Addr::unchecked(""),
+                        funds: Default::default(),
+                    },
+                    code_id: 0xDEADC0DE,
+                },
                 extension,
             },
         )

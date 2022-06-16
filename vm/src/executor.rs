@@ -275,8 +275,8 @@ where
 
     fn cosmwasm_call<I>(
         &mut self,
-        env: Env,
-        info: MessageInfo,
+        env: &Env,
+        info: &MessageInfo,
         message: &[u8],
     ) -> Result<I::Output, VmErrorOf<Self>>
     where
@@ -287,8 +287,8 @@ where
     {
         log::debug!("Call");
         let input = CosmwasmCallInput(
-            self.marshall_in(&env)?,
-            self.marshall_in(&info)?,
+            self.marshall_in(env)?,
+            self.marshall_in(info)?,
             self.passthrough_in(message)?,
             PhantomData,
         );
@@ -296,13 +296,13 @@ where
         self.marshall_out(pointer)
     }
 
-    fn cosmwasm_query(&mut self, env: Env, message: &[u8]) -> Result<QueryResult, VmErrorOf<Self>>
+    fn cosmwasm_query(&mut self, env: &Env, message: &[u8]) -> Result<QueryResult, VmErrorOf<Self>>
     where
         for<'x> VmInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>
             + TryFrom<CosmwasmQueryInput<'x, Self::Pointer>, Error = VmErrorOf<Self>>,
     {
         log::debug!("Query");
-        let input = CosmwasmQueryInput(self.marshall_in(&env)?, self.passthrough_in(message)?);
+        let input = CosmwasmQueryInput(self.marshall_in(env)?, self.passthrough_in(message)?);
         let pointer = self.call(input)?;
         self.marshall_out(pointer)
     }

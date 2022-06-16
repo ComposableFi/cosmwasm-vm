@@ -73,7 +73,7 @@ pub trait Bank {
         &mut self,
         from: &Self::AccountId,
         to: &Self::AccountId,
-        funds: Vec<Coin>,
+        funds: &[Coin],
     ) -> Result<(), Self::Error>;
 }
 
@@ -91,10 +91,16 @@ pub type SystemAccountIdOf<T> = <T as System>::AccountId;
 
 pub type CosmwasmCodeId = u64;
 
+pub struct LoadContract {
+    pub env: Env,
+    pub info: MessageInfo,
+    pub code_id: CosmwasmCodeId,
+}
+
 pub trait System:
     Executor
     + Transactional
-    + Loader<CodeId = CosmwasmCodeId, Output = Self>
+    + Loader<CodeId = LoadContract, Output = Self>
     + SystemEnv
     + Bank<AccountId = SystemAccountIdOf<Self>>
     + Peripherals<AccountId = SystemAccountIdOf<Self>, CodeId = CosmwasmCodeId>
@@ -161,7 +167,7 @@ where
         let env: Env = self.get();
         let info = self.get();
         let output = self
-            .cosmwasm_call::<I>(env.clone(), info, message)
+            .cosmwasm_call::<I>(&env, &info, message)
             .map(Into::into);
         log::debug!("Output: {:?}", output);
         match output {
@@ -182,14 +188,14 @@ where
                 });
                 messages.into_iter().try_fold(
                     data,
-                    |current,
-                     SubMsg {
-                         id,
-                         msg,
-                         gas_limit,
-                         reply_on,
-                     }|
-                     -> Result<Option<Binary>, VmErrorOf<Self>> {
+                    move |current,
+                          SubMsg {
+                              id,
+                              msg,
+                              gas_limit,
+                              reply_on,
+                          }|
+                          -> Result<Option<Binary>, VmErrorOf<Self>> {
                         log::debug!("Executing submessages");
                         let mut sub_events = Vec::<Event>::new();
                         let mut sub_event_handler = |event: Event| {
@@ -213,14 +219,21 @@ where
                                         .try_into()
                                         .map_err(|_| SystemError::AddressConversionFailed)?,
                                     &contract_addr,
-                                    funds,
+                                    &funds,
                                 )?;
                                 let code_id = self.contract_code(&contract_addr)?;
-                                self.load(code_id)?
-                                    .cosmwasm_orchestrate_call::<ExecuteInput>(
-                                        &msg,
-                                        &mut sub_event_handler,
-                                    )
+                                self.load(LoadContract {
+                                    env: env.clone(),
+                                    info: MessageInfo {
+                                        sender: env.contract.address.clone(),
+                                        funds,
+                                    },
+                                    code_id,
+                                })?
+                                .cosmwasm_orchestrate_call::<ExecuteInput>(
+                                    &msg,
+                                    &mut sub_event_handler,
+                                )
                             }
                             _ => Err(SystemError::UnsupportedMessage.into()),
                         };
