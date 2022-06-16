@@ -53,15 +53,31 @@ pub struct AllocateInput<Pointer>(pub Pointer);
 impl<Pointer> Input for AllocateInput<Pointer> {
     type Output = Pointer;
 }
+impl<Pointer> AsFunctionName for AllocateInput<Pointer> {
+    fn name() -> &'static str {
+        "allocate"
+    }
+}
 
+pub struct Unit;
 pub struct DeallocateInput<Pointer>(pub Pointer);
 impl<Pointer> Input for DeallocateInput<Pointer> {
-    type Output = Pointer;
+    type Output = Unit;
+}
+impl<Pointer> AsFunctionName for DeallocateInput<Pointer> {
+    fn name() -> &'static str {
+        "deallocate"
+    }
 }
 
 pub struct CosmwasmQueryInput<'a, Pointer>(pub Tagged<Pointer, Env>, pub Tagged<Pointer, &'a [u8]>);
 impl<'a, Pointer> Input for CosmwasmQueryInput<'a, Pointer> {
     type Output = Pointer;
+}
+impl<'a, Pointer> AsFunctionName for CosmwasmQueryInput<'a, Pointer> {
+    fn name() -> &'static str {
+        "query"
+    }
 }
 
 pub struct CosmwasmCallInput<'a, Pointer, I>(
@@ -118,54 +134,47 @@ pub enum ExecutorError {
     CallReadLimitWouldOverflow,
 }
 
-pub trait ExecutorPointer<T>:
-    for<'x> TryFrom<VmOutputOf<'x, T>, Error = VmErrorOf<T>>
-    + TryFrom<usize>
-    + TryInto<usize>
-    + Copy
-    + Ord
-    + Debug
-where
-    T: ?Sized + VM,
-{
-}
+pub trait ExecutorPointer: TryFrom<usize> + TryInto<usize> + Copy + Ord + Debug {}
 
 pub mod constants {
     /// A kibi (kilo binary)
-    pub const KI: u32 = 1024;
+    pub const KI: usize = 1024;
     /// A mibi (mega binary)
-    pub const MI: u32 = 1024 * 1024;
+    pub const MI: usize = 1024 * 1024;
     /// Max key length for db_write/db_read/db_remove/db_scan (when VM reads the key argument from Wasm
     /// memory)
-    pub const MAX_LENGTH_DB_KEY: u32 = 64 * KI;
+    pub const MAX_LENGTH_DB_KEY: usize = 64 * KI;
     /// Max value length for db_write (when VM reads the value argument from Wasm memory)
-    pub const MAX_LENGTH_DB_VALUE: u32 = 128 * KI;
+    pub const MAX_LENGTH_DB_VALUE: usize = 128 * KI;
     /// Typically 20 (Cosmos SDK, Ethereum), 32 (Nano, Substrate) or 54 (MockApi)
-    pub const MAX_LENGTH_CANONICAL_ADDRESS: u32 = 64;
+    pub const MAX_LENGTH_CANONICAL_ADDRESS: usize = 64;
     /// The max length of human address inputs (in bytes).
     /// The maximum allowed size for [bech32](https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki#bech32)
     /// is 90 characters and we're adding some safety margin around that for other formats.
-    pub const MAX_LENGTH_HUMAN_ADDRESS: u32 = 256;
-    pub const MAX_LENGTH_QUERY_CHAIN_REQUEST: u32 = 64 * KI;
+    pub const MAX_LENGTH_HUMAN_ADDRESS: usize = 256;
+    pub const MAX_LENGTH_QUERY_CHAIN_REQUEST: usize = 64 * KI;
     /// Length of a serialized Ed25519  signature
-    pub const MAX_LENGTH_ED25519_SIGNATURE: u32 = 64;
+    pub const MAX_LENGTH_ED25519_SIGNATURE: usize = 64;
     /// Max length of a Ed25519 message in bytes.
     /// This is an arbitrary value, for performance / memory contraints. If you need to verify larger
     /// messages, let us know.
-    pub const MAX_LENGTH_ED25519_MESSAGE: u32 = 128 * 1024;
+    pub const MAX_LENGTH_ED25519_MESSAGE: usize = 128 * 1024;
     /// Max number of batch Ed25519 messages / signatures / public_keys.
     /// This is an arbitrary value, for performance / memory contraints. If you need to batch-verify a
     /// larger number of signatures, let us know.
-    pub const MAX_COUNT_ED25519_BATCH: u32 = 256;
+    pub const MAX_COUNT_ED25519_BATCH: usize = 256;
 
     /// Max length for a debug message
-    pub const MAX_LENGTH_DEBUG: u32 = 2 * MI;
+    pub const MAX_LENGTH_DEBUG: usize = 2 * MI;
+
+    /// Max length for an abort message
+    pub const MAX_LENGTH_ABORT: usize = 2 * MI;
 }
 
-pub struct ConstantReadLimit<const K: u32>;
-impl<const K: u32> ReadLimit for ConstantReadLimit<K> {
+pub struct ConstantReadLimit<const K: usize>;
+impl<const K: usize> ReadLimit for ConstantReadLimit<K> {
     fn read_limit() -> usize {
-        K as usize
+        K
     }
 }
 
@@ -178,7 +187,7 @@ where
         + From<WritableMemoryErrorOf<Self::Memory<'x>>>
         + From<ExecutorError>,
 {
-    type Pointer: ExecutorPointer<Self>;
+    type Pointer: ExecutorPointer + for<'x> TryFrom<VmOutputOf<'x, Self>, Error = VmErrorOf<Self>>;
     type Memory<'a>: ReadWriteMemory<Pointer = Self::Pointer>;
 
     fn memory<'a>(&mut self) -> Self::Memory<'a>;
@@ -197,6 +206,7 @@ where
 
     fn deallocate<L>(&mut self, pointer: L) -> Result<(), VmErrorOf<Self>>
     where
+        for<'x> Unit: TryFrom<VmOutputOf<'x, Self>, Error = VmErrorOf<Self>>,
         for<'x> VmInputOf<'x, Self>:
             TryFrom<DeallocateInput<Self::Pointer>, Error = VmErrorOf<Self>>,
         Self::Pointer: TryFrom<L>,

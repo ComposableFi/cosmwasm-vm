@@ -26,10 +26,13 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use alloc::string::String;
+
 pub trait Host {
     type Key;
     type Value;
     type Error;
-    fn db_read(&mut self, key: Self::Key) -> Result<Self::Value, Self::Error>;
+    fn db_read(&mut self, key: Self::Key) -> Result<Option<Self::Value>, Self::Error>;
     fn db_write(&mut self, key: Self::Key, value: Self::Value) -> Result<(), Self::Error>;
+    fn abort(&mut self, message: String) -> Result<(), Self::Error>;
 }

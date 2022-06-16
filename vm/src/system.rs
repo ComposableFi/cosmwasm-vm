@@ -30,8 +30,8 @@ use core::fmt::Debug;
 
 use crate::{
     executor::{
-        AllocateInput, CosmwasmCallInput, CosmwasmQueryInput, ExecuteInput, Executor,
-        ExecutorError, ExecutorMemoryOf, InstantiateInput, ReplyInput,
+        AllocateInput, CosmwasmCallInput, CosmwasmQueryInput, DeallocateInput, ExecuteInput,
+        Executor, ExecutorError, ExecutorMemoryOf, InstantiateInput, ReplyInput,
     },
     has::Has,
     input::Input,
@@ -111,12 +111,13 @@ where
         + Debug,
 
     for<'x> VmInputOf<'x, Self>: TryFrom<AllocateInput<Self::Pointer>, Error = VmErrorOf<Self>>
+        + TryFrom<DeallocateInput<Self::Pointer>, Error = VmErrorOf<Self>>
         + TryFrom<CosmwasmCallInput<'x, Self::Pointer, InstantiateInput>, Error = VmErrorOf<Self>>
         + TryFrom<CosmwasmCallInput<'x, Self::Pointer, ExecuteInput>, Error = VmErrorOf<Self>>
         + TryFrom<CosmwasmCallInput<'x, Self::Pointer, ReplyInput>, Error = VmErrorOf<Self>>
         + TryFrom<CosmwasmQueryInput<'x, Self::Pointer>, Error = VmErrorOf<Self>>,
 {
-    type AccountId: TryFrom<Addr>;
+    type AccountId: TryFrom<Addr, Error = VmErrorOf<Self>>;
 
     fn cosmwasm_orchestrate_entrypoint<I>(
         &mut self,
@@ -179,7 +180,6 @@ where
                 events.into_iter().for_each(|Event { ty, attributes, .. }| {
                     event_handler(Event::new(format!("wasm-{}", ty), attributes))
                 });
-
                 messages.into_iter().try_fold(
                     data,
                     |current,

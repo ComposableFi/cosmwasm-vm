@@ -37,7 +37,7 @@ pub trait Pointable {
 }
 
 pub trait ReadWriteMemory:
-    Pointable + ReadableMemory<Error = <Self as WritableMemory>::Error> + WritableMemory
+    ReadableMemory<Error = <Self as WritableMemory>::Error> + WritableMemory
 {
 }
 
@@ -197,7 +197,7 @@ pub struct IntoRegion<T>(pub PhantomData<T>);
 impl<'a, 'b, M, T> TryFrom<TypedWrite<'a, 'b, M, T>> for IntoRegion<T>
 where
     T: Sized,
-    M: ReadableMemory<Error = <M as WritableMemory>::Error> + WritableMemory,
+    M: ReadWriteMemory,
     M::Pointer: Debug + Ord + Copy + TryFrom<usize>,
 {
     type Error = <M as ReadableMemory>::Error;
@@ -225,7 +225,7 @@ where
 pub struct RawIntoRegion;
 impl<'a, 'b, M> TryFrom<Write<'a, 'b, M>> for RawIntoRegion
 where
-    M: ReadableMemory<Error = <M as WritableMemory>::Error> + WritableMemory,
+    M: ReadWriteMemory,
     M::Pointer: Debug + Ord + Copy + TryFrom<usize>,
 {
     type Error = <M as ReadableMemory>::Error;
