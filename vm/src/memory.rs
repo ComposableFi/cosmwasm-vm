@@ -33,7 +33,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 pub trait Pointable {
-    type Pointer;
+    type Pointer: Debug + Ord + Copy + TryFrom<usize> + TryInto<usize>;
 }
 
 pub trait ReadWriteMemory:
@@ -113,7 +113,6 @@ impl<'a, M, T> TryFrom<LimitedTypedRead<'a, M>> for FromRegion<T>
 where
     T: Sized,
     M: ReadableMemory,
-    M::Pointer: Ord,
 {
     type Error = M::Error;
     fn try_from(
@@ -136,7 +135,6 @@ pub struct RawFromRegion(pub Vec<u8>);
 impl<'a, M> TryFrom<LimitedRead<'a, M>> for RawFromRegion
 where
     M: ReadableMemory,
-    M::Pointer: Ord + TryInto<usize>,
 {
     type Error = M::Error;
     fn try_from(
@@ -178,7 +176,6 @@ impl<'a, 'b, M, T> TryFrom<TypedWrite<'a, 'b, M, T>> for IntoMemory<T>
 where
     T: Sized,
     M: WritableMemory,
-    M::Pointer: Copy + TryFrom<usize>,
 {
     type Error = M::Error;
     fn try_from(
@@ -198,7 +195,6 @@ impl<'a, 'b, M, T> TryFrom<TypedWrite<'a, 'b, M, T>> for IntoRegion<T>
 where
     T: Sized,
     M: ReadWriteMemory,
-    M::Pointer: Debug + Ord + Copy + TryFrom<usize>,
 {
     type Error = <M as ReadableMemory>::Error;
     fn try_from(
@@ -226,7 +222,6 @@ pub struct RawIntoRegion;
 impl<'a, 'b, M> TryFrom<Write<'a, 'b, M>> for RawIntoRegion
 where
     M: ReadWriteMemory,
-    M::Pointer: Debug + Ord + Copy + TryFrom<usize>,
 {
     type Error = <M as ReadableMemory>::Error;
     fn try_from(Write(memory, pointer, value): Write<'a, 'b, M>) -> Result<Self, Self::Error> {

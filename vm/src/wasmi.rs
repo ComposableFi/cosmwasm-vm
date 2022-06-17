@@ -31,9 +31,7 @@ use crate::executor::AsFunctionName;
 use crate::executor::CosmwasmCallInput;
 use crate::executor::CosmwasmQueryInput;
 use crate::executor::DeallocateInput;
-use crate::executor::Executor;
 use crate::executor::ExecutorError;
-use crate::executor::ExecutorPointer;
 use crate::executor::Unit;
 use crate::has::Has;
 use crate::host::Host;
@@ -48,14 +46,8 @@ use crate::memory::ReadWriteMemory;
 use crate::memory::ReadableMemory;
 use crate::memory::WritableMemory;
 use crate::system::Bank;
-use crate::system::BankAccountIdOf;
-use crate::system::BankErrorOf;
 use crate::system::CosmwasmCodeId;
-use crate::system::LoadContract;
 use crate::system::Peripherals;
-use crate::system::PeripheralsErrorOf;
-use crate::system::System;
-use crate::system::SystemEnv;
 use crate::system::SystemError;
 use crate::tagged::Tagged;
 use crate::transaction::Transactional;
@@ -73,9 +65,6 @@ use core::fmt::Debug;
 use core::fmt::Display;
 use core::marker::PhantomData;
 use core::num::TryFromIntError;
-use cosmwasm_minimal_std::Addr;
-use cosmwasm_minimal_std::Env;
-use cosmwasm_minimal_std::MessageInfo;
 use either::Either;
 use wasmi::Externals;
 use wasmi::FuncInstance;
@@ -177,7 +166,14 @@ pub struct AsWasmiVM<T>(T);
 pub type IsWasmiVMErrorOf<T> = <T as IsWasmiVM<T>>::Error;
 
 pub trait IsWasmiVM<T>: WasmiHost {
-    type Error: Debug + From<WasmiVMError> + From<<Self as Host>::Error> + HostError;
+    type Error: Debug
+        + From<WasmiVMError>
+        + From<MemoryReadError>
+        + From<MemoryWriteError>
+        + From<ExecutorError>
+        + From<SystemError>
+        + From<<Self as Host>::Error>
+        + HostError;
     fn host_functions_definitions(
         &self,
     ) -> &BTreeMap<WasmiModuleName, WasmiHostModule<AsWasmiVM<T>, <Self as IsWasmiVM<T>>::Error>>;
@@ -278,28 +274,6 @@ pub struct WasmiModule {
     module: wasmi::ModuleRef,
     memory: wasmi::MemoryRef,
 }
-
-impl Pointable for wasmi::MemoryRef {
-    type Pointer = u32;
-}
-
-impl ReadableMemory for wasmi::MemoryRef {
-    type Error = WasmiVMError;
-    fn read(&self, offset: Self::Pointer, buffer: &mut [u8]) -> Result<(), Self::Error> {
-        self.get_into(offset, buffer)
-            .map_err(|_| WasmiVMError::LowLevelMemoryReadError)
-    }
-}
-
-impl WritableMemory for wasmi::MemoryRef {
-    type Error = WasmiVMError;
-    fn write(&self, offset: Self::Pointer, buffer: &[u8]) -> Result<(), Self::Error> {
-        self.set(offset, buffer)
-            .map_err(|_| WasmiVMError::LowLevelMemoryWriteError)
-    }
-}
-
-impl ReadWriteMemory for wasmi::MemoryRef {}
 
 impl<'a, T> TryFrom<WasmiOutput<'a, T>> for RuntimeValue
 where
@@ -465,13 +439,12 @@ where
     type Input<'a> = WasmiInput<'a, T>;
     type Output<'a> = WasmiOutput<'a, T>;
     type Error = <T as IsWasmiVM<T>>::Error;
-    fn raw_call<'a, O, E>(
+    fn raw_call<'a, O>(
         &mut self,
         WasmiInput(WasmiFunctionName(function_name), (function_args, _), _): Self::Input<'a>,
     ) -> Result<O, Self::Error>
     where
-        O: for<'x> TryFrom<Self::Output<'x>, Error = E>,
-        Self::Error: From<E>,
+        O: for<'x> TryFrom<Self::Output<'x>, Error = VmErrorOf<Self>>,
     {
         let WasmiModule { module, memory } = self.0.module();
         let value = module
@@ -487,23 +460,43 @@ where
     }
 }
 
-impl ExecutorPointer for u32 {}
-impl<T> Executor for AsWasmiVM<T>
+impl<T> Pointable for AsWasmiVM<T> {
+    type Pointer = u32;
+}
+
+impl<T> ReadableMemory for AsWasmiVM<T>
 where
     T: IsWasmiVM<T>,
-    IsWasmiVMErrorOf<T>: From<ExecutorError>,
 {
-    type Pointer = u32;
-    type Memory<'a> = wasmi::MemoryRef;
-    fn memory<'a>(&mut self) -> Self::Memory<'a> {
-        self.0.module().memory.clone()
+    type Error = IsWasmiVMErrorOf<T>;
+    fn read(&self, offset: Self::Pointer, buffer: &mut [u8]) -> Result<(), Self::Error> {
+        self.0
+            .module()
+            .memory
+            .get_into(offset, buffer)
+            .map_err(|_| WasmiVMError::LowLevelMemoryReadError.into())
     }
 }
 
+impl<T> WritableMemory for AsWasmiVM<T>
+where
+    T: IsWasmiVM<T>,
+{
+    type Error = IsWasmiVMErrorOf<T>;
+    fn write(&self, offset: Self::Pointer, buffer: &[u8]) -> Result<(), Self::Error> {
+        self.0
+            .module()
+            .memory
+            .set(offset, buffer)
+            .map_err(|_| WasmiVMError::LowLevelMemoryWriteError.into())
+    }
+}
+
+impl<T> ReadWriteMemory for AsWasmiVM<T> where T: IsWasmiVM<T> {}
+
 impl<T> Transactional for AsWasmiVM<T>
 where
-    T: IsWasmiVM<T> + Transactional,
-    IsWasmiVMErrorOf<T>: From<TransactionalErrorOf<T>>,
+    T: Transactional,
 {
     type Error = TransactionalErrorOf<T>;
     fn transaction_begin(&mut self) -> Result<(), Self::Error> {
@@ -519,8 +512,7 @@ where
 
 impl<T> Loader for AsWasmiVM<T>
 where
-    T: IsWasmiVM<T> + Loader,
-    IsWasmiVMErrorOf<T>: From<LoaderErrorOf<T>>,
+    T: Loader,
 {
     type CodeId = LoaderCodeIdOf<T>;
     type Error = LoaderErrorOf<T>;
@@ -529,8 +521,6 @@ where
         self.0.load(code_id)
     }
 }
-
-impl<T> SystemEnv for AsWasmiVM<T> where T: IsWasmiVM<T> + Has<Env> + Has<MessageInfo> {}
 
 impl<T> Bank for AsWasmiVM<T>
 where
@@ -560,29 +550,10 @@ where
     }
 }
 
-impl<T> System for AsWasmiVM<T>
-where
-    T: IsWasmiVM<T>
-        + Transactional
-        + Loader<CodeId = LoadContract, Output = Self>
-        + SystemEnv
-        + Bank
-        + Peripherals<AccountId = BankAccountIdOf<T>, CodeId = CosmwasmCodeId>,
-    for<'x> IsWasmiVMErrorOf<T>: From<TransactionalErrorOf<T>>
-        + From<LoaderErrorOf<T>>
-        + From<BankErrorOf<T>>
-        + From<PeripheralsErrorOf<T>>
-        + From<ExecutorError>
-        + From<SystemError>,
-    BankAccountIdOf<T>: TryFrom<Addr, Error = IsWasmiVMErrorOf<T>>,
-{
-    type AccountId = BankAccountIdOf<T>;
-}
-
 #[allow(dead_code)]
 mod host_functions {
     use super::*;
-    use crate::executor::{constants, ConstantReadLimit};
+    use crate::executor::{constants, passthrough_in, passthrough_out, ConstantReadLimit};
 
     pub fn definitions<T>(
     ) -> BTreeMap<WasmiModuleName, WasmiHostModule<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>>
@@ -724,19 +695,19 @@ mod host_functions {
     ) -> Result<Option<RuntimeValue>, IsWasmiVMErrorOf<T>>
     where
         T: IsWasmiVM<T>,
-        IsWasmiVMErrorOf<T>: From<ExecutorError>,
     {
         log::debug!("db_read");
         match &values[..] {
             [RuntimeValue::I32(key_pointer)] => {
-                let key = vm
-                    .passthrough_out::<ConstantReadLimit<{ constants::MAX_LENGTH_DB_KEY }>>(
-                        *key_pointer as u32,
-                    )?;
+                let key = passthrough_out::<
+                    AsWasmiVM<T>,
+                    ConstantReadLimit<{ constants::MAX_LENGTH_DB_KEY }>,
+                >(vm, *key_pointer as u32)?;
                 let value = vm.0.db_read(key);
                 match value {
                     Ok(Some(value)) => {
-                        let Tagged(value_pointer, _) = vm.passthrough_in::<()>(&value)?;
+                        let Tagged(value_pointer, _) =
+                            passthrough_in::<AsWasmiVM<T>, ()>(vm, &value)?;
                         Ok(Some(RuntimeValue::I32(value_pointer as i32)))
                     }
                     Ok(None) => Ok(Some(RuntimeValue::I32(0))),
@@ -753,19 +724,18 @@ mod host_functions {
     ) -> Result<Option<RuntimeValue>, IsWasmiVMErrorOf<T>>
     where
         T: IsWasmiVM<T>,
-        IsWasmiVMErrorOf<T>: From<ExecutorError>,
     {
         log::debug!("db_write");
         match &values[..] {
             [RuntimeValue::I32(key_pointer), RuntimeValue::I32(value_pointer)] => {
-                let key = vm
-                    .passthrough_out::<ConstantReadLimit<{ constants::MAX_LENGTH_DB_KEY }>>(
-                        *key_pointer as u32,
-                    )?;
-                let value = vm
-                    .passthrough_out::<ConstantReadLimit<{ constants::MAX_LENGTH_DB_VALUE }>>(
-                        *value_pointer as u32,
-                    )?;
+                let key = passthrough_out::<
+                    AsWasmiVM<T>,
+                    ConstantReadLimit<{ constants::MAX_LENGTH_DB_KEY }>,
+                >(vm, *key_pointer as u32)?;
+                let value = passthrough_out::<
+                    AsWasmiVM<T>,
+                    ConstantReadLimit<{ constants::MAX_LENGTH_DB_VALUE }>,
+                >(vm, *value_pointer as u32)?;
                 vm.0.db_write(key, value)?;
                 Ok(None)
             }
@@ -927,10 +897,10 @@ mod host_functions {
         log::debug!("abort");
         match &values[..] {
             [RuntimeValue::I32(message_pointer)] => {
-                let message: Vec<u8> = vm
-                    .passthrough_out::<ConstantReadLimit<{ constants::MAX_LENGTH_ABORT }>>(
-                        *message_pointer as u32,
-                    )?;
+                let message: Vec<u8> = passthrough_out::<
+                    AsWasmiVM<T>,
+                    ConstantReadLimit<{ constants::MAX_LENGTH_ABORT }>,
+                >(vm, *message_pointer as u32)?;
                 vm.0.abort(String::from_utf8_lossy(&message).into())?;
                 Ok(None)
             }
@@ -956,7 +926,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::executor::{ExecuteInput, InstantiateInput};
+    use crate::{
+        executor::{cosmwasm_call, cosmwasm_query, ExecuteInput, InstantiateInput},
+        system::{cosmwasm_system_entrypoint, LoadContract},
+    };
     use alloc::rc::Rc;
     use core::{assert_matches::assert_matches, cell::RefCell};
     use cosmwasm_minimal_std::{
@@ -1095,7 +1068,6 @@ mod tests {
             self.load_info.info.clone()
         }
     }
-    impl SystemEnv for SimpleWasmiVM {}
 
     impl Transactional for SimpleWasmiVM {
         type Error = WasmiVMError;
@@ -1180,7 +1152,8 @@ mod tests {
             funds: Default::default(),
         };
         assert_matches!(
-            vm.cosmwasm_call::<InstantiateInput>(
+            cosmwasm_call::<InstantiateInput, AsWasmiVM<SimpleWasmiVM>>(
+                &mut vm,
                 &env,
                 &info,
                 r#"{
@@ -1197,8 +1170,12 @@ mod tests {
             InstantiateResult(CosmwasmExecutionResult::Ok(_))
         );
         assert_eq!(
-            vm.cosmwasm_query(&env, r#"{ "token_info": {} }"#.as_bytes(),)
-                .unwrap(),
+            cosmwasm_query::<AsWasmiVM<SimpleWasmiVM>>(
+                &mut vm,
+                &env,
+                r#"{ "token_info": {} }"#.as_bytes(),
+            )
+            .unwrap(),
             QueryResult(CosmwasmQueryResult::Ok(Binary(
                 r#"{"name":"Picasso","symbol":"PICA","decimals":12,"total_supply":"0"}"#
                     .as_bytes()
@@ -1250,7 +1227,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            vm.cosmwasm_orchestrate_entrypoint::<InstantiateInput>(
+            cosmwasm_system_entrypoint::<InstantiateInput, AsWasmiVM<SimpleWasmiVM>>(
+                &mut vm,
                 r#"{
                   "name": "Picasso",
                   "symbol": "PICA",
@@ -1269,7 +1247,8 @@ mod tests {
         );
 
         assert_eq!(
-            vm.cosmwasm_orchestrate_entrypoint::<ExecuteInput>(
+            cosmwasm_system_entrypoint::<ExecuteInput, AsWasmiVM<SimpleWasmiVM>>(
+                &mut vm,
                 r#"{
                   "mint": {
                     "recipient": "0xCAFEBABE",
@@ -1344,7 +1323,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            vm.cosmwasm_orchestrate_entrypoint::<ExecuteInput>(
+            cosmwasm_system_entrypoint::<ExecuteInput, AsWasmiVM<SimpleWasmiVM>>(
+                &mut vm,
                 r#"{
                   "message_loop": {}
                 }"#

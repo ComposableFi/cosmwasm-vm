@@ -36,17 +36,15 @@ pub trait VM {
     type Input<'a>;
     type Output<'a>;
     type Error;
-    fn call<'a, I, IE, OE>(&mut self, input: I) -> Result<I::Output, Self::Error>
+    fn call<'a, I>(&mut self, input: I) -> Result<I::Output, Self::Error>
     where
-        I: Input + TryInto<VmInputOf<'a, Self>, Error = IE>,
-        I::Output: for<'x> TryFrom<VmOutputOf<'x, Self>, Error = OE>,
-        VmErrorOf<Self>: From<IE> + From<OE>,
+        I: Input + TryInto<VmInputOf<'a, Self>, Error = Self::Error>,
+        I::Output: for<'x> TryFrom<VmOutputOf<'x, Self>, Error = Self::Error>,
     {
         let input = input.try_into()?;
-        Ok(self.raw_call::<I::Output, OE>(input)?)
+        Ok(self.raw_call::<I::Output>(input)?)
     }
-    fn raw_call<'a, O, E>(&mut self, input: Self::Input<'a>) -> Result<O, Self::Error>
+    fn raw_call<'a, O>(&mut self, input: Self::Input<'a>) -> Result<O, Self::Error>
     where
-        O: for<'x> TryFrom<Self::Output<'x>, Error = E>,
-        Self::Error: From<E>;
+        O: for<'x> TryFrom<Self::Output<'x>, Error = Self::Error>;
 }
