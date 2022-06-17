@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::{
+    has::Has,
     input::{Input, OutputOf},
     memory::{
         LimitedRead, RawFromRegion, RawIntoRegion, ReadWriteMemory, ReadableMemory,
@@ -185,7 +186,7 @@ where
 {
     let len_value = P::try_from(len).map_err(|_| ExecutorError::AllocationWouldOverflow)?;
     let result = vm.call(AllocateInput(len_value))?;
-    log::debug!("Allocate: size={:?}, pointer={:?}", len_value, result);
+    log::trace!("Allocate: size={:?}, pointer={:?}", len_value, result);
     Ok(result)
 }
 
@@ -197,7 +198,7 @@ where
     P: Copy + TryFrom<L> + Debug + for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
     VmErrorOf<V>: From<ExecutorError>,
 {
-    log::debug!("Deallocate");
+    log::trace!("Deallocate");
     let pointer_value =
         P::try_from(pointer).map_err(|_| ExecutorError::DeallocationWouldOverflow)?;
     vm.call(DeallocateInput(pointer_value))?;
@@ -212,7 +213,7 @@ where
     VmErrorOf<V>:
         From<ReadableMemoryErrorOf<V>> + From<WritableMemoryErrorOf<V>> + From<ExecutorError>,
 {
-    log::debug!("PassthroughIn");
+    log::trace!("PassthroughIn");
     let pointer = allocate::<_, _, usize>(vm, data.len())?;
     RawIntoRegion::try_from(Write(vm, pointer, data))?;
     Ok(Tagged::new(pointer))
@@ -226,7 +227,7 @@ where
     V::Pointer: for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
     VmErrorOf<V>: From<ReadableMemoryErrorOf<V>> + From<ExecutorError>,
 {
-    log::debug!("PassthroughOut");
+    log::trace!("PassthroughOut");
     let RawFromRegion(buffer) = RawFromRegion::try_from(LimitedRead(
         vm,
         pointer,
@@ -245,7 +246,7 @@ where
         From<ReadableMemoryErrorOf<V>> + From<WritableMemoryErrorOf<V>> + From<ExecutorError>,
     T: serde::ser::Serialize + Sized,
 {
-    log::debug!("MarshallIn");
+    log::trace!("MarshallIn");
     let serialized = serde_json::to_vec(x).map_err(|_| ExecutorError::FailedToSerialize)?;
     Ok(passthrough_in(vm, &serialized)?)
 }
@@ -259,7 +260,7 @@ where
     VmErrorOf<V>: From<ReadableMemoryErrorOf<V>> + From<ExecutorError>,
     T: serde::de::DeserializeOwned + ReadLimit + DeserializeLimit,
 {
-    log::debug!("MarshallOut");
+    log::trace!("MarshallOut");
     let RawFromRegion(output) = RawFromRegion::try_from(LimitedRead(
         vm,
         pointer,
@@ -269,14 +270,9 @@ where
     Ok(serde_json::from_slice(&output).map_err(|_| ExecutorError::FailedToDeserialize)?)
 }
 
-pub fn cosmwasm_call<I, V>(
-    vm: &mut V,
-    env: &Env,
-    info: &MessageInfo,
-    message: &[u8],
-) -> Result<I::Output, VmErrorOf<V>>
+pub fn cosmwasm_call<I, V>(vm: &mut V, message: &[u8]) -> Result<I::Output, VmErrorOf<V>>
 where
-    V: VM + ReadWriteMemory,
+    V: VM + ReadWriteMemory + Has<Env> + Has<MessageInfo>,
     I: Input,
     I::Output: DeserializeOwned + ReadLimit + DeserializeLimit,
     V::Pointer: for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
@@ -285,10 +281,12 @@ where
     VmErrorOf<V>:
         From<ReadableMemoryErrorOf<V>> + From<WritableMemoryErrorOf<V>> + From<ExecutorError>,
 {
-    log::debug!("Call");
+    log::trace!("Call");
+    let env = vm.get();
+    let info = vm.get();
     let input = CosmwasmCallInput(
-        marshall_in(vm, env)?,
-        marshall_in(vm, info)?,
+        marshall_in(vm, &env)?,
+        marshall_in(vm, &info)?,
         passthrough_in(vm, message)?,
         PhantomData,
     );
@@ -296,16 +294,17 @@ where
     marshall_out(vm, pointer)
 }
 
-pub fn cosmwasm_query<V>(vm: &mut V, env: &Env, message: &[u8]) -> Result<QueryResult, VmErrorOf<V>>
+pub fn cosmwasm_query<V>(vm: &mut V, message: &[u8]) -> Result<QueryResult, VmErrorOf<V>>
 where
-    V: VM + ReadWriteMemory,
+    V: VM + ReadWriteMemory + Has<Env>,
     V::Pointer: for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
     for<'x> VmInputOf<'x, V>: TryFrom<AllocateInput<V::Pointer>, Error = VmErrorOf<V>>
         + TryFrom<CosmwasmQueryInput<'x, V::Pointer>, Error = VmErrorOf<V>>,
     VmErrorOf<V>: From<ReadableMemoryErrorOf<V>> + From<ExecutorError>,
 {
-    log::debug!("Query");
-    let input = CosmwasmQueryInput(marshall_in(vm, env)?, passthrough_in(vm, message)?);
+    log::trace!("Query");
+    let env = vm.get();
+    let input = CosmwasmQueryInput(marshall_in(vm, &env)?, passthrough_in(vm, message)?);
     let pointer = vm.call(input)?;
     marshall_out(vm, pointer)
 }

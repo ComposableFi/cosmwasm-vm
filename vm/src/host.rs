@@ -27,12 +27,21 @@
 // DEALINGS IN THE SOFTWARE.
 
 use alloc::string::String;
+use cosmwasm_minimal_std::{CosmwasmQueryResult, SystemResult};
+
+pub type HostErrorOf<T> = <T as Host>::Error;
+pub type HostQueryCustomOf<T> = <T as Host>::QueryCustom;
 
 pub trait Host {
     type Key;
     type Value;
+    type QueryCustom: serde::de::DeserializeOwned;
     type Error;
     fn db_read(&mut self, key: Self::Key) -> Result<Option<Self::Value>, Self::Error>;
     fn db_write(&mut self, key: Self::Key, value: Self::Value) -> Result<(), Self::Error>;
     fn abort(&mut self, message: String) -> Result<(), Self::Error>;
+    fn query_custom(
+        &mut self,
+        query: Self::QueryCustom,
+    ) -> Result<SystemResult<CosmwasmQueryResult>, Self::Error>;
 }

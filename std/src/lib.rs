@@ -128,7 +128,6 @@ impl Into<ContractResult<Response>> for InstantiateResult {
   }
 }
 
-#[non_exhaustive]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryRequest<C = Empty> {
@@ -149,7 +148,6 @@ impl<C> ReadLimit for QueryRequest<C> {
     }
 }
 
-#[non_exhaustive]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum BankQuery {
@@ -177,7 +175,6 @@ pub struct AllBalanceResponse {
     pub amount: Vec<Coin>,
 }
 
-#[non_exhaustive]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum WasmQuery {
@@ -201,7 +198,6 @@ pub enum WasmQuery {
     ContractInfo { contract_addr: String },
 }
 
-#[non_exhaustive]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ContractInfoResponse {
     pub code_id: u64,
@@ -233,7 +229,6 @@ impl ContractInfoResponse {
 pub const UNUSED_MSG_ID: u64 = 0;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[non_exhaustive]
 pub struct Response<T = Empty> {
     /// Optional list of messages to pass. These will be executed in order.
     /// If the ReplyOn variant matches the result (Always, Success on Ok, Error on Err),
@@ -333,7 +328,6 @@ pub trait CustomMsg: Serialize + Clone + core::fmt::Debug + PartialEq {}
 
 impl CustomMsg for Empty {}
 
-#[non_exhaustive]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 // See https://github.com/serde-rs/serde/issues/1296 why we cannot add De-Serialize trait bounds to T
@@ -348,7 +342,6 @@ pub enum CosmosMsg<T = Empty> {
 /// The message types of the bank module.
 ///
 /// See https://github.com/cosmos/cosmos-sdk/blob/v0.40.0/proto/cosmos/bank/v1beta1/tx.proto
-#[non_exhaustive]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum BankMsg {
@@ -369,7 +362,6 @@ pub enum BankMsg {
 /// The message types of the wasm module.
 ///
 /// See https://github.com/CosmWasm/wasmd/blob/v0.14.0/x/wasm/internal/types/tx.proto
-#[non_exhaustive]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum WasmMsg {
@@ -430,7 +422,6 @@ pub enum WasmMsg {
 /// [*Cosmos SDK* event]: https://docs.cosmos.network/master/core/events.html
 /// [*Cosmos SDK* StringEvent]: https://github.com/cosmos/cosmos-sdk/blob/v0.42.5/proto/cosmos/base/abci/v1beta1/abci.proto#L56-L70
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[non_exhaustive]
 pub struct Event {
     /// The event type. This is renamed to "ty" because "type" is reserved in Rust. This sucks, we
     /// know.
@@ -971,7 +962,6 @@ pub struct ContractInfo {
 /// ensure the contract understands the error format without creating a dependency on cosmwasm-vm.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
-#[non_exhaustive]
 pub enum SystemError {
     InvalidRequest {
         error: String,

@@ -28,6 +28,7 @@
 
 #![no_std]
 #![feature(generic_associated_types)]
+#![feature(trait_alias)]
 #![cfg_attr(test, feature(assert_matches))]
 
 extern crate alloc;
@@ -40,6 +41,5 @@ pub mod has;
 pub mod tagged;
 pub mod vm;
 pub mod loader;
-pub mod wasmi;
 pub mod host;
 pub mod transaction;

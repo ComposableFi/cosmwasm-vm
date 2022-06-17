@@ -29,10 +29,15 @@
 pub type LoaderCodeIdOf<T> = <T as Loader>::CodeId;
 pub type LoaderOutputOf<T> = <T as Loader>::Output;
 pub type LoaderErrorOf<T> = <T as Loader>::Error;
+pub type LoaderAddressOf<T> = <T as Loader>::Address;
+pub type LoaderInputOf<T> = <T as Loader>::Input;
 
 pub trait Loader {
     type CodeId;
-    type Error;
+    type Address;
+    type Input;
     type Output;
-    fn load(&mut self, code_id: Self::CodeId) -> Result<Self::Output, Self::Error>;
+    type Error;
+    fn load(&mut self, address: Self::Address, input: Self::Input) -> Result<Self::Output, Self::Error>;
+    fn new(&mut self, code_id: Self::CodeId) -> Result<Self::Address, Self::Error>;
 }

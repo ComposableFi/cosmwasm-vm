@@ -26,12 +26,12 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use alloc::vec;
+use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::marker::PhantomData;
 
-use alloc::vec;
-use alloc::vec::Vec;
-
+pub type PointerOf<T> = <T as Pointable>::Pointer;
 pub trait Pointable {
     type Pointer: Debug + Ord + Copy + TryFrom<usize> + TryInto<usize>;
 }
@@ -82,7 +82,7 @@ where
 {
     type Error = M::Error;
     fn try_from(Read(memory, offset): Read<'a, M>) -> Result<Self, Self::Error> {
-        log::debug!("FromMemory");
+        log::trace!("FromMemory");
         let size = core::mem::size_of::<T>();
         if size == 0 {
             Err(MemoryReadError::InvalidTypeSize.into())
@@ -118,7 +118,7 @@ where
     fn try_from(
         LimitedTypedRead(memory, pointer, limit): LimitedTypedRead<'a, M>,
     ) -> Result<Self, Self::Error> {
-        log::debug!("FromRegion");
+        log::trace!("FromRegion");
         let FromMemory(region) = FromMemory::<Region<M::Pointer>>::try_from(Read(memory, pointer))?;
         if region.length > limit {
             Err(MemoryReadError::OverflowLimit.into())
@@ -140,7 +140,7 @@ where
     fn try_from(
         LimitedRead(memory, pointer, limit): LimitedRead<'a, M>,
     ) -> Result<Self, Self::Error> {
-        log::debug!("RawFromRegion");
+        log::trace!("RawFromRegion");
         let FromMemory(region) = FromMemory::<Region<M::Pointer>>::try_from(Read(memory, pointer))?;
         if region.length > limit {
             Err(MemoryReadError::OverflowLimit.into())
@@ -165,7 +165,7 @@ where
 {
     type Error = M::Error;
     fn try_from(Write(memory, offset, buffer): Write<'a, 'b, M>) -> Result<Self, Self::Error> {
-        log::debug!("RawIntoMemory");
+        log::trace!("RawIntoMemory");
         memory.write(offset, buffer)?;
         Ok(RawIntoMemory)
     }
@@ -181,7 +181,7 @@ where
     fn try_from(
         TypedWrite(memory, offset, value): TypedWrite<'a, 'b, M, T>,
     ) -> Result<Self, Self::Error> {
-        log::debug!("IntoMemory");
+        log::trace!("IntoMemory");
         let buffer = unsafe {
             core::slice::from_raw_parts(value as *const T as *const u8, core::mem::size_of::<T>())
         };
@@ -200,11 +200,11 @@ where
     fn try_from(
         TypedWrite(memory, pointer, value): TypedWrite<'a, 'b, M, T>,
     ) -> Result<Self, Self::Error> {
-        log::debug!("IntoRegion");
+        log::trace!("IntoRegion");
         let FromMemory(mut region) =
             FromMemory::<Region<M::Pointer>>::try_from(Read(memory, pointer))
                 .map_err(|_| MemoryWriteError::BufferSizeOverflowPointer)?;
-        log::debug!("Region: {:?}", region);
+        log::trace!("Region: {:?}", region);
         let len = M::Pointer::try_from(core::mem::size_of::<T>())
             .map_err(|_| MemoryWriteError::BufferSizeOverflowPointer)?;
         if region.capacity < len {
@@ -225,11 +225,11 @@ where
 {
     type Error = <M as ReadableMemory>::Error;
     fn try_from(Write(memory, pointer, value): Write<'a, 'b, M>) -> Result<Self, Self::Error> {
-        log::debug!("RawIntoRegion");
+        log::trace!("RawIntoRegion");
         let FromMemory(mut region) =
             FromMemory::<Region<M::Pointer>>::try_from(Read(memory, pointer))
                 .map_err(|_| MemoryWriteError::BufferSizeOverflowPointer)?;
-        log::debug!("Region: {:?}", region);
+        log::trace!("Region: {:?}", region);
         let len = M::Pointer::try_from(value.len())
             .map_err(|_| MemoryWriteError::BufferSizeOverflowPointer)?;
         if region.capacity < len {
