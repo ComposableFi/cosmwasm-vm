@@ -81,7 +81,7 @@ pub struct CosmwasmNewContract {
     pub label: String,
 }
 
-pub trait CosmwasmCallVM<T> = VM
+pub trait CosmwasmBaseVM = VM
     + ReadWriteMemory
     + Transactional
     + Loader<
@@ -90,11 +90,10 @@ pub trait CosmwasmCallVM<T> = VM
         Input = Vec<Coin>,
         Output = Self,
     > + Bank
-    + Host<Value = Vec<u8>, MessageCustom = T>
+    + Host<Value = Vec<u8>>
     + Has<Env>
     + Has<MessageInfo>
 where
-    T: serde::de::DeserializeOwned + Debug,
     BankAccountIdOf<Self>:
         TryFrom<Addr, Error = VmErrorOf<Self>> + TryFrom<String, Error = VmErrorOf<Self>>,
     VmErrorOf<Self>: From<ReadableMemoryErrorOf<Self>>
@@ -106,43 +105,24 @@ where
         + From<BankErrorOf<Self>>
         + From<HostErrorOf<Self>>
         + Debug,
-    for<'x> VmInputOf<'x, Self>: TryFrom<AllocateInput<PointerOf<Self>>, Error = VmErrorOf<Self>>
-        + TryFrom<DeallocateInput<PointerOf<Self>>, Error = VmErrorOf<Self>>
+    for<'x> VmInputOf<'x, Self>: TryFrom<AllocateInput<PointerOf<Self>>, Error = VmErrorOf<Self>>,
+    PointerOf<Self>: for<'x> TryFrom<VmOutputOf<'x, Self>, Error = VmErrorOf<Self>>;
+
+pub trait CosmwasmCallVM<T> = CosmwasmBaseVM + Host<MessageCustom = T>
+where
+    T: serde::de::DeserializeOwned + Debug,
+    for<'x> VmInputOf<'x, Self>: TryFrom<DeallocateInput<PointerOf<Self>>, Error = VmErrorOf<Self>>
         + TryFrom<
             CosmwasmCallInput<'x, PointerOf<Self>, InstantiateInput<T>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<CosmwasmCallInput<'x, PointerOf<Self>, ExecuteInput<T>>, Error = VmErrorOf<Self>>
-        + TryFrom<CosmwasmCallInput<'x, PointerOf<Self>, ReplyInput<T>>, Error = VmErrorOf<Self>>,
-    PointerOf<Self>: for<'x> TryFrom<VmOutputOf<'x, Self>, Error = VmErrorOf<Self>>;
+        + TryFrom<CosmwasmCallInput<'x, PointerOf<Self>, ReplyInput<T>>, Error = VmErrorOf<Self>>;
 
-pub trait CosmwasmQueryVM<T> = VM
-    + ReadWriteMemory
-    + Transactional
-    + Loader<
-        CodeId = CosmwasmNewContract,
-        Address = BankAccountIdOf<Self>,
-        Input = Vec<Coin>,
-        Output = Self,
-    > + Bank
-    + Host<Value = Vec<u8>, QueryCustom = T>
-    + Has<Env>
-    + Has<MessageInfo>
+pub trait CosmwasmQueryVM<T> = CosmwasmBaseVM + Host<QueryCustom = T>
 where
     T: serde::de::DeserializeOwned + Debug,
-    BankAccountIdOf<Self>:
-        TryFrom<Addr, Error = VmErrorOf<Self>> + TryFrom<String, Error = VmErrorOf<Self>>,
-    VmErrorOf<Self>: From<ReadableMemoryErrorOf<Self>>
-        + From<WritableMemoryErrorOf<Self>>
-        + From<ExecutorError>
-        + From<SystemError>
-        + From<TransactionalErrorOf<Self>>
-        + From<LoaderErrorOf<Self>>
-        + From<BankErrorOf<Self>>
-        + From<HostErrorOf<Self>>
-        + Debug,
-    for<'x> VmInputOf<'x, Self>: TryFrom<AllocateInput<PointerOf<Self>>, Error = VmErrorOf<Self>>
-        + TryFrom<CosmwasmQueryInput<'x, PointerOf<Self>>, Error = VmErrorOf<Self>>,
-    PointerOf<Self>: for<'x> TryFrom<VmOutputOf<'x, Self>, Error = VmErrorOf<Self>>;
+    for<'x> VmInputOf<'x, Self>:
+        TryFrom<CosmwasmQueryInput<'x, PointerOf<Self>>, Error = VmErrorOf<Self>>;
 
 pub fn cosmwasm_system_entrypoint<I, V, T>(
     vm: &mut V,

@@ -345,6 +345,7 @@ fn create_simple_vm(
     .unwrap()
 }
 
+#[test]
 fn test_bare() {
     let code = include_bytes!("../../fixtures/cw20_base.wasm").to_vec();
     let sender = BankAccount(0);
