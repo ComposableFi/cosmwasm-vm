@@ -150,8 +150,8 @@ impl Host for SimpleWasmiVM {
 
     fn message_custom(
         &mut self,
-        message: Self::MessageCustom,
-        event_handler: &mut dyn FnMut(Event),
+        _: Self::MessageCustom,
+        _: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error> {
         Err(SimpleVMError::NoCustomMessage)
     }
