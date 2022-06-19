@@ -26,16 +26,20 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use core::fmt::Debug;
+
 use alloc::string::String;
-use cosmwasm_minimal_std::{CosmwasmQueryResult, SystemResult};
+use cosmwasm_minimal_std::{CosmwasmQueryResult, SystemResult, Event, Binary};
 
 pub type HostErrorOf<T> = <T as Host>::Error;
 pub type HostQueryCustomOf<T> = <T as Host>::QueryCustom;
+pub type HostMessageCustomOf<T> = <T as Host>::MessageCustom;
 
 pub trait Host {
     type Key;
     type Value;
-    type QueryCustom: serde::de::DeserializeOwned;
+    type QueryCustom: serde::de::DeserializeOwned + Debug;
+    type MessageCustom: serde::de::DeserializeOwned + Debug;
     type Error;
     fn db_read(&mut self, key: Self::Key) -> Result<Option<Self::Value>, Self::Error>;
     fn db_write(&mut self, key: Self::Key, value: Self::Value) -> Result<(), Self::Error>;
@@ -44,4 +48,9 @@ pub trait Host {
         &mut self,
         query: Self::QueryCustom,
     ) -> Result<SystemResult<CosmwasmQueryResult>, Self::Error>;
+    fn message_custom(
+        &mut self,
+        message: Self::MessageCustom,
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<Option<Binary>, Self::Error>;
 }

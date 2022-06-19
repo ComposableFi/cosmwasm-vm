@@ -52,9 +52,11 @@ use core::marker::PhantomData;
 use core::num::TryFromIntError;
 use cosmwasm_minimal_std::Addr;
 use cosmwasm_minimal_std::BankQuery;
+use cosmwasm_minimal_std::Binary;
 use cosmwasm_minimal_std::Coin;
 use cosmwasm_minimal_std::CosmwasmQueryResult;
 use cosmwasm_minimal_std::Env;
+use cosmwasm_minimal_std::Event;
 use cosmwasm_minimal_std::MessageInfo;
 use cosmwasm_minimal_std::SystemResult;
 use cosmwasm_vm::executor::AllocateInput;
@@ -564,6 +566,7 @@ where
     type Key = T::Key;
     type Value = T::Value;
     type QueryCustom = T::QueryCustom;
+    type MessageCustom = T::MessageCustom;
     type Error = T::Error;
     fn db_read(&mut self, key: Self::Key) -> Result<Option<Self::Value>, Self::Error> {
         self.0.db_read(key)
@@ -580,6 +583,14 @@ where
         query: Self::QueryCustom,
     ) -> Result<SystemResult<CosmwasmQueryResult>, Self::Error> {
         self.0.query_custom(query)
+    }
+
+    fn message_custom(
+        &mut self,
+        message: Self::MessageCustom,
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<Option<Binary>, Self::Error> {
+        self.0.message_custom(message, event_handler)
     }
 }
 

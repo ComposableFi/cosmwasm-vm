@@ -47,9 +47,9 @@ pub mod deserialization_limits {
     pub const REQUEST_QUERY: usize = 256 * KI;
 }
 
-pub type CosmwasmExecutionResult = ContractResult<Response>;
+pub type CosmwasmExecutionResult<T> = ContractResult<Response<T>>;
 pub type CosmwasmQueryResult = ContractResult<QueryResponse>;
-pub type CosmwasmReplyResult = ContractResult<Response>;
+pub type CosmwasmReplyResult<T> = ContractResult<Response<T>>;
 
 pub type QueryResponse = Binary;
 
@@ -62,20 +62,20 @@ pub trait ReadLimit {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct ReplyResult(pub CosmwasmExecutionResult);
-impl DeserializeLimit for ReplyResult {
+pub struct ReplyResult<T>(pub CosmwasmExecutionResult<T>);
+impl<T> DeserializeLimit for ReplyResult<T> {
     fn deserialize_limit() -> usize {
         deserialization_limits::RESULT_REPLY
     }
 }
-impl ReadLimit for ReplyResult {
+impl<T> ReadLimit for ReplyResult<T> {
     fn read_limit() -> usize {
         read_limits::RESULT_REPLY
     }
 }
-impl Into<ContractResult<Response>> for ReplyResult {
-    fn into(self) -> ContractResult<Response> {
-      self.0
+impl<T> Into<ContractResult<Response<T>>> for ReplyResult<T> {
+    fn into(self) -> ContractResult<Response<T>> {
+        self.0
     }
 }
 
@@ -93,39 +93,39 @@ impl ReadLimit for QueryResult {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct ExecuteResult(pub CosmwasmExecutionResult);
-impl DeserializeLimit for ExecuteResult {
+pub struct ExecuteResult<T>(pub CosmwasmExecutionResult<T>);
+impl<T> DeserializeLimit for ExecuteResult<T> {
     fn deserialize_limit() -> usize {
         deserialization_limits::RESULT_EXECUTE
     }
 }
-impl ReadLimit for ExecuteResult {
+impl<T> ReadLimit for ExecuteResult<T> {
     fn read_limit() -> usize {
         read_limits::RESULT_EXECUTE
     }
 }
-impl Into<ContractResult<Response>> for ExecuteResult {
-  fn into(self) -> ContractResult<Response> {
-    self.0
-  }
+impl<T> Into<ContractResult<Response<T>>> for ExecuteResult<T> {
+    fn into(self) -> ContractResult<Response<T>> {
+        self.0
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct InstantiateResult(pub CosmwasmExecutionResult);
-impl DeserializeLimit for InstantiateResult {
+pub struct InstantiateResult<T>(pub CosmwasmExecutionResult<T>);
+impl<T> DeserializeLimit for InstantiateResult<T> {
     fn deserialize_limit() -> usize {
         deserialization_limits::RESULT_INSTANTIATE
     }
 }
-impl ReadLimit for InstantiateResult {
+impl<T> ReadLimit for InstantiateResult<T> {
     fn read_limit() -> usize {
         read_limits::RESULT_INSTANTIATE
     }
 }
-impl Into<ContractResult<Response>> for InstantiateResult {
-  fn into(self) -> ContractResult<Response> {
-    self.0
-  }
+impl<T> Into<ContractResult<Response<T>>> for InstantiateResult<T> {
+    fn into(self) -> ContractResult<Response<T>> {
+        self.0
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -436,9 +436,9 @@ pub struct Event {
 }
 
 impl Event {
-  pub fn new(ty: String, attributes: Vec<Attribute>) -> Self {
-    Event { ty, attributes }
-  }
+    pub fn new(ty: String, attributes: Vec<Attribute>) -> Self {
+        Event { ty, attributes }
+    }
 }
 
 /// An key value pair that is used in the context of event attributes in logs

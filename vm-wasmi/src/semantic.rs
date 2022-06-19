@@ -6,15 +6,12 @@ use core::{
     str::FromStr,
 };
 use cosmwasm_minimal_std::{
-    Addr, Attribute, Binary, BlockInfo, Coin, ContractInfo,
-    CosmwasmExecutionResult, CosmwasmQueryResult, Empty, Env, Event, InstantiateResult,
-    MessageInfo, QueryResult, Timestamp,
+    Addr, Attribute, Binary, BlockInfo, Coin, ContractInfo, CosmwasmExecutionResult,
+    CosmwasmQueryResult, Empty, Env, Event, InstantiateResult, MessageInfo, QueryResult, Timestamp,
 };
 use cosmwasm_vm::{
     executor::{cosmwasm_call, cosmwasm_query, ExecuteInput, InstantiateInput},
-    system::{
-        cosmwasm_system_entrypoint, CosmwasmCodeId, CosmwasmNewContract,
-    },
+    system::{cosmwasm_system_entrypoint, CosmwasmCodeId, CosmwasmNewContract},
 };
 
 pub fn initialize() {
@@ -34,6 +31,7 @@ enum SimpleVMError {
     ContractNotFound(BankAccount),
     InvalidAccountFormat,
     NoCustomQuery,
+    NoCustomMessage,
     Unsupported,
 }
 impl From<WasmiVMError> for SimpleVMError {
@@ -123,8 +121,9 @@ impl MinWasmiVM<SimpleWasmiVM> for SimpleWasmiVM {
 impl Host for SimpleWasmiVM {
     type Key = Vec<u8>;
     type Value = Vec<u8>;
-    type Error = SimpleVMError;
     type QueryCustom = Empty;
+    type MessageCustom = Empty;
+    type Error = SimpleVMError;
 
     fn db_read(&mut self, key: Self::Key) -> Result<Option<Self::Value>, Self::Error> {
         Ok(self.extension.try_borrow()?.storage.get(&key).cloned())
@@ -147,6 +146,14 @@ impl Host for SimpleWasmiVM {
         _: Self::QueryCustom,
     ) -> Result<SystemResult<CosmwasmQueryResult>, Self::Error> {
         Err(SimpleVMError::NoCustomQuery)
+    }
+
+    fn message_custom(
+        &mut self,
+        message: Self::MessageCustom,
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<Option<Binary>, Self::Error> {
+        Err(SimpleVMError::NoCustomMessage)
     }
 }
 
@@ -279,20 +286,20 @@ impl Transactional for SimpleWasmiVM {
     type Error = SimpleVMError;
     fn transaction_begin(&mut self) -> Result<(), Self::Error> {
         let mut ext = self.extension.try_borrow_mut()?;
-        log::debug!("> Transaction begin: {}", ext.transaction_depth);
         ext.transaction_depth += 1;
+        log::debug!("> Transaction begin: {}", ext.transaction_depth);
         Ok(())
     }
     fn transaction_commit(&mut self) -> Result<(), Self::Error> {
         let mut ext = self.extension.try_borrow_mut()?;
-        log::debug!("< Transaction end: {}", ext.transaction_depth);
         ext.transaction_depth -= 1;
+        log::debug!("< Transaction end: {}", ext.transaction_depth);
         Ok(())
     }
     fn transaction_rollback(&mut self) -> Result<(), Self::Error> {
         let mut ext = self.extension.try_borrow_mut()?;
-        log::debug!("< Transaction abort: {}", ext.transaction_depth);
         ext.transaction_depth -= 1;
+        log::debug!("< Transaction abort: {}", ext.transaction_depth);
         Ok(())
     }
 }
@@ -338,7 +345,6 @@ fn create_simple_vm(
     .unwrap()
 }
 
-#[test]
 fn test_bare() {
     let code = include_bytes!("../../fixtures/cw20_base.wasm").to_vec();
     let sender = BankAccount(0);
@@ -353,7 +359,7 @@ fn test_bare() {
     }));
     let mut vm = create_simple_vm(sender, address, funds, &code, extension);
     assert_matches!(
-        cosmwasm_call::<InstantiateInput, AsWasmiVM<SimpleWasmiVM>>(
+        cosmwasm_call::<InstantiateInput<Empty>, AsWasmiVM<SimpleWasmiVM>>(
             &mut vm,
             r#"{
               "name": "Picasso",
@@ -379,7 +385,6 @@ fn test_bare() {
     );
 }
 
-#[test]
 fn test_orchestration_base() {
     let code = include_bytes!("../../fixtures/cw20_base.wasm").to_vec();
     let sender = BankAccount(0);
@@ -394,7 +399,7 @@ fn test_orchestration_base() {
     }));
     let mut vm = create_simple_vm(sender, address, funds, &code, extension);
     assert_eq!(
-        cosmwasm_system_entrypoint::<InstantiateInput, AsWasmiVM<SimpleWasmiVM>>(
+        cosmwasm_system_entrypoint::<InstantiateInput, AsWasmiVM<SimpleWasmiVM>, _>(
             &mut vm,
             format!(
                 r#"{{
@@ -416,7 +421,7 @@ fn test_orchestration_base() {
         (None, vec![])
     );
     assert_eq!(
-        cosmwasm_system_entrypoint::<ExecuteInput, AsWasmiVM<SimpleWasmiVM>>(
+        cosmwasm_system_entrypoint::<ExecuteInput, AsWasmiVM<SimpleWasmiVM>, _>(
             &mut vm,
             r#"{
               "mint": {

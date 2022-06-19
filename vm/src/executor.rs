@@ -40,7 +40,7 @@ use alloc::vec::Vec;
 use core::{fmt::Debug, marker::PhantomData};
 use cosmwasm_minimal_std::{
     DeserializeLimit, Env, ExecuteResult, InstantiateResult, MessageInfo, QueryResult, ReadLimit,
-    ReplyResult,
+    ReplyResult, Empty,
 };
 use serde::de::DeserializeOwned;
 
@@ -91,31 +91,31 @@ impl<'a, Pointer, I: Input> Input for CosmwasmCallInput<'a, Pointer, I> {
     type Output = Pointer;
 }
 
-pub struct InstantiateInput;
-impl Input for InstantiateInput {
-    type Output = InstantiateResult;
+pub struct InstantiateInput<T = Empty>(PhantomData<T>);
+impl<T> Input for InstantiateInput<T> {
+    type Output = InstantiateResult<T>;
 }
-impl AsFunctionName for InstantiateInput {
+impl<T> AsFunctionName for InstantiateInput<T> {
     fn name() -> &'static str {
         "instantiate"
     }
 }
 
-pub struct ExecuteInput;
-impl Input for ExecuteInput {
-    type Output = ExecuteResult;
+pub struct ExecuteInput<T = Empty>(PhantomData<T>);
+impl<T> Input for ExecuteInput<T> {
+    type Output = ExecuteResult<T>;
 }
-impl AsFunctionName for ExecuteInput {
+impl<T> AsFunctionName for ExecuteInput<T> {
     fn name() -> &'static str {
         "execute"
     }
 }
 
-pub struct ReplyInput;
-impl Input for ReplyInput {
-    type Output = ReplyResult;
+pub struct ReplyInput<T = Empty>(PhantomData<T>);
+impl<T> Input for ReplyInput<T> {
+    type Output = ReplyResult<T>;
 }
-impl AsFunctionName for ReplyInput {
+impl<T> AsFunctionName for ReplyInput<T> {
     fn name() -> &'static str {
         "reply"
     }
