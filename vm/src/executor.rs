@@ -40,7 +40,7 @@ use alloc::vec::Vec;
 use core::{fmt::Debug, marker::PhantomData};
 use cosmwasm_minimal_std::{
     DeserializeLimit, Env, ExecuteResult, InstantiateResult, MessageInfo, QueryResult, ReadLimit,
-    ReplyResult, Empty,
+    ReplyResult, Empty, MigrateResult,
 };
 use serde::de::DeserializeOwned;
 
@@ -119,6 +119,16 @@ impl<T> AsFunctionName for ReplyInput<T> {
     fn name() -> &'static str {
         "reply"
     }
+}
+
+pub struct MigrateInput<T = Empty>(PhantomData<T>);
+impl<T> Input for MigrateInput<T> {
+  type Output = MigrateResult<T>;
+}
+impl<T> AsFunctionName for MigrateInput<T> {
+  fn name() -> &'static str {
+    "migrate"
+  }
 }
 
 pub trait AsFunctionName {

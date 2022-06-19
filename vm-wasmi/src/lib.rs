@@ -84,7 +84,7 @@ use cosmwasm_vm::memory::WritableMemory;
 use cosmwasm_vm::system::Bank;
 use cosmwasm_vm::system::BankAccountIdOf;
 use cosmwasm_vm::system::BankErrorOf;
-use cosmwasm_vm::system::CosmwasmNewContract;
+use cosmwasm_vm::system::CosmwasmContractMeta;
 use cosmwasm_vm::system::SystemError;
 use cosmwasm_vm::tagged::Tagged;
 use cosmwasm_vm::transaction::Transactional;
@@ -176,7 +176,7 @@ pub trait IsWasmiVM<T> = where
     T: MinWasmiVM<T>
         + Transactional
         + Loader<
-            CodeId = CosmwasmNewContract,
+            CodeId = CosmwasmContractMeta,
             Address = BankAccountIdOf<T>,
             Input = Vec<Coin>,
             Output = AsWasmiVM<T>,
@@ -556,6 +556,16 @@ where
     }
     fn new(&mut self, code_id: Self::CodeId) -> Result<Self::Address, Self::Error> {
         self.0.new(code_id)
+    }
+    fn code_id(&mut self, address: Self::Address) -> Result<Self::CodeId, Self::Error> {
+        self.0.code_id(address)
+    }
+    fn set_code_id(
+        &mut self,
+        address: Self::Address,
+        new_code_id: Self::CodeId,
+    ) -> Result<(), Self::Error> {
+      self.0.set_code_id(address, new_code_id)
     }
 }
 

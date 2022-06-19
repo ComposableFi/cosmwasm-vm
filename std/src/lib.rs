@@ -50,6 +50,7 @@ pub mod deserialization_limits {
 pub type CosmwasmExecutionResult<T> = ContractResult<Response<T>>;
 pub type CosmwasmQueryResult = ContractResult<QueryResponse>;
 pub type CosmwasmReplyResult<T> = ContractResult<Response<T>>;
+pub type CosmwasmMigrateResult<T> = ContractResult<Response<T>>;
 
 pub type QueryResponse = Binary;
 
@@ -123,6 +124,24 @@ impl<T> ReadLimit for InstantiateResult<T> {
     }
 }
 impl<T> Into<ContractResult<Response<T>>> for InstantiateResult<T> {
+    fn into(self) -> ContractResult<Response<T>> {
+        self.0
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct MigrateResult<T>(pub CosmwasmExecutionResult<T>);
+impl<T> DeserializeLimit for MigrateResult<T> {
+    fn deserialize_limit() -> usize {
+        deserialization_limits::RESULT_MIGRATE
+    }
+}
+impl<T> ReadLimit for MigrateResult<T> {
+    fn read_limit() -> usize {
+        read_limits::RESULT_MIGRATE
+    }
+}
+impl<T> Into<ContractResult<Response<T>>> for MigrateResult<T> {
     fn into(self) -> ContractResult<Response<T>> {
         self.0
     }

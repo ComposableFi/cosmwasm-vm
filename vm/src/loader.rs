@@ -38,6 +38,16 @@ pub trait Loader {
     type Input;
     type Output;
     type Error;
-    fn load(&mut self, address: Self::Address, input: Self::Input) -> Result<Self::Output, Self::Error>;
+    fn load(
+        &mut self,
+        address: Self::Address,
+        input: Self::Input,
+    ) -> Result<Self::Output, Self::Error>;
     fn new(&mut self, code_id: Self::CodeId) -> Result<Self::Address, Self::Error>;
+    fn set_code_id(
+        &mut self,
+        address: Self::Address,
+        new_code_id: Self::CodeId,
+    ) -> Result<(), Self::Error>;
+    fn code_id(&mut self, address: Self::Address) -> Result<Self::CodeId, Self::Error>;
 }

@@ -11,7 +11,7 @@ use cosmwasm_minimal_std::{
 };
 use cosmwasm_vm::{
     executor::{cosmwasm_call, cosmwasm_query, ExecuteInput, InstantiateInput},
-    system::{cosmwasm_system_entrypoint, CosmwasmCodeId, CosmwasmNewContract},
+    system::{cosmwasm_system_entrypoint, CosmwasmCodeId, CosmwasmContractMeta},
 };
 
 pub fn initialize() {
@@ -160,7 +160,7 @@ impl Host for SimpleWasmiVM {
 impl WasmiHost for SimpleWasmiVM {}
 
 impl Loader for SimpleWasmiVM {
-    type CodeId = CosmwasmNewContract;
+    type CodeId = CosmwasmContractMeta;
     type Address = BankAccount;
     type Input = Vec<Coin>;
     type Output = AsWasmiVM<SimpleWasmiVM>;
@@ -212,7 +212,7 @@ impl Loader for SimpleWasmiVM {
 
     fn new(
         &mut self,
-        CosmwasmNewContract { code_id, .. }: Self::CodeId,
+        CosmwasmContractMeta { code_id, .. }: Self::CodeId,
     ) -> Result<Self::Address, Self::Error> {
         let mut ext = self.extension.try_borrow_mut()?;
         let BankAccount(new_account_id) = ext.next_account_id;
@@ -220,6 +220,14 @@ impl Loader for SimpleWasmiVM {
         ext.contracts
             .insert(BankAccount(new_account_id), Contract { code_id });
         Ok(BankAccount(new_account_id))
+    }
+
+    fn code_id(&mut self, _: Self::Address) -> Result<Self::CodeId, Self::Error> {
+        Err(SimpleVMError::Unsupported)
+    }
+
+    fn set_code_id(&mut self, _: Self::Address, _: Self::CodeId) -> Result<(), Self::Error> {
+        Err(SimpleVMError::Unsupported)
     }
 }
 
