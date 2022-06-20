@@ -182,7 +182,7 @@ pub trait IsWasmiVM<T> = where
             Input = Vec<Coin>,
             Output = AsWasmiVM<T>,
         > + Bank
-        + Host<Address = BankAccountIdOf<T>>
+        + Host<Address = BankAccountIdOf<T>, Key = Vec<u8>, Value = Vec<u8>>
         + Has<Env>
         + Has<MessageInfo>,
     IsWasmiVMErrorOf<T>: From<MemoryReadError>
@@ -201,7 +201,7 @@ pub trait IsWasmiVM<T> = where
 
 pub type IsWasmiVMErrorOf<T> = <T as MinWasmiVM<T>>::Error;
 
-pub trait MinWasmiVM<T>: WasmiHost {
+pub trait MinWasmiVM<T> {
     type Error;
     fn host_functions_definitions(
         &self,
@@ -416,8 +416,6 @@ where
         ))
     }
 }
-
-pub trait WasmiHost: Host<Key = Vec<u8>, Value = Vec<u8>> {}
 
 impl<T: Has<U>, U> Has<U> for AsWasmiVM<T> {
     fn get(&self) -> U {

@@ -195,8 +195,6 @@ impl Host for SimpleWasmiVM {
     }
 }
 
-impl WasmiHost for SimpleWasmiVM {}
-
 impl Loader for SimpleWasmiVM {
     type CodeId = CosmwasmContractMeta;
     type Address = BankAccount;
