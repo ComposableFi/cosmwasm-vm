@@ -82,7 +82,7 @@ struct Contract {
 }
 
 struct SimpleWasmiVMExtension {
-    storage: BTreeMap<Vec<u8>, Vec<u8>>,
+    storage: BTreeMap<BankAccount, BTreeMap<Vec<u8>, Vec<u8>>>,
     codes: BTreeMap<CosmwasmCodeId, Vec<u8>>,
     contracts: BTreeMap<BankAccount, Contract>,
     next_account_id: BankAccount,
@@ -123,14 +123,30 @@ impl Host for SimpleWasmiVM {
     type Value = Vec<u8>;
     type QueryCustom = Empty;
     type MessageCustom = Empty;
+    type Address = BankAccount;
     type Error = SimpleVMError;
 
     fn db_read(&mut self, key: Self::Key) -> Result<Option<Self::Value>, Self::Error> {
-        Ok(self.extension.try_borrow()?.storage.get(&key).cloned())
+        let contract_addr = self.env.contract.address.clone().try_into()?;
+        let empty = BTreeMap::new();
+        Ok(self
+            .extension
+            .try_borrow()?
+            .storage
+            .get(&contract_addr)
+            .unwrap_or(&empty)
+            .get(&key)
+            .cloned())
     }
 
     fn db_write(&mut self, key: Self::Key, value: Self::Value) -> Result<(), Self::Error> {
-        self.extension.try_borrow_mut()?.storage.insert(key, value);
+        let contract_addr = self.env.contract.address.clone().try_into()?;
+        self.extension
+            .try_borrow_mut()?
+            .storage
+            .entry(contract_addr)
+            .or_insert(BTreeMap::new())
+            .insert(key, value);
         Ok(())
     }
 
@@ -154,6 +170,28 @@ impl Host for SimpleWasmiVM {
         _: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error> {
         Err(SimpleVMError::NoCustomMessage)
+    }
+
+    fn query_raw(
+        &mut self,
+        address: Self::Address,
+        key: Self::Key,
+    ) -> Result<Option<Self::Value>, Self::Error> {
+        Ok(self
+            .extension
+            .try_borrow()?
+            .storage
+            .get(&address)
+            .unwrap_or(&Default::default())
+            .get(&key)
+            .cloned())
+    }
+
+    fn query_info(
+        &mut self,
+        _: Self::Address,
+    ) -> Result<cosmwasm_minimal_std::ContractInfoResponse, Self::Error> {
+        Err(SimpleVMError::Unsupported)
     }
 }
 

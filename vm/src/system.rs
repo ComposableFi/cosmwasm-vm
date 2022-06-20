@@ -91,7 +91,7 @@ pub trait CosmwasmBaseVM = VM
         Input = Vec<Coin>,
         Output = Self,
     > + Bank
-    + Host<Value = Vec<u8>>
+    + Host<Address = BankAccountIdOf<Self>, Key = Vec<u8>, Value = Vec<u8>>
     + Has<Env>
     + Has<MessageInfo>
 where
@@ -253,22 +253,20 @@ where
                                 new_code_id,
                                 msg: Binary(msg),
                             } => {
-                                let vm_address = BankAccountIdOf::<V>::try_from(contract_addr)?;
-                                let CosmwasmContractMeta {
-                                    code_id,
-                                    admin,
-                                    label,
-                                } = vm.code_id(vm_address.clone())?;
+                                let vm_contract_addr =
+                                    BankAccountIdOf::<V>::try_from(contract_addr)?;
+                                let CosmwasmContractMeta { admin, label, .. } =
+                                    vm.code_id(vm_contract_addr.clone())?;
                                 ensure_admin(&admin)?;
                                 vm.set_code_id(
-                                    vm_address.clone(),
+                                    vm_contract_addr.clone(),
                                     CosmwasmContractMeta {
                                         code_id: new_code_id,
                                         admin,
                                         label,
                                     },
                                 )?;
-                                let mut sub_vm = vm.load(vm_address, vec![])?;
+                                let mut sub_vm = vm.load(vm_contract_addr, vec![])?;
                                 cosmwasm_system_run::<MigrateInput<T>, V, T>(
                                     &mut sub_vm,
                                     &msg,
@@ -279,15 +277,16 @@ where
                                 contract_addr,
                                 admin: new_admin,
                             } => {
-                                let vm_address = BankAccountIdOf::<V>::try_from(contract_addr)?;
+                                let vm_contract_addr =
+                                    BankAccountIdOf::<V>::try_from(contract_addr)?;
                                 let CosmwasmContractMeta {
                                     code_id,
                                     admin,
                                     label,
-                                } = vm.code_id(vm_address.clone())?;
+                                } = vm.code_id(vm_contract_addr.clone())?;
                                 ensure_admin(&admin)?;
                                 vm.set_code_id(
-                                    vm_address,
+                                    vm_contract_addr,
                                     CosmwasmContractMeta {
                                         code_id,
                                         admin: Some(new_admin),
@@ -297,15 +296,16 @@ where
                                 Ok(None)
                             }
                             WasmMsg::ClearAdmin { contract_addr } => {
-                                let vm_address = BankAccountIdOf::<V>::try_from(contract_addr)?;
+                                let vm_contract_addr =
+                                    BankAccountIdOf::<V>::try_from(contract_addr)?;
                                 let CosmwasmContractMeta {
                                     code_id,
                                     admin,
                                     label,
-                                } = vm.code_id(vm_address.clone())?;
+                                } = vm.code_id(vm_contract_addr.clone())?;
                                 ensure_admin(&admin)?;
                                 vm.set_code_id(
-                                    vm_address,
+                                    vm_contract_addr,
                                     CosmwasmContractMeta {
                                         code_id,
                                         admin: None,
@@ -315,35 +315,16 @@ where
                                 Ok(None)
                             }
                         },
-                        CosmosMsg::Wasm(WasmMsg::Instantiate {
-                            admin,
-                            code_id,
-                            msg,
-                            funds,
-                            label,
-                        }) => {
-                            let address = vm.new(CosmwasmContractMeta {
-                                code_id,
-                                admin,
-                                label,
-                            })?;
-                            vm.transfer(&address, &funds)?;
-                            let mut sub_vm = vm.load(address, funds)?;
-                            cosmwasm_system_run::<InstantiateInput<T>, V, T>(
-                                &mut sub_vm,
-                                &msg,
-                                &mut sub_event_handler,
-                            )
-                        }
-                        CosmosMsg::Bank(BankMsg::Send { to_address, amount }) => {
-                            vm.transfer(&to_address.try_into()?, &amount)?;
-                            Ok(None)
-                        }
-                        CosmosMsg::Bank(BankMsg::Burn { amount }) => {
-                            vm.burn(&amount)?;
-                            Ok(None)
-                        }
-                        _ => Err(SystemError::UnsupportedMessage.into()),
+                        CosmosMsg::Bank(bank_message) => match bank_message {
+                            BankMsg::Send { to_address, amount } => {
+                                vm.transfer(&to_address.try_into()?, &amount)?;
+                                Ok(None)
+                            }
+                            BankMsg::Burn { amount } => {
+                                vm.burn(&amount)?;
+                                Ok(None)
+                            }
+                        },
                     };
 
                     log::debug!("Submessage result: {:?}", sub_res);
@@ -421,13 +402,30 @@ where
                 contract_addr,
                 msg: Binary(message),
             } => {
-                let vm_addr = contract_addr.try_into()?;
-                let mut sub_vm = vm.load(vm_addr, vec![])?;
+                let vm_contract_addr = contract_addr.try_into()?;
+                let mut sub_vm = vm.load(vm_contract_addr, vec![])?;
                 let QueryResult(output) = cosmwasm_query(&mut sub_vm, &message)?;
                 Ok(SystemResult::Ok(output))
             }
-            WasmQuery::Raw { contract_addr, key } => todo!(),
-            WasmQuery::ContractInfo { contract_addr } => todo!(),
+            WasmQuery::Raw {
+                contract_addr,
+                key: Binary(key),
+            } => {
+                let vm_contract_addr = contract_addr.try_into()?;
+                let value = vm.query_raw(vm_contract_addr, key)?;
+                Ok(SystemResult::Ok(ContractResult::Ok(Binary(
+                    value.unwrap_or_else(|| Vec::new()),
+                ))))
+            }
+            WasmQuery::ContractInfo { contract_addr } => {
+                let vm_contract_addr = contract_addr.try_into()?;
+                let info = vm.query_info(vm_contract_addr)?;
+                let serialized_info =
+                    serde_json::to_vec(&info).map_err(|_| SystemError::FailedToSerialize)?;
+                Ok(SystemResult::Ok(ContractResult::Ok(Binary(
+                    serialized_info,
+                ))))
+            }
         },
     }
 }

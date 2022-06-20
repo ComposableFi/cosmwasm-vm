@@ -54,6 +54,7 @@ use cosmwasm_minimal_std::Addr;
 use cosmwasm_minimal_std::BankQuery;
 use cosmwasm_minimal_std::Binary;
 use cosmwasm_minimal_std::Coin;
+use cosmwasm_minimal_std::ContractInfoResponse;
 use cosmwasm_minimal_std::CosmwasmQueryResult;
 use cosmwasm_minimal_std::Env;
 use cosmwasm_minimal_std::Event;
@@ -181,7 +182,7 @@ pub trait IsWasmiVM<T> = where
             Input = Vec<Coin>,
             Output = AsWasmiVM<T>,
         > + Bank
-        + Host
+        + Host<Address = BankAccountIdOf<T>>
         + Has<Env>
         + Has<MessageInfo>,
     IsWasmiVMErrorOf<T>: From<MemoryReadError>
@@ -565,7 +566,7 @@ where
         address: Self::Address,
         new_code_id: Self::CodeId,
     ) -> Result<(), Self::Error> {
-      self.0.set_code_id(address, new_code_id)
+        self.0.set_code_id(address, new_code_id)
     }
 }
 
@@ -578,6 +579,7 @@ where
     type QueryCustom = T::QueryCustom;
     type MessageCustom = T::MessageCustom;
     type Error = T::Error;
+    type Address = T::Address;
     fn db_read(&mut self, key: Self::Key) -> Result<Option<Self::Value>, Self::Error> {
         self.0.db_read(key)
     }
@@ -587,20 +589,28 @@ where
     fn abort(&mut self, message: String) -> Result<(), Self::Error> {
         self.0.abort(message)
     }
-
     fn query_custom(
         &mut self,
         query: Self::QueryCustom,
     ) -> Result<SystemResult<CosmwasmQueryResult>, Self::Error> {
         self.0.query_custom(query)
     }
-
     fn message_custom(
         &mut self,
         message: Self::MessageCustom,
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error> {
         self.0.message_custom(message, event_handler)
+    }
+    fn query_raw(
+        &mut self,
+        address: Self::Address,
+        key: Self::Key,
+    ) -> Result<Option<Self::Value>, Self::Error> {
+        self.0.query_raw(address, key)
+    }
+    fn query_info(&mut self, address: Self::Address) -> Result<ContractInfoResponse, Self::Error> {
+        self.0.query_info(address)
     }
 }
 

@@ -29,7 +29,9 @@
 use core::fmt::Debug;
 
 use alloc::string::String;
-use cosmwasm_minimal_std::{CosmwasmQueryResult, SystemResult, Event, Binary};
+use cosmwasm_minimal_std::{
+    Binary, ContractInfoResponse, CosmwasmQueryResult, Event, SystemResult,
+};
 
 pub type HostErrorOf<T> = <T as Host>::Error;
 pub type HostQueryCustomOf<T> = <T as Host>::QueryCustom;
@@ -40,6 +42,7 @@ pub trait Host {
     type Value;
     type QueryCustom: serde::de::DeserializeOwned + Debug;
     type MessageCustom: serde::de::DeserializeOwned + Debug;
+    type Address;
     type Error;
     fn db_read(&mut self, key: Self::Key) -> Result<Option<Self::Value>, Self::Error>;
     fn db_write(&mut self, key: Self::Key, value: Self::Value) -> Result<(), Self::Error>;
@@ -53,4 +56,10 @@ pub trait Host {
         message: Self::MessageCustom,
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error>;
+    fn query_raw(
+        &mut self,
+        address: Self::Address,
+        key: Self::Key,
+    ) -> Result<Option<Self::Value>, Self::Error>;
+    fn query_info(&mut self, address: Self::Address) -> Result<ContractInfoResponse, Self::Error>;
 }
