@@ -26,28 +26,52 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use crate::{
+    bank::BankAccountIdOf,
+    host::{Host, HostMessageCustomOf},
+    input::Input,
+};
+use cosmwasm_minimal_std::{
+    Binary, ContractResult, DeserializeLimit, Event, QueryResult, ReadLimit, Response,
+};
+use serde::de::DeserializeOwned;
+
 pub type LoaderCodeIdOf<T> = <T as Loader>::CodeId;
 pub type LoaderOutputOf<T> = <T as Loader>::Output;
 pub type LoaderErrorOf<T> = <T as Loader>::Error;
-pub type LoaderAddressOf<T> = <T as Loader>::Address;
 pub type LoaderInputOf<T> = <T as Loader>::Input;
 
-pub trait Loader {
+pub trait Loader: Host {
     type CodeId;
-    type Address;
     type Input;
     type Output;
     type Error;
-    fn load(
+    fn query_continuation(
         &mut self,
-        address: Self::Address,
+        address: BankAccountIdOf<Self>,
+        message: &[u8],
+    ) -> Result<QueryResult, LoaderErrorOf<Self>>;
+    fn execution_continuation<I>(
+        &mut self,
+        address: BankAccountIdOf<Self>,
         input: Self::Input,
-    ) -> Result<Self::Output, Self::Error>;
-    fn new(&mut self, code_id: Self::CodeId) -> Result<Self::Address, Self::Error>;
+        message: &[u8],
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<Option<Binary>, LoaderErrorOf<Self>>
+    where
+        I: Input,
+        I::Output: DeserializeOwned
+            + ReadLimit
+            + DeserializeLimit
+            + Into<ContractResult<Response<HostMessageCustomOf<Self>>>>;
+    fn new(&mut self, code_id: Self::CodeId) -> Result<BankAccountIdOf<Self>, LoaderErrorOf<Self>>;
     fn set_code_id(
         &mut self,
-        address: Self::Address,
+        address: BankAccountIdOf<Self>,
         new_code_id: Self::CodeId,
-    ) -> Result<(), Self::Error>;
-    fn code_id(&mut self, address: Self::Address) -> Result<Self::CodeId, Self::Error>;
+    ) -> Result<(), LoaderErrorOf<Self>>;
+    fn code_id(
+        &mut self,
+        address: BankAccountIdOf<Self>,
+    ) -> Result<Self::CodeId, LoaderErrorOf<Self>>;
 }

@@ -27,9 +27,10 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::{
+    bank::{Bank, BankAccountIdOf, BankErrorOf},
     executor::{
-        cosmwasm_call, cosmwasm_query, AllocateInput, CosmwasmCallInput, CosmwasmQueryInput,
-        DeallocateInput, ExecuteInput, ExecutorError, InstantiateInput, MigrateInput, ReplyInput,
+        cosmwasm_call, AllocateInput, CosmwasmCallInput, CosmwasmQueryInput, DeallocateInput,
+        ExecuteInput, ExecutorError, InstantiateInput, MigrateInput, ReplyInput,
     },
     has::Has,
     host::{Host, HostErrorOf},
@@ -42,7 +43,7 @@ use crate::{
 use alloc::{format, string::String, vec, vec::Vec};
 use core::fmt::Debug;
 use cosmwasm_minimal_std::{
-    Addr, BankMsg, BankQuery, Binary, Coin, ContractResult, CosmosMsg, CosmwasmQueryResult,
+    Addr, BankMsg, Binary, Coin, ContractResult, CosmosMsg, CosmwasmQueryResult,
     DeserializeLimit, Env, Event, MessageInfo, QueryRequest, QueryResult, ReadLimit, Reply,
     ReplyOn, Response, SubMsg, SubMsgResponse, SubMsgResult, SystemResult, WasmMsg, WasmQuery,
 };
@@ -63,17 +64,6 @@ enum SubCallContinuation<E> {
     Abort(E),
 }
 
-pub type BankErrorOf<T> = <T as Bank>::Error;
-pub type BankAccountIdOf<T> = <T as Bank>::AccountId;
-pub trait Bank {
-    type AccountId: Clone;
-    type Error;
-    fn transfer(&mut self, to: &Self::AccountId, funds: &[Coin]) -> Result<(), Self::Error>;
-    fn burn(&mut self, funds: &[Coin]) -> Result<(), Self::Error>;
-    fn query(&mut self, query: BankQuery)
-        -> Result<SystemResult<CosmwasmQueryResult>, Self::Error>;
-}
-
 pub type CosmwasmCodeId = u64;
 
 pub struct CosmwasmContractMeta {
@@ -85,13 +75,9 @@ pub struct CosmwasmContractMeta {
 pub trait CosmwasmBaseVM = VM
     + ReadWriteMemory
     + Transactional
-    + Loader<
-        CodeId = CosmwasmContractMeta,
-        Address = BankAccountIdOf<Self>,
-        Input = Vec<Coin>,
-        Output = Self,
-    > + Bank
-    + Host<Address = BankAccountIdOf<Self>, Key = Vec<u8>, Value = Vec<u8>>
+    + Loader<CodeId = CosmwasmContractMeta, Input = Vec<Coin>, Output = Self>
+    + Bank
+    + Host<Key = Vec<u8>, Value = Vec<u8>>
     + Has<Env>
     + Has<MessageInfo>
 where
@@ -154,7 +140,7 @@ where
     }
 }
 
-fn cosmwasm_system_run<I, V, T>(
+pub fn cosmwasm_system_run<I, V, T>(
     vm: &mut V,
     message: &[u8],
     mut event_handler: &mut dyn FnMut(Event),
@@ -221,12 +207,13 @@ where
                             } => {
                                 let vm_contract_addr = contract_addr.try_into()?;
                                 vm.transfer(&vm_contract_addr, &funds)?;
-                                let mut sub_vm = vm.load(vm_contract_addr, funds)?;
-                                cosmwasm_system_run::<ExecuteInput<T>, V, T>(
-                                    &mut sub_vm,
+                                vm.execution_continuation::<ExecuteInput<T>>(
+                                    vm_contract_addr,
+                                    vec![],
                                     &msg,
                                     &mut sub_event_handler,
                                 )
+                                .map_err(Into::into)
                             }
                             WasmMsg::Instantiate {
                                 admin,
@@ -235,18 +222,19 @@ where
                                 funds,
                                 label,
                             } => {
-                                let address = vm.new(CosmwasmContractMeta {
+                                let vm_contract_addr = vm.new(CosmwasmContractMeta {
                                     code_id,
                                     admin,
                                     label,
                                 })?;
-                                vm.transfer(&address, &funds)?;
-                                let mut sub_vm = vm.load(address, funds)?;
-                                cosmwasm_system_run::<InstantiateInput<T>, V, T>(
-                                    &mut sub_vm,
+                                vm.transfer(&vm_contract_addr, &funds)?;
+                                vm.execution_continuation::<InstantiateInput<T>>(
+                                    vm_contract_addr,
+                                    funds,
                                     &msg,
                                     &mut sub_event_handler,
                                 )
+                                .map_err(Into::into)
                             }
                             WasmMsg::Migrate {
                                 contract_addr,
@@ -266,12 +254,13 @@ where
                                         label,
                                     },
                                 )?;
-                                let mut sub_vm = vm.load(vm_contract_addr, vec![])?;
-                                cosmwasm_system_run::<MigrateInput<T>, V, T>(
-                                    &mut sub_vm,
+                                vm.execution_continuation::<MigrateInput<T>>(
+                                    vm_contract_addr,
+                                    vec![],
                                     &msg,
                                     &mut sub_event_handler,
                                 )
+                                .map_err(Into::into)
                             }
                             WasmMsg::UpdateAdmin {
                                 contract_addr,
@@ -403,8 +392,7 @@ where
                 msg: Binary(message),
             } => {
                 let vm_contract_addr = contract_addr.try_into()?;
-                let mut sub_vm = vm.load(vm_contract_addr, vec![])?;
-                let QueryResult(output) = cosmwasm_query(&mut sub_vm, &message)?;
+                let QueryResult(output) = vm.query_continuation(vm_contract_addr, &message)?;
                 Ok(SystemResult::Ok(output))
             }
             WasmQuery::Raw {
@@ -433,11 +421,13 @@ where
 pub fn cosmwasm_system_query_raw<V, T>(
     vm: &mut V,
     request: QueryRequest<T>,
-) -> Result<Vec<u8>, VmErrorOf<V>>
+) -> Result<Binary, VmErrorOf<V>>
 where
     V: CosmwasmQueryVM<T>,
 {
     log::debug!("SystemQueryRaw");
     let output = cosmwasm_system_query(vm, request)?;
-    Ok(serde_json::to_vec(&output).map_err(|_| SystemError::FailedToSerialize)?)
+    Ok(Binary(
+        serde_json::to_vec(&output).map_err(|_| SystemError::FailedToSerialize)?,
+    ))
 }

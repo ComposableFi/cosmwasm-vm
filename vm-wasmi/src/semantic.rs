@@ -1,17 +1,15 @@
 use super::*;
-use alloc::{rc::Rc, string::ToString};
-use core::{
-    assert_matches::assert_matches,
-    cell::{BorrowError, BorrowMutError, RefCell},
-    str::FromStr,
-};
+use alloc::string::ToString;
+use core::{assert_matches::assert_matches, str::FromStr};
 use cosmwasm_minimal_std::{
     Addr, Attribute, Binary, BlockInfo, Coin, ContractInfo, CosmwasmExecutionResult,
     CosmwasmQueryResult, Empty, Env, Event, InstantiateResult, MessageInfo, QueryResult, Timestamp,
 };
 use cosmwasm_vm::{
-    executor::{cosmwasm_call, cosmwasm_query, ExecuteInput, InstantiateInput},
-    system::{cosmwasm_system_entrypoint, CosmwasmCodeId, CosmwasmContractMeta},
+    executor::{cosmwasm_call, cosmwasm_query, ExecuteInput, InstantiateInput, MigrateInput},
+    system::{
+        cosmwasm_system_entrypoint, cosmwasm_system_run, CosmwasmCodeId, CosmwasmContractMeta,
+    },
 };
 
 pub fn initialize() {
@@ -25,8 +23,6 @@ pub fn initialize() {
 #[derive(Debug)]
 enum SimpleVMError {
     VMError(WasmiVMError),
-    Borrow(BorrowError),
-    BorrowMut(BorrowMutError),
     CodeNotFound(CosmwasmCodeId),
     ContractNotFound(BankAccount),
     InvalidAccountFormat,
@@ -59,16 +55,6 @@ impl From<MemoryWriteError> for SimpleVMError {
         SimpleVMError::VMError(e.into())
     }
 }
-impl From<BorrowMutError> for SimpleVMError {
-    fn from(e: BorrowMutError) -> Self {
-        SimpleVMError::BorrowMut(e)
-    }
-}
-impl From<BorrowError> for SimpleVMError {
-    fn from(e: BorrowError) -> Self {
-        SimpleVMError::Borrow(e)
-    }
-}
 impl Display for SimpleVMError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "{:?}", self)
@@ -89,7 +75,7 @@ struct SimpleWasmiVMExtension {
     transaction_depth: u32,
 }
 
-struct SimpleWasmiVM {
+struct SimpleWasmiVM<'a> {
     host_functions_definitions:
         BTreeMap<WasmiModuleName, WasmiHostModule<AsWasmiVM<Self>, SimpleVMError>>,
     host_functions:
@@ -97,20 +83,23 @@ struct SimpleWasmiVM {
     executing_module: WasmiModule,
     env: Env,
     info: MessageInfo,
-    extension: Rc<RefCell<SimpleWasmiVMExtension>>,
+    extension: &'a mut SimpleWasmiVMExtension,
 }
 
-impl MinWasmiVM<SimpleWasmiVM> for SimpleWasmiVM {
+impl<'a> MinWasmiVM<SimpleWasmiVM<'a>> for SimpleWasmiVM<'a> {
     type Error = SimpleVMError;
     fn host_functions_definitions(
         &self,
-    ) -> &BTreeMap<WasmiModuleName, WasmiHostModule<AsWasmiVM<SimpleWasmiVM>, SimpleVMError>> {
+    ) -> &BTreeMap<WasmiModuleName, WasmiHostModule<AsWasmiVM<SimpleWasmiVM<'a>>, SimpleVMError>>
+    {
         &self.host_functions_definitions
     }
     fn host_functions(
         &self,
-    ) -> &BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<AsWasmiVM<SimpleWasmiVM>, SimpleVMError>>
-    {
+    ) -> &BTreeMap<
+        WasmiHostFunctionIndex,
+        WasmiHostFunction<AsWasmiVM<SimpleWasmiVM<'a>>, SimpleVMError>,
+    > {
         &self.host_functions
     }
     fn module(&self) -> WasmiModule {
@@ -118,20 +107,18 @@ impl MinWasmiVM<SimpleWasmiVM> for SimpleWasmiVM {
     }
 }
 
-impl Host for SimpleWasmiVM {
+impl<'a> Host for SimpleWasmiVM<'a> {
     type Key = Vec<u8>;
     type Value = Vec<u8>;
     type QueryCustom = Empty;
     type MessageCustom = Empty;
-    type Address = BankAccount;
     type Error = SimpleVMError;
 
-    fn db_read(&mut self, key: Self::Key) -> Result<Option<Self::Value>, Self::Error> {
+    fn db_read(&mut self, key: Self::Key) -> Result<Option<Self::Value>, HostErrorOf<Self>> {
         let contract_addr = self.env.contract.address.clone().try_into()?;
         let empty = BTreeMap::new();
         Ok(self
             .extension
-            .try_borrow()?
             .storage
             .get(&contract_addr)
             .unwrap_or(&empty)
@@ -139,10 +126,9 @@ impl Host for SimpleWasmiVM {
             .cloned())
     }
 
-    fn db_write(&mut self, key: Self::Key, value: Self::Value) -> Result<(), Self::Error> {
+    fn db_write(&mut self, key: Self::Key, value: Self::Value) -> Result<(), HostErrorOf<Self>> {
         let contract_addr = self.env.contract.address.clone().try_into()?;
         self.extension
-            .try_borrow_mut()?
             .storage
             .entry(contract_addr)
             .or_insert(BTreeMap::new())
@@ -150,7 +136,7 @@ impl Host for SimpleWasmiVM {
         Ok(())
     }
 
-    fn abort(&mut self, message: String) -> Result<(), Self::Error> {
+    fn abort(&mut self, message: String) -> Result<(), HostErrorOf<Self>> {
         log::debug!("Contract aborted: {}", message);
         Err(SimpleVMError::from(WasmiVMError::from(
             SystemError::ContractExecutionFailure(message),
@@ -160,7 +146,7 @@ impl Host for SimpleWasmiVM {
     fn query_custom(
         &mut self,
         _: Self::QueryCustom,
-    ) -> Result<SystemResult<CosmwasmQueryResult>, Self::Error> {
+    ) -> Result<SystemResult<CosmwasmQueryResult>, HostErrorOf<Self>> {
         Err(SimpleVMError::NoCustomQuery)
     }
 
@@ -168,18 +154,17 @@ impl Host for SimpleWasmiVM {
         &mut self,
         _: Self::MessageCustom,
         _: &mut dyn FnMut(Event),
-    ) -> Result<Option<Binary>, Self::Error> {
+    ) -> Result<Option<Binary>, HostErrorOf<Self>> {
         Err(SimpleVMError::NoCustomMessage)
     }
 
     fn query_raw(
         &mut self,
-        address: Self::Address,
+        address: BankAccountIdOf<Self>,
         key: Self::Key,
-    ) -> Result<Option<Self::Value>, Self::Error> {
+    ) -> Result<Option<Self::Value>, HostErrorOf<Self>> {
         Ok(self
             .extension
-            .try_borrow()?
             .storage
             .get(&address)
             .unwrap_or(&Default::default())
@@ -189,80 +174,148 @@ impl Host for SimpleWasmiVM {
 
     fn query_info(
         &mut self,
-        _: Self::Address,
-    ) -> Result<cosmwasm_minimal_std::ContractInfoResponse, Self::Error> {
+        _: BankAccountIdOf<Self>,
+    ) -> Result<cosmwasm_minimal_std::ContractInfoResponse, HostErrorOf<Self>> {
         Err(SimpleVMError::Unsupported)
     }
 }
 
-impl Loader for SimpleWasmiVM {
+impl<'a> Loader for SimpleWasmiVM<'a> {
     type CodeId = CosmwasmContractMeta;
-    type Address = BankAccount;
     type Input = Vec<Coin>;
-    type Output = AsWasmiVM<SimpleWasmiVM>;
+    type Output = AsWasmiVM<SimpleWasmiVM<'a>>;
     type Error = SimpleVMError;
 
-    fn load(
+    fn execution_continuation<I>(
         &mut self,
-        address: Self::Address,
-        funds: Self::Input,
-    ) -> Result<Self::Output, Self::Error> {
-        log::debug!("Load");
-        let ext = self.extension.try_borrow()?;
-        let Contract { code_id } = ext
-            .contracts
-            .get(&address)
-            .copied()
-            .ok_or(SimpleVMError::ContractNotFound(address))?;
-        let code = ext
-            .codes
-            .get(&code_id)
-            .ok_or(SimpleVMError::CodeNotFound(code_id))?;
-        new_vm(
-            &code,
-            self.extension.clone(),
-            |WasmiImportResolver(host_functions_definitions), _, extension, module| SimpleWasmiVM {
-                host_functions_definitions: host_functions_definitions.clone(),
-                host_functions: host_functions_definitions
-                    .clone()
-                    .into_iter()
-                    .map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
-                    .flatten()
-                    .collect(),
-                executing_module: module,
-                env: Env {
-                    block: self.env.block.clone(),
-                    transaction: self.env.transaction.clone(),
-                    contract: ContractInfo {
-                        address: address.into(),
-                    },
+        address: BankAccountIdOf<Self>,
+        input: Self::Input,
+        message: &[u8],
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<Option<Binary>, LoaderErrorOf<Self>>
+    where
+        I: cosmwasm_vm::input::Input,
+        I::Output: serde::de::DeserializeOwned
+            + cosmwasm_minimal_std::ReadLimit
+            + cosmwasm_minimal_std::DeserializeLimit
+            + Into<
+                cosmwasm_minimal_std::ContractResult<
+                    cosmwasm_minimal_std::Response<Self::MessageCustom>,
+                >,
+            >,
+    {
+        let code = (|| {
+            let Contract { code_id } = self
+                .extension
+                .contracts
+                .get(&address)
+                .copied()
+                .ok_or(SimpleVMError::ContractNotFound(address))?;
+            self.extension
+                .codes
+                .get(&code_id)
+                .ok_or(SimpleVMError::CodeNotFound(code_id))
+                .cloned()
+        })()?;
+        let host_functions_definitions =
+            WasmiImportResolver(host_functions::definitions::<SimpleWasmiVM>());
+        let module = new_wasmi_vm(&host_functions_definitions, &code)?;
+        let mut sub_vm = AsWasmiVM(SimpleWasmiVM {
+            host_functions_definitions: host_functions_definitions.0.clone(),
+            host_functions: host_functions_definitions
+                .0
+                .into_iter()
+                .map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
+                .flatten()
+                .collect(),
+            executing_module: module,
+            env: Env {
+                block: self.env.block.clone(),
+                transaction: self.env.transaction.clone(),
+                contract: ContractInfo {
+                    address: address.into(),
                 },
-                info: MessageInfo {
-                    sender: self.env.contract.address.clone(),
-                    funds,
-                },
-                extension,
             },
-        )
+            info: MessageInfo {
+                sender: self.env.contract.address.clone(),
+                funds: input,
+            },
+            extension: self.extension,
+        });
+        cosmwasm_system_run::<
+            MigrateInput<Self::MessageCustom>,
+            AsWasmiVM<SimpleWasmiVM>,
+            Self::MessageCustom,
+        >(&mut sub_vm, message, event_handler)
+    }
+
+    fn query_continuation(
+        &mut self,
+        address: BankAccountIdOf<Self>,
+        message: &[u8],
+    ) -> Result<QueryResult, LoaderErrorOf<Self>> {
+        let code = (|| {
+            let Contract { code_id } = self
+                .extension
+                .contracts
+                .get(&address)
+                .copied()
+                .ok_or(SimpleVMError::ContractNotFound(address))?;
+            self.extension
+                .codes
+                .get(&code_id)
+                .ok_or(SimpleVMError::CodeNotFound(code_id))
+                .cloned()
+        })()?;
+        let host_functions_definitions =
+            WasmiImportResolver(host_functions::definitions::<SimpleWasmiVM>());
+        let module = new_wasmi_vm(&host_functions_definitions, &code)?;
+        let mut sub_vm = AsWasmiVM(SimpleWasmiVM {
+            host_functions_definitions: host_functions_definitions.0.clone(),
+            host_functions: host_functions_definitions
+                .0
+                .into_iter()
+                .map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
+                .flatten()
+                .collect(),
+            executing_module: module,
+            env: Env {
+                block: self.env.block.clone(),
+                transaction: self.env.transaction.clone(),
+                contract: ContractInfo {
+                    address: address.into(),
+                },
+            },
+            info: MessageInfo {
+                sender: self.env.contract.address.clone(),
+                funds: vec![],
+            },
+            extension: self.extension,
+        });
+        cosmwasm_query::<AsWasmiVM<SimpleWasmiVM>>(&mut sub_vm, message)
     }
 
     fn new(
         &mut self,
         CosmwasmContractMeta { code_id, .. }: Self::CodeId,
-    ) -> Result<Self::Address, Self::Error> {
-        let mut ext = self.extension.try_borrow_mut()?;
-        let BankAccount(new_account_id) = ext.next_account_id;
-        ext.next_account_id = BankAccount(new_account_id + 1);
-        ext.contracts
+    ) -> Result<BankAccountIdOf<Self>, LoaderErrorOf<Self>> {
+        let BankAccount(new_account_id) = self.extension.next_account_id;
+        self.extension.next_account_id = BankAccount(new_account_id + 1);
+        self.extension
+            .contracts
             .insert(BankAccount(new_account_id), Contract { code_id });
         Ok(BankAccount(new_account_id))
     }
 
-    fn code_id(&mut self, _: Self::Address) -> Result<Self::CodeId, Self::Error> {
+    fn set_code_id(
+        &mut self,
+        _: BankAccountIdOf<Self>,
+        _: Self::CodeId,
+    ) -> Result<(), LoaderErrorOf<Self>> {
         Err(SimpleVMError::Unsupported)
     }
 
-    fn set_code_id(&mut self, _: Self::Address, _: Self::CodeId) -> Result<(), Self::Error> {
+    fn code_id(&mut self, _: BankAccountIdOf<Self>) -> Result<Self::CodeId, LoaderErrorOf<Self>> {
         Err(SimpleVMError::Unsupported)
     }
 }
@@ -270,10 +323,10 @@ impl Loader for SimpleWasmiVM {
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 struct BankAccount(u128);
 
-impl Bank for SimpleWasmiVM {
+impl<'a> Bank for SimpleWasmiVM<'a> {
     type AccountId = BankAccount;
     type Error = SimpleVMError;
-    fn transfer(&mut self, to: &Self::AccountId, funds: &[Coin]) -> Result<(), Self::Error> {
+    fn transfer(&mut self, to: &Self::AccountId, funds: &[Coin]) -> Result<(), BankErrorOf<Self>> {
         log::debug!(
             "Transfer: {:?} -> {:?}\n{:?}",
             self.env.contract.address,
@@ -283,12 +336,15 @@ impl Bank for SimpleWasmiVM {
         Ok(())
     }
 
-    fn burn(&mut self, funds: &[Coin]) -> Result<(), Self::Error> {
+    fn burn(&mut self, funds: &[Coin]) -> Result<(), BankErrorOf<Self>> {
         log::debug!("Burn: {:?}\n{:?}", self.env.contract.address, funds);
         Ok(())
     }
 
-    fn query(&mut self, _: BankQuery) -> Result<SystemResult<CosmwasmQueryResult>, Self::Error> {
+    fn query(
+        &mut self,
+        _: BankQuery,
+    ) -> Result<SystemResult<CosmwasmQueryResult>, BankErrorOf<Self>> {
         Err(SimpleVMError::Unsupported)
     }
 }
@@ -315,78 +371,73 @@ impl Into<Addr> for BankAccount {
     }
 }
 
-impl Has<Env> for SimpleWasmiVM {
+impl<'a> Has<Env> for SimpleWasmiVM<'a> {
     fn get(&self) -> Env {
         self.env.clone()
     }
 }
-impl Has<MessageInfo> for SimpleWasmiVM {
+impl<'a> Has<MessageInfo> for SimpleWasmiVM<'a> {
     fn get(&self) -> MessageInfo {
         self.info.clone()
     }
 }
 
-impl Transactional for SimpleWasmiVM {
+impl<'a> Transactional for SimpleWasmiVM<'a> {
     type Error = SimpleVMError;
     fn transaction_begin(&mut self) -> Result<(), Self::Error> {
-        let mut ext = self.extension.try_borrow_mut()?;
-        ext.transaction_depth += 1;
-        log::debug!("> Transaction begin: {}", ext.transaction_depth);
+        self.extension.transaction_depth += 1;
+        log::debug!("> Transaction begin: {}", self.extension.transaction_depth);
         Ok(())
     }
     fn transaction_commit(&mut self) -> Result<(), Self::Error> {
-        let mut ext = self.extension.try_borrow_mut()?;
-        ext.transaction_depth -= 1;
-        log::debug!("< Transaction end: {}", ext.transaction_depth);
+        self.extension.transaction_depth -= 1;
+        log::debug!("< Transaction end: {}", self.extension.transaction_depth);
         Ok(())
     }
     fn transaction_rollback(&mut self) -> Result<(), Self::Error> {
-        let mut ext = self.extension.try_borrow_mut()?;
-        ext.transaction_depth -= 1;
-        log::debug!("< Transaction abort: {}", ext.transaction_depth);
+        self.extension.transaction_depth -= 1;
+        log::debug!("< Transaction abort: {}", self.extension.transaction_depth);
         Ok(())
     }
 }
 
-fn create_simple_vm(
+fn create_simple_vm<'a>(
     sender: BankAccount,
     address: BankAccount,
     funds: Vec<Coin>,
     code: &[u8],
-    extension: Rc<RefCell<SimpleWasmiVMExtension>>,
-) -> AsWasmiVM<SimpleWasmiVM> {
+    extension: &'a mut SimpleWasmiVMExtension,
+) -> AsWasmiVM<SimpleWasmiVM<'a>> {
     initialize();
-    new_vm::<SimpleWasmiVM, _>(
-        code,
-        extension,
-        |WasmiImportResolver(host_functions_definitions), _, extension, module| SimpleWasmiVM {
-            host_functions_definitions: host_functions_definitions.clone(),
-            host_functions: host_functions_definitions
-                .clone()
-                .into_iter()
-                .map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
-                .flatten()
-                .collect(),
-            executing_module: module,
-            env: Env {
-                block: BlockInfo {
-                    height: 0xDEADC0DE,
-                    time: Timestamp(0),
-                    chain_id: "abstract-test".into(),
-                },
-                transaction: None,
-                contract: ContractInfo {
-                    address: address.into(),
-                },
+    let host_functions_definitions = WasmiImportResolver(host_functions::definitions());
+    let module = new_wasmi_vm(&host_functions_definitions, code).unwrap();
+    AsWasmiVM(SimpleWasmiVM {
+        host_functions_definitions: host_functions_definitions.0.clone(),
+        host_functions: host_functions_definitions
+            .0
+            .clone()
+            .into_iter()
+            .map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
+            .flatten()
+            .collect(),
+        executing_module: module,
+        env: Env {
+            block: BlockInfo {
+                height: 0xDEADC0DE,
+                time: Timestamp(0),
+                chain_id: "abstract-test".into(),
             },
-            info: MessageInfo {
-                sender: sender.into(),
-                funds,
+            transaction: None,
+            contract: ContractInfo {
+                address: address.into(),
             },
-            extension,
         },
-    )
-    .unwrap()
+        info: MessageInfo {
+            sender: sender.into(),
+            funds,
+        },
+        extension,
+    })
 }
 
 #[test]
@@ -395,14 +446,14 @@ fn test_bare() {
     let sender = BankAccount(0);
     let address = BankAccount(10_000);
     let funds = vec![];
-    let extension = Rc::new(RefCell::new(SimpleWasmiVMExtension {
+    let mut extension = SimpleWasmiVMExtension {
         storage: Default::default(),
         codes: BTreeMap::from([(0x1337, code.clone())]),
         contracts: BTreeMap::from([(address, Contract { code_id: 0x1337 })]),
         next_account_id: BankAccount(10_001),
         transaction_depth: 0,
-    }));
-    let mut vm = create_simple_vm(sender, address, funds, &code, extension);
+    };
+    let mut vm = create_simple_vm(sender, address, funds, &code, &mut extension);
     assert_matches!(
         cosmwasm_call::<InstantiateInput<Empty>, AsWasmiVM<SimpleWasmiVM>>(
             &mut vm,
@@ -430,19 +481,20 @@ fn test_bare() {
     );
 }
 
+#[test]
 fn test_orchestration_base() {
     let code = include_bytes!("../../fixtures/cw20_base.wasm").to_vec();
     let sender = BankAccount(0);
     let address = BankAccount(10_000);
     let funds = vec![];
-    let extension = Rc::new(RefCell::new(SimpleWasmiVMExtension {
+    let mut extension = SimpleWasmiVMExtension {
         storage: Default::default(),
         codes: BTreeMap::from([(0x1337, code.clone())]),
         contracts: BTreeMap::from([(address, Contract { code_id: 0x1337 })]),
         next_account_id: BankAccount(10_001),
         transaction_depth: 0,
-    }));
-    let mut vm = create_simple_vm(sender, address, funds, &code, extension);
+    };
+    let mut vm = create_simple_vm(sender, address, funds, &code, &mut extension);
     assert_eq!(
         cosmwasm_system_entrypoint::<InstantiateInput, AsWasmiVM<SimpleWasmiVM>, _>(
             &mut vm,
@@ -506,14 +558,14 @@ fn test_orchestration_advanced() {
     let sender = BankAccount(0);
     let address = BankAccount(10_000);
     let funds = vec![];
-    let extension = Rc::new(RefCell::new(SimpleWasmiVMExtension {
+    let mut extension = SimpleWasmiVMExtension {
         storage: Default::default(),
         codes: BTreeMap::from([(0x1337, code.clone())]),
         contracts: BTreeMap::from([(address, Contract { code_id: 0x1337 })]),
         next_account_id: BankAccount(10_001),
         transaction_depth: 0,
-    }));
-    let mut vm = create_simple_vm(sender, address, funds, &code, extension);
+    };
+    let mut vm = create_simple_vm(sender, address, funds, &code, &mut extension);
     assert_eq!(
         cosmwasm_query::<AsWasmiVM<SimpleWasmiVM>>(
             &mut vm,

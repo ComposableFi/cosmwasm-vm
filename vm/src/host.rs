@@ -26,9 +26,9 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use core::fmt::Debug;
-
+use crate::bank::{Bank, BankAccountIdOf};
 use alloc::string::String;
+use core::fmt::Debug;
 use cosmwasm_minimal_std::{
     Binary, ContractInfoResponse, CosmwasmQueryResult, Event, SystemResult,
 };
@@ -37,29 +37,31 @@ pub type HostErrorOf<T> = <T as Host>::Error;
 pub type HostQueryCustomOf<T> = <T as Host>::QueryCustom;
 pub type HostMessageCustomOf<T> = <T as Host>::MessageCustom;
 
-pub trait Host {
+pub trait Host: Bank {
     type Key;
     type Value;
     type QueryCustom: serde::de::DeserializeOwned + Debug;
     type MessageCustom: serde::de::DeserializeOwned + Debug;
-    type Address;
     type Error;
-    fn db_read(&mut self, key: Self::Key) -> Result<Option<Self::Value>, Self::Error>;
-    fn db_write(&mut self, key: Self::Key, value: Self::Value) -> Result<(), Self::Error>;
-    fn abort(&mut self, message: String) -> Result<(), Self::Error>;
+    fn db_read(&mut self, key: Self::Key) -> Result<Option<Self::Value>, HostErrorOf<Self>>;
+    fn db_write(&mut self, key: Self::Key, value: Self::Value) -> Result<(), HostErrorOf<Self>>;
+    fn abort(&mut self, message: String) -> Result<(), HostErrorOf<Self>>;
     fn query_custom(
         &mut self,
         query: Self::QueryCustom,
-    ) -> Result<SystemResult<CosmwasmQueryResult>, Self::Error>;
+    ) -> Result<SystemResult<CosmwasmQueryResult>, HostErrorOf<Self>>;
     fn message_custom(
         &mut self,
         message: Self::MessageCustom,
         event_handler: &mut dyn FnMut(Event),
-    ) -> Result<Option<Binary>, Self::Error>;
+    ) -> Result<Option<Binary>, HostErrorOf<Self>>;
     fn query_raw(
         &mut self,
-        address: Self::Address,
+        address: BankAccountIdOf<Self>,
         key: Self::Key,
-    ) -> Result<Option<Self::Value>, Self::Error>;
-    fn query_info(&mut self, address: Self::Address) -> Result<ContractInfoResponse, Self::Error>;
+    ) -> Result<Option<Self::Value>, HostErrorOf<Self>>;
+    fn query_info(
+        &mut self,
+        address: BankAccountIdOf<Self>,
+    ) -> Result<ContractInfoResponse, HostErrorOf<Self>>;
 }

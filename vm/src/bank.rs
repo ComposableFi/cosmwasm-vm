@@ -1,4 +1,4 @@
-// lib.rs ---
+// bank.rs ---
 
 // Copyright (C) 2022 Hussein Ait-Lahcen
 
@@ -26,21 +26,15 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-#![no_std]
-#![feature(generic_associated_types)]
-#![feature(trait_alias)]
-#![cfg_attr(test, feature(assert_matches))]
+use cosmwasm_minimal_std::{BankQuery, Coin, CosmwasmQueryResult, SystemResult};
 
-extern crate alloc;
-
-pub mod bank;
-pub mod executor;
-pub mod input;
-pub mod memory;
-pub mod system;
-pub mod has;
-pub mod tagged;
-pub mod vm;
-pub mod loader;
-pub mod host;
-pub mod transaction;
+pub type BankErrorOf<T> = <T as Bank>::Error;
+pub type BankAccountIdOf<T> = <T as Bank>::AccountId;
+pub trait Bank {
+    type AccountId: Clone;
+    type Error;
+    fn transfer(&mut self, to: &Self::AccountId, funds: &[Coin]) -> Result<(), Self::Error>;
+    fn burn(&mut self, funds: &[Coin]) -> Result<(), Self::Error>;
+    fn query(&mut self, query: BankQuery)
+        -> Result<SystemResult<CosmwasmQueryResult>, Self::Error>;
+}
