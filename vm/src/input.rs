@@ -29,5 +29,5 @@
 pub type OutputOf<T> = <T as Input>::Output;
 
 pub trait Input {
-  type Output;
+    type Output;
 }

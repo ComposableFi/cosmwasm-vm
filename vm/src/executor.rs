@@ -39,8 +39,8 @@ use crate::{
 use alloc::vec::Vec;
 use core::{fmt::Debug, marker::PhantomData};
 use cosmwasm_minimal_std::{
-    DeserializeLimit, Env, ExecuteResult, InstantiateResult, MessageInfo, QueryResult, ReadLimit,
-    ReplyResult, Empty, MigrateResult,
+    DeserializeLimit, Empty, Env, ExecuteResult, InstantiateResult, MessageInfo, MigrateResult,
+    QueryResult, ReadLimit, ReplyResult,
 };
 use serde::de::DeserializeOwned;
 
@@ -123,12 +123,12 @@ impl<T> AsFunctionName for ReplyInput<T> {
 
 pub struct MigrateInput<T = Empty>(PhantomData<T>);
 impl<T> Input for MigrateInput<T> {
-  type Output = MigrateResult<T>;
+    type Output = MigrateResult<T>;
 }
 impl<T> AsFunctionName for MigrateInput<T> {
-  fn name() -> &'static str {
-    "migrate"
-  }
+    fn name() -> &'static str {
+        "migrate"
+    }
 }
 
 pub trait AsFunctionName {

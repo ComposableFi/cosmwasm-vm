@@ -43,9 +43,9 @@ use crate::{
 use alloc::{format, string::String, vec, vec::Vec};
 use core::fmt::Debug;
 use cosmwasm_minimal_std::{
-    Addr, BankMsg, Binary, Coin, ContractResult, CosmosMsg, CosmwasmQueryResult,
-    DeserializeLimit, Env, Event, MessageInfo, QueryRequest, QueryResult, ReadLimit, Reply,
-    ReplyOn, Response, SubMsg, SubMsgResponse, SubMsgResult, SystemResult, WasmMsg, WasmQuery,
+    Addr, BankMsg, Binary, Coin, ContractResult, CosmosMsg, CosmwasmQueryResult, DeserializeLimit,
+    Env, Event, MessageInfo, QueryRequest, QueryResult, ReadLimit, Reply, ReplyOn, Response,
+    SubMsg, SubMsgResponse, SubMsgResult, SystemResult, WasmMsg, WasmQuery,
 };
 use serde::de::DeserializeOwned;
 

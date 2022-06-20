@@ -27,5 +27,5 @@
 // DEALINGS IN THE SOFTWARE.
 
 pub trait Has<T> {
-  fn get(&self) -> T;
+    fn get(&self) -> T;
 }
