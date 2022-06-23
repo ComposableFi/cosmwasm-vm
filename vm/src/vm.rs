@@ -27,15 +27,24 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::input::Input;
+use alloc::{string::String, vec::Vec};
+use core::fmt::Debug;
+use cosmwasm_minimal_std::{
+    Binary, Coin, ContractInfoResponse, CosmwasmQueryResult, Event, QueryResult, SystemResult,
+};
+use serde::de::DeserializeOwned;
 
-pub type VmInputOf<'a, T> = <T as VM>::Input<'a>;
-pub type VmOutputOf<'a, T> = <T as VM>::Output<'a>;
-pub type VmErrorOf<T> = <T as VM>::Error;
+pub type VmInputOf<'a, T> = <T as VMBase>::Input<'a>;
+pub type VmOutputOf<'a, T> = <T as VMBase>::Output<'a>;
+pub type VmErrorOf<T> = <T as VMBase>::Error;
+pub type VmQueryCustomOf<T> = <T as VMBase>::QueryCustom;
+pub type VmMessageCustomOf<T> = <T as VMBase>::MessageCustom;
+pub type VmAddressOf<T> = <T as VMBase>::Address;
+pub type VmStorageKeyOf<T> = <T as VMBase>::StorageKey;
+pub type VmStorageValueOf<T> = <T as VMBase>::StorageValue;
+pub type VmCodeIdOf<T> = <T as VMBase>::CodeId;
 
-pub trait VM {
-    type Input<'a>;
-    type Output<'a>;
-    type Error;
+pub trait VM: VMBase {
     fn call<'a, I>(&mut self, input: I) -> Result<I::Output, Self::Error>
     where
         I: Input + TryInto<VmInputOf<'a, Self>, Error = Self::Error>,
@@ -44,7 +53,102 @@ pub trait VM {
         let input = input.try_into()?;
         Ok(self.raw_call::<I::Output>(input)?)
     }
+
     fn raw_call<'a, O>(&mut self, input: Self::Input<'a>) -> Result<O, Self::Error>
     where
         O: for<'x> TryFrom<Self::Output<'x>, Error = Self::Error>;
+}
+
+pub trait VMBase {
+    type Input<'a>;
+    type Output<'a>;
+    type QueryCustom: DeserializeOwned + Debug;
+    type MessageCustom: DeserializeOwned + Debug;
+    type CodeId;
+    type Address;
+    type StorageKey;
+    type StorageValue;
+    type Error;
+
+    fn new_contract(&mut self, code_id: Self::CodeId) -> Result<Self::Address, Self::Error>;
+
+    fn set_code_id(
+        &mut self,
+        address: Self::Address,
+        new_code_id: Self::CodeId,
+    ) -> Result<(), Self::Error>;
+
+    fn code_id(&mut self, address: Self::Address) -> Result<Self::CodeId, Self::Error>;
+
+    fn query_continuation(
+        &mut self,
+        address: Self::Address,
+        message: &[u8],
+    ) -> Result<QueryResult, Self::Error>;
+
+    fn continue_execute(
+        &mut self,
+        address: Self::Address,
+        funds: Vec<Coin>,
+        message: &[u8],
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<Option<Binary>, Self::Error>;
+
+    fn continue_instantiate(
+        &mut self,
+        address: Self::Address,
+        funds: Vec<Coin>,
+        message: &[u8],
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<Option<Binary>, Self::Error>;
+
+    fn continue_migrate(
+        &mut self,
+        address: Self::Address,
+        funds: Vec<Coin>,
+        message: &[u8],
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<Option<Binary>, Self::Error>;
+
+    fn query_custom(
+        &mut self,
+        query: Self::QueryCustom,
+    ) -> Result<SystemResult<CosmwasmQueryResult>, Self::Error>;
+
+    fn message_custom(
+        &mut self,
+        message: Self::MessageCustom,
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<Option<Binary>, Self::Error>;
+
+    fn query_raw(
+        &mut self,
+        address: Self::Address,
+        key: Self::StorageKey,
+    ) -> Result<Option<Self::StorageValue>, Self::Error>;
+
+    /// Transfer `funds` from the current bank to `to`.
+    fn transfer(&mut self, to: &Self::Address, funds: &[Coin]) -> Result<(), Self::Error>;
+
+    /// Burn the `funds` from the current contract.
+    fn burn(&mut self, funds: &[Coin]) -> Result<(), Self::Error>;
+
+    /// Query the balance of `denom` tokens.
+    fn balance(&self, account: &Self::Address, denom: String) -> Result<Coin, Self::Error>;
+
+    /// Query for the balance of all tokens.
+    fn all_balance(&self, account: &Self::Address) -> Result<Vec<Coin>, Self::Error>;
+
+    fn query_info(&mut self, address: Self::Address) -> Result<ContractInfoResponse, Self::Error>;
+
+    fn db_read(&mut self, key: Self::StorageKey)
+        -> Result<Option<Self::StorageValue>, Self::Error>;
+
+    fn db_write(
+        &mut self,
+        key: Self::StorageKey,
+        value: Self::StorageValue,
+    ) -> Result<(), Self::Error>;
+
+    fn abort(&mut self, message: String) -> Result<(), Self::Error>;
 }

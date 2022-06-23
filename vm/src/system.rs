@@ -27,25 +27,24 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::{
-    bank::{Bank, BankAccountIdOf, BankErrorOf},
     executor::{
-        cosmwasm_call, AllocateInput, CosmwasmCallInput, CosmwasmQueryInput, DeallocateInput,
-        ExecuteInput, ExecutorError, InstantiateInput, MigrateInput, ReplyInput,
+        cosmwasm_call, AllocateInput, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
+        CosmwasmQueryInput, DeallocateInput, ExecuteInput, ExecutorError, HasInfo,
+        InstantiateInput, MigrateInput, ReplyInput,
     },
     has::Has,
-    host::{Host, HostErrorOf},
-    input::Input,
-    loader::{Loader, LoaderErrorOf},
+    input::{Input, OutputOf},
     memory::{PointerOf, ReadWriteMemory, ReadableMemoryErrorOf, WritableMemoryErrorOf},
     transaction::{Transactional, TransactionalErrorOf},
-    vm::{VmErrorOf, VmInputOf, VmOutputOf, VM},
+    vm::{VmAddressOf, VmErrorOf, VmInputOf, VmMessageCustomOf, VmOutputOf, VmQueryCustomOf, VM},
 };
 use alloc::{format, string::String, vec, vec::Vec};
 use core::fmt::Debug;
 use cosmwasm_minimal_std::{
-    Addr, BankMsg, Binary, Coin, ContractResult, CosmosMsg, CosmwasmQueryResult, DeserializeLimit,
-    Env, Event, MessageInfo, QueryRequest, QueryResult, ReadLimit, Reply, ReplyOn, Response,
-    SubMsg, SubMsgResponse, SubMsgResult, SystemResult, WasmMsg, WasmQuery,
+    Addr, AllBalanceResponse, BalanceResponse, BankMsg, BankQuery, Binary, ContractResult,
+    CosmosMsg, CosmwasmQueryResult, DeserializeLimit, Env, Event, MessageInfo, QueryRequest,
+    QueryResult, ReadLimit, Reply, ReplyOn, Response, SubMsg, SubMsgResponse, SubMsgResult,
+    SystemResult, WasmMsg, WasmQuery,
 };
 use serde::de::DeserializeOwned;
 
@@ -66,61 +65,73 @@ enum SubCallContinuation<E> {
 
 pub type CosmwasmCodeId = u64;
 
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CosmwasmContractMeta {
     pub code_id: CosmwasmCodeId,
     pub admin: Option<String>,
     pub label: String,
 }
 
-pub trait CosmwasmBaseVM = VM
+pub trait CosmwasmBaseVM = VM<CodeId = CosmwasmContractMeta, StorageKey = Vec<u8>, StorageValue = Vec<u8>>
     + ReadWriteMemory
     + Transactional
-    + Loader<CodeId = CosmwasmContractMeta, Input = Vec<Coin>, Output = Self>
-    + Bank
-    + Host<Key = Vec<u8>, Value = Vec<u8>>
     + Has<Env>
     + Has<MessageInfo>
 where
-    BankAccountIdOf<Self>:
-        TryFrom<Addr, Error = VmErrorOf<Self>> + TryFrom<String, Error = VmErrorOf<Self>>,
+    VmMessageCustomOf<Self>: DeserializeOwned + Debug,
+    VmQueryCustomOf<Self>: DeserializeOwned + Debug,
+    VmAddressOf<Self>:
+        Clone + TryFrom<Addr, Error = VmErrorOf<Self>> + TryFrom<String, Error = VmErrorOf<Self>>,
     VmErrorOf<Self>: From<ReadableMemoryErrorOf<Self>>
         + From<WritableMemoryErrorOf<Self>>
         + From<ExecutorError>
         + From<SystemError>
         + From<TransactionalErrorOf<Self>>
-        + From<LoaderErrorOf<Self>>
-        + From<BankErrorOf<Self>>
-        + From<HostErrorOf<Self>>
         + Debug,
     for<'x> VmInputOf<'x, Self>: TryFrom<AllocateInput<PointerOf<Self>>, Error = VmErrorOf<Self>>,
     PointerOf<Self>: for<'x> TryFrom<VmOutputOf<'x, Self>, Error = VmErrorOf<Self>>;
 
-pub trait CosmwasmCallVM<T> = CosmwasmBaseVM + Host<MessageCustom = T>
+pub trait CosmwasmCallVM<I> = CosmwasmBaseVM
 where
-    T: serde::de::DeserializeOwned + Debug,
     for<'x> VmInputOf<'x, Self>: TryFrom<DeallocateInput<PointerOf<Self>>, Error = VmErrorOf<Self>>
         + TryFrom<
-            CosmwasmCallInput<'x, PointerOf<Self>, InstantiateInput<T>>,
+            CosmwasmCallInput<'x, PointerOf<Self>, InstantiateInput<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
-        > + TryFrom<CosmwasmCallInput<'x, PointerOf<Self>, ExecuteInput<T>>, Error = VmErrorOf<Self>>
-        + TryFrom<CosmwasmCallInput<'x, PointerOf<Self>, ReplyInput<T>>, Error = VmErrorOf<Self>>
-        + TryFrom<CosmwasmCallInput<'x, PointerOf<Self>, MigrateInput<T>>, Error = VmErrorOf<Self>>;
+        > + TryFrom<
+            CosmwasmCallInput<'x, PointerOf<Self>, ExecuteInput<VmMessageCustomOf<Self>>>,
+            Error = VmErrorOf<Self>,
+        > + TryFrom<
+            CosmwasmCallInput<'x, PointerOf<Self>, ReplyInput<VmMessageCustomOf<Self>>>,
+            Error = VmErrorOf<Self>,
+        > + TryFrom<
+            CosmwasmCallWithoutInfoInput<'x, PointerOf<Self>, ReplyInput<VmMessageCustomOf<Self>>>,
+            Error = VmErrorOf<Self>,
+        > + TryFrom<
+            CosmwasmCallWithoutInfoInput<
+                'x,
+                PointerOf<Self>,
+                MigrateInput<VmMessageCustomOf<Self>>,
+            >,
+            Error = VmErrorOf<Self>,
+        > + TryFrom<CosmwasmCallInput<'x, PointerOf<Self>, I>, Error = VmErrorOf<Self>>
+        + TryFrom<CosmwasmCallWithoutInfoInput<'x, PointerOf<Self>, I>, Error = VmErrorOf<Self>>,
+    I: Input + HasInfo,
+    OutputOf<I>: DeserializeOwned
+        + ReadLimit
+        + DeserializeLimit
+        + Into<ContractResult<Response<VmMessageCustomOf<Self>>>>;
 
-pub trait CosmwasmQueryVM<T> = CosmwasmBaseVM + Host<QueryCustom = T>
+pub trait CosmwasmQueryVM = CosmwasmBaseVM
 where
-    T: serde::de::DeserializeOwned + Debug,
     for<'x> VmInputOf<'x, Self>:
         TryFrom<CosmwasmQueryInput<'x, PointerOf<Self>>, Error = VmErrorOf<Self>>;
 
-pub fn cosmwasm_system_entrypoint<I, V, T>(
+pub fn cosmwasm_system_entrypoint<I, V>(
     vm: &mut V,
     message: &[u8],
 ) -> Result<(Option<Binary>, Vec<Event>), VmErrorOf<V>>
 where
-    V: CosmwasmCallVM<T>,
-    I: Input,
-    I::Output: DeserializeOwned + ReadLimit + DeserializeLimit + Into<ContractResult<Response<T>>>,
-    for<'x> VmInputOf<'x, V>: TryFrom<CosmwasmCallInput<'x, PointerOf<V>, I>, Error = VmErrorOf<V>>,
+    V: CosmwasmCallVM<I>,
 {
     log::debug!("SystemEntrypoint");
     let mut events = Vec::<Event>::new();
@@ -128,7 +139,7 @@ where
         events.push(event);
     };
     vm.transaction_begin()?;
-    match cosmwasm_system_run::<I, V, T>(vm, message, &mut event_handler) {
+    match cosmwasm_system_run::<I, V>(vm, message, &mut event_handler) {
         Ok(data) => {
             vm.transaction_commit()?;
             Ok((data, events))
@@ -140,16 +151,13 @@ where
     }
 }
 
-pub fn cosmwasm_system_run<I, V, T>(
+pub fn cosmwasm_system_run<I, V>(
     vm: &mut V,
     message: &[u8],
     mut event_handler: &mut dyn FnMut(Event),
 ) -> Result<Option<Binary>, VmErrorOf<V>>
 where
-    V: CosmwasmCallVM<T>,
-    I: Input,
-    I::Output: DeserializeOwned + ReadLimit + DeserializeLimit + Into<ContractResult<Response<T>>>,
-    for<'x> VmInputOf<'x, V>: TryFrom<CosmwasmCallInput<'x, PointerOf<V>, I>, Error = VmErrorOf<V>>,
+    V: CosmwasmCallVM<I>,
 {
     log::debug!("SystemRun");
     let env: Env = vm.get();
@@ -207,13 +215,12 @@ where
                             } => {
                                 let vm_contract_addr = contract_addr.try_into()?;
                                 vm.transfer(&vm_contract_addr, &funds)?;
-                                vm.execution_continuation::<ExecuteInput<T>>(
+                                vm.continue_execute(
                                     vm_contract_addr,
                                     vec![],
                                     &msg,
                                     &mut sub_event_handler,
                                 )
-                                .map_err(Into::into)
                             }
                             WasmMsg::Instantiate {
                                 admin,
@@ -222,27 +229,25 @@ where
                                 funds,
                                 label,
                             } => {
-                                let vm_contract_addr = vm.new(CosmwasmContractMeta {
+                                let vm_contract_addr = vm.new_contract(CosmwasmContractMeta {
                                     code_id,
                                     admin,
                                     label,
                                 })?;
                                 vm.transfer(&vm_contract_addr, &funds)?;
-                                vm.execution_continuation::<InstantiateInput<T>>(
+                                vm.continue_instantiate(
                                     vm_contract_addr,
                                     funds,
                                     &msg,
                                     &mut sub_event_handler,
                                 )
-                                .map_err(Into::into)
                             }
                             WasmMsg::Migrate {
                                 contract_addr,
                                 new_code_id,
                                 msg: Binary(msg),
                             } => {
-                                let vm_contract_addr =
-                                    BankAccountIdOf::<V>::try_from(contract_addr)?;
+                                let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
                                 let CosmwasmContractMeta { admin, label, .. } =
                                     vm.code_id(vm_contract_addr.clone())?;
                                 ensure_admin(&admin)?;
@@ -254,20 +259,18 @@ where
                                         label,
                                     },
                                 )?;
-                                vm.execution_continuation::<MigrateInput<T>>(
+                                vm.continue_migrate(
                                     vm_contract_addr,
                                     vec![],
                                     &msg,
                                     &mut sub_event_handler,
                                 )
-                                .map_err(Into::into)
                             }
                             WasmMsg::UpdateAdmin {
                                 contract_addr,
                                 admin: new_admin,
                             } => {
-                                let vm_contract_addr =
-                                    BankAccountIdOf::<V>::try_from(contract_addr)?;
+                                let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
                                 let CosmwasmContractMeta {
                                     code_id,
                                     admin,
@@ -285,8 +288,7 @@ where
                                 Ok(None)
                             }
                             WasmMsg::ClearAdmin { contract_addr } => {
-                                let vm_contract_addr =
-                                    BankAccountIdOf::<V>::try_from(contract_addr)?;
+                                let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
                                 let CosmwasmContractMeta {
                                     code_id,
                                     admin,
@@ -354,12 +356,13 @@ where
                         SubCallContinuation::Abort(e) => Err(e),
                         // Might be overwritten again.
                         SubCallContinuation::Reply(response) => {
+                            log::debug!("Replying");
                             let raw_response = serde_json::to_vec(&Reply {
                                 id,
                                 result: response,
                             })
                             .map_err(|_| SystemError::FailedToSerialize)?;
-                            cosmwasm_system_run::<ReplyInput<T>, V, T>(
+                            cosmwasm_system_run::<ReplyInput<VmMessageCustomOf<V>>, V>(
                                 vm,
                                 &raw_response,
                                 &mut event_handler,
@@ -375,17 +378,36 @@ where
     }
 }
 
-pub fn cosmwasm_system_query<V, T>(
+pub fn cosmwasm_system_query<V>(
     vm: &mut V,
-    request: QueryRequest<T>,
+    request: QueryRequest<VmQueryCustomOf<V>>,
 ) -> Result<SystemResult<CosmwasmQueryResult>, VmErrorOf<V>>
 where
-    V: CosmwasmQueryVM<T>,
+    V: CosmwasmQueryVM,
 {
     log::debug!("SystemQuery");
     match request {
         QueryRequest::Custom(query) => Ok(vm.query_custom(query)?),
-        QueryRequest::Bank(query) => Ok(vm.query(query)?),
+        QueryRequest::Bank(bank_query) => match bank_query {
+            BankQuery::Balance { address, denom } => {
+                let vm_account_addr = address.try_into()?;
+                let amount = vm.balance(&vm_account_addr, denom)?;
+                let serialized_info = serde_json::to_vec(&BalanceResponse { amount })
+                    .map_err(|_| SystemError::FailedToSerialize)?;
+                Ok(SystemResult::Ok(ContractResult::Ok(Binary(
+                    serialized_info,
+                ))))
+            }
+            BankQuery::AllBalances { address } => {
+                let vm_account_addr = address.try_into()?;
+                let amount = vm.all_balance(&vm_account_addr)?;
+                let serialized_info = serde_json::to_vec(&AllBalanceResponse { amount })
+                    .map_err(|_| SystemError::FailedToSerialize)?;
+                Ok(SystemResult::Ok(ContractResult::Ok(Binary(
+                    serialized_info,
+                ))))
+            }
+        },
         QueryRequest::Wasm(wasm_query) => match wasm_query {
             WasmQuery::Smart {
                 contract_addr,
@@ -418,12 +440,12 @@ where
     }
 }
 
-pub fn cosmwasm_system_query_raw<V, T>(
+pub fn cosmwasm_system_query_raw<V>(
     vm: &mut V,
-    request: QueryRequest<T>,
+    request: QueryRequest<VmQueryCustomOf<V>>,
 ) -> Result<Binary, VmErrorOf<V>>
 where
-    V: CosmwasmQueryVM<T>,
+    V: CosmwasmQueryVM,
 {
     log::debug!("SystemQueryRaw");
     let output = cosmwasm_system_query(vm, request)?;

@@ -28,7 +28,7 @@
 
 use crate::{
     has::Has,
-    input::{Input, OutputOf},
+    input::Input,
     memory::{
         LimitedRead, RawFromRegion, RawIntoRegion, ReadWriteMemory, ReadableMemory,
         ReadableMemoryErrorOf, WritableMemoryErrorOf, Write,
@@ -44,12 +44,7 @@ use cosmwasm_minimal_std::{
 };
 use serde::de::DeserializeOwned;
 
-pub trait Environment {
-    type Query: Input;
-    type Error;
-    fn query(query: Self::Query) -> Result<OutputOf<Self::Query>, Self::Error>;
-}
-
+/// The type representing a call to a contract `allocate` export.
 pub struct AllocateInput<Pointer>(pub Pointer);
 impl<Pointer> Input for AllocateInput<Pointer> {
     type Output = Pointer;
@@ -61,6 +56,8 @@ impl<Pointer> AsFunctionName for AllocateInput<Pointer> {
 }
 
 pub struct Unit;
+
+/// The type representing a call to a contract `deallocate` export.
 pub struct DeallocateInput<Pointer>(pub Pointer);
 impl<Pointer> Input for DeallocateInput<Pointer> {
     type Output = Unit;
@@ -71,6 +68,7 @@ impl<Pointer> AsFunctionName for DeallocateInput<Pointer> {
     }
 }
 
+/// The type representing a call to a contract `query` export.
 pub struct CosmwasmQueryInput<'a, Pointer>(pub Tagged<Pointer, Env>, pub Tagged<Pointer, &'a [u8]>);
 impl<'a, Pointer> Input for CosmwasmQueryInput<'a, Pointer> {
     type Output = Pointer;
@@ -79,6 +77,74 @@ impl<'a, Pointer> AsFunctionName for CosmwasmQueryInput<'a, Pointer> {
     fn name() -> &'static str {
         "query"
     }
+}
+
+/// The type representing a call to a contract `instantiate` export.
+pub struct InstantiateInput<T = Empty>(PhantomData<T>);
+impl<T> Input for InstantiateInput<T> {
+    type Output = InstantiateResult<T>;
+}
+impl<T> AsFunctionName for InstantiateInput<T> {
+    fn name() -> &'static str {
+        "instantiate"
+    }
+}
+impl<T> HasInfo for InstantiateInput<T> {
+    fn has_info() -> bool {
+        true
+    }
+}
+
+/// The type representing a call to a contract `execute` export.
+pub struct ExecuteInput<T = Empty>(PhantomData<T>);
+impl<T> Input for ExecuteInput<T> {
+    type Output = ExecuteResult<T>;
+}
+impl<T> AsFunctionName for ExecuteInput<T> {
+    fn name() -> &'static str {
+        "execute"
+    }
+}
+impl<T> HasInfo for ExecuteInput<T> {
+    fn has_info() -> bool {
+        true
+    }
+}
+
+/// The type representing a call to a contract `reply` export.
+pub struct ReplyInput<T = Empty>(PhantomData<T>);
+impl<T> Input for ReplyInput<T> {
+    type Output = ReplyResult<T>;
+}
+impl<T> AsFunctionName for ReplyInput<T> {
+    fn name() -> &'static str {
+        "reply"
+    }
+}
+impl<T> HasInfo for ReplyInput<T> {
+    fn has_info() -> bool {
+        false
+    }
+}
+
+/// The type representing a call to a contract `migrate` export.
+pub struct MigrateInput<T = Empty>(PhantomData<T>);
+impl<T> Input for MigrateInput<T> {
+    type Output = MigrateResult<T>;
+}
+impl<T> AsFunctionName for MigrateInput<T> {
+    fn name() -> &'static str {
+        "migrate"
+    }
+}
+impl<T> HasInfo for MigrateInput<T> {
+    fn has_info() -> bool {
+        false
+    }
+}
+
+pub trait AsFunctionName {
+    fn name() -> &'static str;
 }
 
 pub struct CosmwasmCallInput<'a, Pointer, I>(
@@ -91,48 +157,18 @@ impl<'a, Pointer, I: Input> Input for CosmwasmCallInput<'a, Pointer, I> {
     type Output = Pointer;
 }
 
-pub struct InstantiateInput<T = Empty>(PhantomData<T>);
-impl<T> Input for InstantiateInput<T> {
-    type Output = InstantiateResult<T>;
-}
-impl<T> AsFunctionName for InstantiateInput<T> {
-    fn name() -> &'static str {
-        "instantiate"
-    }
+pub struct CosmwasmCallWithoutInfoInput<'a, Pointer, I>(
+    pub Tagged<Pointer, Env>,
+    pub Tagged<Pointer, &'a [u8]>,
+    pub PhantomData<I>,
+);
+
+impl<'a, Pointer, I: Input> Input for CosmwasmCallWithoutInfoInput<'a, Pointer, I> {
+    type Output = Pointer;
 }
 
-pub struct ExecuteInput<T = Empty>(PhantomData<T>);
-impl<T> Input for ExecuteInput<T> {
-    type Output = ExecuteResult<T>;
-}
-impl<T> AsFunctionName for ExecuteInput<T> {
-    fn name() -> &'static str {
-        "execute"
-    }
-}
-
-pub struct ReplyInput<T = Empty>(PhantomData<T>);
-impl<T> Input for ReplyInput<T> {
-    type Output = ReplyResult<T>;
-}
-impl<T> AsFunctionName for ReplyInput<T> {
-    fn name() -> &'static str {
-        "reply"
-    }
-}
-
-pub struct MigrateInput<T = Empty>(PhantomData<T>);
-impl<T> Input for MigrateInput<T> {
-    type Output = MigrateResult<T>;
-}
-impl<T> AsFunctionName for MigrateInput<T> {
-    fn name() -> &'static str {
-        "migrate"
-    }
-}
-
-pub trait AsFunctionName {
-    fn name() -> &'static str;
+pub trait HasInfo {
+    fn has_info() -> bool;
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -180,6 +216,7 @@ pub mod constants {
     pub const MAX_LENGTH_ABORT: usize = 2 * MI;
 }
 
+/// Allow for untyped marshalling to specify a limit while extracting the bytes from a contract memory.
 pub struct ConstantReadLimit<const K: usize>;
 impl<const K: usize> ReadLimit for ConstantReadLimit<K> {
     fn read_limit() -> usize {
@@ -187,6 +224,15 @@ impl<const K: usize> ReadLimit for ConstantReadLimit<K> {
     }
 }
 
+/// Allocate a chunk of bytes from the contract memory.
+///
+/// # Arguments
+///
+/// * `vm` - the virtual machine running a contract.
+/// * `len` - the len of the chunk to allocate.
+///
+/// Returns the chunk pointer.
+///
 pub fn allocate<V, P, L>(vm: &mut V, len: L) -> Result<P, VmErrorOf<V>>
 where
     V: VM,
@@ -200,6 +246,13 @@ where
     Ok(result)
 }
 
+/// Deallocate a previously allocated chunk from a contract memory.
+///
+/// # Arguments
+///
+/// * `vm` - the virtual machine running a contract.
+///
+///
 pub fn deallocate<V, P, L>(vm: &mut V, pointer: L) -> Result<(), VmErrorOf<V>>
 where
     V: VM,
@@ -215,6 +268,8 @@ where
     Ok(())
 }
 
+/// Passthrough raw bytes into a contract memory via an allocated chunk.
+///
 pub fn passthrough_in<V, T>(vm: &mut V, data: &[u8]) -> Result<Tagged<V::Pointer, T>, VmErrorOf<V>>
 where
     V: VM + ReadWriteMemory,
@@ -229,6 +284,7 @@ where
     Ok(Tagged::new(pointer))
 }
 
+///
 pub fn passthrough_out<V, T>(vm: &V, pointer: V::Pointer) -> Result<Vec<u8>, VmErrorOf<V>>
 where
     V: VM + ReadableMemory,
@@ -283,24 +339,37 @@ where
 pub fn cosmwasm_call<I, V>(vm: &mut V, message: &[u8]) -> Result<I::Output, VmErrorOf<V>>
 where
     V: VM + ReadWriteMemory + Has<Env> + Has<MessageInfo>,
-    I: Input,
+    I: Input + HasInfo,
     I::Output: DeserializeOwned + ReadLimit + DeserializeLimit,
     V::Pointer: for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
     for<'x> VmInputOf<'x, V>: TryFrom<AllocateInput<V::Pointer>, Error = VmErrorOf<V>>
-        + TryFrom<CosmwasmCallInput<'x, V::Pointer, I>, Error = VmErrorOf<V>>,
+        + TryFrom<CosmwasmCallInput<'x, V::Pointer, I>, Error = VmErrorOf<V>>
+        + TryFrom<CosmwasmCallWithoutInfoInput<'x, V::Pointer, I>, Error = VmErrorOf<V>>,
     VmErrorOf<V>:
         From<ReadableMemoryErrorOf<V>> + From<WritableMemoryErrorOf<V>> + From<ExecutorError>,
 {
     log::trace!("Call");
     let env = vm.get();
-    let info = vm.get();
-    let input = CosmwasmCallInput(
-        marshall_in(vm, &env)?,
-        marshall_in(vm, &info)?,
-        passthrough_in(vm, message)?,
-        PhantomData,
-    );
-    let pointer = vm.call(input)?;
+    let pointer = match I::has_info() {
+        true => {
+            let info = vm.get();
+            let input = CosmwasmCallInput(
+                marshall_in(vm, &env)?,
+                marshall_in(vm, &info)?,
+                passthrough_in(vm, message)?,
+                PhantomData,
+            );
+            vm.call(input)
+        }
+        false => {
+            let input = CosmwasmCallWithoutInfoInput(
+                marshall_in(vm, &env)?,
+                passthrough_in(vm, message)?,
+                PhantomData,
+            );
+            vm.call(input)
+        }
+    }?;
     marshall_out(vm, pointer)
 }
 

@@ -51,7 +51,6 @@ use core::fmt::Display;
 use core::marker::PhantomData;
 use core::num::TryFromIntError;
 use cosmwasm_minimal_std::Addr;
-use cosmwasm_minimal_std::BankQuery;
 use cosmwasm_minimal_std::Binary;
 use cosmwasm_minimal_std::Coin;
 use cosmwasm_minimal_std::ContractInfoResponse;
@@ -60,30 +59,24 @@ use cosmwasm_minimal_std::Env;
 use cosmwasm_minimal_std::Event;
 use cosmwasm_minimal_std::MessageInfo;
 use cosmwasm_minimal_std::SystemResult;
-use cosmwasm_vm::bank::Bank;
-use cosmwasm_vm::bank::BankAccountIdOf;
-use cosmwasm_vm::bank::BankErrorOf;
 use cosmwasm_vm::executor::AllocateInput;
 use cosmwasm_vm::executor::AsFunctionName;
 use cosmwasm_vm::executor::CosmwasmCallInput;
+use cosmwasm_vm::executor::CosmwasmCallWithoutInfoInput;
 use cosmwasm_vm::executor::CosmwasmQueryInput;
 use cosmwasm_vm::executor::DeallocateInput;
 use cosmwasm_vm::executor::ExecutorError;
 use cosmwasm_vm::executor::Unit;
 use cosmwasm_vm::has::Has;
-use cosmwasm_vm::host::Host;
-use cosmwasm_vm::host::HostErrorOf;
-use cosmwasm_vm::loader::Loader;
-use cosmwasm_vm::loader::LoaderCodeIdOf;
-use cosmwasm_vm::loader::LoaderErrorOf;
-use cosmwasm_vm::loader::LoaderInputOf;
-use cosmwasm_vm::loader::LoaderOutputOf;
 use cosmwasm_vm::memory::MemoryReadError;
 use cosmwasm_vm::memory::MemoryWriteError;
 use cosmwasm_vm::memory::Pointable;
+use cosmwasm_vm::memory::PointerOf;
 use cosmwasm_vm::memory::ReadWriteMemory;
 use cosmwasm_vm::memory::ReadableMemory;
+use cosmwasm_vm::memory::ReadableMemoryErrorOf;
 use cosmwasm_vm::memory::WritableMemory;
+use cosmwasm_vm::memory::WritableMemoryErrorOf;
 use cosmwasm_vm::system::CosmwasmContractMeta;
 use cosmwasm_vm::system::SystemError;
 use cosmwasm_vm::tagged::Tagged;
@@ -105,9 +98,10 @@ pub type WasmiFunctionArgs<'a> = (Vec<RuntimeValue>, PhantomData<&'a ()>);
 pub struct WasmiModuleName(String);
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct WasmiHostFunctionIndex(usize);
-pub type WasmiHostFunction<T, E> = fn(&mut T, &[RuntimeValue]) -> Result<Option<RuntimeValue>, E>;
-pub type WasmiHostModule<T, E> =
-    BTreeMap<WasmiFunctionName, (WasmiHostFunctionIndex, WasmiHostFunction<T, E>)>;
+pub type WasmiHostFunction<T> =
+    fn(&mut AsWasmiVM<T>, &[RuntimeValue]) -> Result<Option<RuntimeValue>, VmErrorOf<T>>;
+pub type WasmiHostModule<T> =
+    BTreeMap<WasmiFunctionName, (WasmiHostFunctionIndex, WasmiHostFunction<T>)>;
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum WasmiVMError {
@@ -166,71 +160,63 @@ impl Display for WasmiVMError {
         write!(f, "{:?}", self)
     }
 }
-impl HostError for WasmiVMError {}
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-#[repr(transparent)]
-pub struct AsWasmiVM<T>(T);
-
-pub trait IsWasmiVM<T> = where
-    T: MinWasmiVM<T>
-        + Transactional
-        + Loader<CodeId = CosmwasmContractMeta, Input = Vec<Coin>, Output = AsWasmiVM<T>>
-        + Bank
-        + Host<Key = Vec<u8>, Value = Vec<u8>>
-        + Has<Env>
-        + Has<MessageInfo>,
-    IsWasmiVMErrorOf<T>: From<MemoryReadError>
+pub trait WasmiBaseVM = WasmiModuleExecutor
+    + WasmiExternals
+    + VMBase<CodeId = CosmwasmContractMeta, StorageKey = Vec<u8>, StorageValue = Vec<u8>>
+    + ReadWriteMemory<Pointer = u32>
+    + Transactional
+    + Has<Env>
+    + Has<MessageInfo>
+where
+    VmAddressOf<Self>:
+        Clone + TryFrom<Addr, Error = VmErrorOf<Self>> + TryFrom<String, Error = VmErrorOf<Self>>,
+    VmErrorOf<Self>: From<WasmiVMError>
+        + From<MemoryReadError>
         + From<MemoryWriteError>
+        + From<ReadableMemoryErrorOf<Self>>
+        + From<WritableMemoryErrorOf<Self>>
         + From<ExecutorError>
         + From<SystemError>
-        + From<TransactionalErrorOf<T>>
-        + From<LoaderErrorOf<T>>
-        + From<BankErrorOf<T>>
-        + From<WasmiVMError>
-        + From<HostErrorOf<T>>
-        + HostError
-        + Debug,
-    BankAccountIdOf<T>:
-        TryFrom<Addr, Error = IsWasmiVMErrorOf<T>> + TryFrom<String, Error = IsWasmiVMErrorOf<T>>;
+        + From<TransactionalErrorOf<Self>>
+        + Debug
+        + HostError,
+    ReadableMemoryErrorOf<Self>: From<MemoryReadError>,
+    WritableMemoryErrorOf<Self>: From<MemoryWriteError>;
 
-pub type IsWasmiVMErrorOf<T> = <T as MinWasmiVM<T>>::Error;
-
-pub trait MinWasmiVM<T> {
-    type Error;
-    fn host_functions_definitions(
-        &self,
-    ) -> &BTreeMap<WasmiModuleName, WasmiHostModule<AsWasmiVM<T>, <Self as MinWasmiVM<T>>::Error>>;
-    fn host_functions(
-        &self,
-    ) -> &BTreeMap<
-        WasmiHostFunctionIndex,
-        WasmiHostFunction<AsWasmiVM<T>, <Self as MinWasmiVM<T>>::Error>,
-    >;
-    fn module(&self) -> WasmiModule;
+pub trait WasmiModuleExecutor: Sized {
+    fn executing_module(&self) -> WasmiModule;
 }
 
+pub trait WasmiExternals: Sized + VMBase {
+    fn host_functions(&self) -> &BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<Self>>;
+}
+
+pub struct AsWasmiVM<T>(T);
 impl<T> Externals for AsWasmiVM<T>
 where
-    T: IsWasmiVM<T>,
+    T: WasmiBaseVM,
 {
     fn invoke_index(
         &mut self,
         index: usize,
         args: wasmi::RuntimeArgs,
     ) -> Result<Option<RuntimeValue>, wasmi::Trap> {
-        Ok((self
+        Ok(self
             .0
             .host_functions()
             .get(&WasmiHostFunctionIndex(index))
-            .ok_or(WasmiVMError::HostFunctionNotFound(
-                WasmiHostFunctionIndex(index),
-            ))?)(self, args.as_ref())?)
+            .ok_or(VmErrorOf::<T>::from(
+                WasmiVMError::HostFunctionNotFound(WasmiHostFunctionIndex(index)),
+            ))?(self, args.as_ref())?)
     }
 }
 
-pub struct WasmiImportResolver<T, E>(BTreeMap<WasmiModuleName, WasmiHostModule<T, E>>);
-impl<T, E> ImportResolver for WasmiImportResolver<T, E> {
+pub struct WasmiImportResolver<T: VMBase>(BTreeMap<WasmiModuleName, WasmiHostModule<T>>);
+impl<T> ImportResolver for WasmiImportResolver<T>
+where
+    T: WasmiBaseVM,
+{
     fn resolve_func(
         &self,
         module_name: &str,
@@ -299,12 +285,12 @@ pub struct WasmiModule {
     memory: wasmi::MemoryRef,
 }
 
-impl<'a, T> TryFrom<WasmiOutput<'a, T>> for RuntimeValue
+impl<'a, T> TryFrom<WasmiOutput<'a, AsWasmiVM<T>>> for RuntimeValue
 where
-    T: IsWasmiVM<T>,
+    T: WasmiBaseVM,
 {
-    type Error = IsWasmiVMErrorOf<T>;
-    fn try_from(WasmiOutput(value, _): WasmiOutput<'a, T>) -> Result<Self, Self::Error> {
+    type Error = VmErrorOf<T>;
+    fn try_from(WasmiOutput(value, _): WasmiOutput<'a, AsWasmiVM<T>>) -> Result<Self, Self::Error> {
         match value {
             Either::Right((_, rt_value)) => Ok(rt_value),
             _ => Err(WasmiVMError::UnexpectedUnit.into()),
@@ -312,12 +298,12 @@ where
     }
 }
 
-impl<'a, T> TryFrom<WasmiOutput<'a, T>> for Unit
+impl<'a, T> TryFrom<WasmiOutput<'a, AsWasmiVM<T>>> for Unit
 where
-    T: IsWasmiVM<T>,
+    T: WasmiBaseVM,
 {
-    type Error = IsWasmiVMErrorOf<T>;
-    fn try_from(WasmiOutput(value, _): WasmiOutput<'a, T>) -> Result<Self, Self::Error> {
+    type Error = VmErrorOf<T>;
+    fn try_from(WasmiOutput(value, _): WasmiOutput<'a, AsWasmiVM<T>>) -> Result<Self, Self::Error> {
         match value {
             Either::Left(_) => Ok(Unit),
             _ => Err(WasmiVMError::ExpectedUnit.into()),
@@ -325,12 +311,12 @@ where
     }
 }
 
-impl<'a, T> TryFrom<WasmiOutput<'a, T>> for u32
+impl<'a, T> TryFrom<WasmiOutput<'a, AsWasmiVM<T>>> for u32
 where
-    T: IsWasmiVM<T>,
+    T: WasmiBaseVM,
 {
-    type Error = IsWasmiVMErrorOf<T>;
-    fn try_from(WasmiOutput(value, _): WasmiOutput<'a, T>) -> Result<Self, Self::Error> {
+    type Error = VmErrorOf<T>;
+    fn try_from(WasmiOutput(value, _): WasmiOutput<'a, AsWasmiVM<T>>) -> Result<Self, Self::Error> {
         match value {
             Either::Right((_, RuntimeValue::I32(rt_value))) => Ok(rt_value as u32),
             _ => Err(WasmiVMError::UnexpectedUnit.into()),
@@ -338,11 +324,11 @@ where
     }
 }
 
-impl<'a, T> TryFrom<AllocateInput<u32>> for WasmiInput<'a, T>
+impl<'a, T> TryFrom<AllocateInput<u32>> for WasmiInput<'a, AsWasmiVM<T>>
 where
-    T: IsWasmiVM<T>,
+    T: WasmiBaseVM,
 {
-    type Error = IsWasmiVMErrorOf<T>;
+    type Error = VmErrorOf<T>;
     fn try_from(AllocateInput(ptr): AllocateInput<u32>) -> Result<Self, Self::Error> {
         Ok(WasmiInput(
             WasmiFunctionName(AllocateInput::<u32>::name().into()),
@@ -352,11 +338,11 @@ where
     }
 }
 
-impl<'a, T> TryFrom<DeallocateInput<u32>> for WasmiInput<'a, T>
+impl<'a, T> TryFrom<DeallocateInput<u32>> for WasmiInput<'a, AsWasmiVM<T>>
 where
-    T: IsWasmiVM<T>,
+    T: WasmiBaseVM,
 {
-    type Error = IsWasmiVMErrorOf<T>;
+    type Error = VmErrorOf<T>;
     fn try_from(DeallocateInput(ptr): DeallocateInput<u32>) -> Result<Self, Self::Error> {
         Ok(WasmiInput(
             WasmiFunctionName(DeallocateInput::<u32>::name().into()),
@@ -366,11 +352,11 @@ where
     }
 }
 
-impl<'a, T> TryFrom<CosmwasmQueryInput<'a, u32>> for WasmiInput<'a, T>
+impl<'a, T> TryFrom<CosmwasmQueryInput<'a, u32>> for WasmiInput<'a, AsWasmiVM<T>>
 where
-    T: IsWasmiVM<T>,
+    T: WasmiBaseVM,
 {
-    type Error = IsWasmiVMErrorOf<T>;
+    type Error = VmErrorOf<T>;
     fn try_from(
         CosmwasmQueryInput(Tagged(env_ptr, _), Tagged(msg_ptr, _)): CosmwasmQueryInput<'a, u32>,
     ) -> Result<Self, Self::Error> {
@@ -388,12 +374,12 @@ where
     }
 }
 
-impl<'a, I, T> TryFrom<CosmwasmCallInput<'a, u32, I>> for WasmiInput<'a, T>
+impl<'a, I, T> TryFrom<CosmwasmCallInput<'a, u32, I>> for WasmiInput<'a, AsWasmiVM<T>>
 where
-    T: IsWasmiVM<T>,
+    T: WasmiBaseVM,
     I: AsFunctionName,
 {
-    type Error = IsWasmiVMErrorOf<T>;
+    type Error = VmErrorOf<T>;
     fn try_from(
         CosmwasmCallInput(Tagged(env_ptr, _), Tagged(info_ptr, _), Tagged(msg_ptr, _), _): CosmwasmCallInput<'a, u32, I>,
     ) -> Result<Self, Self::Error> {
@@ -412,42 +398,37 @@ where
     }
 }
 
-impl<T: Has<U>, U> Has<U> for AsWasmiVM<T> {
-    fn get(&self) -> U {
-        self.0.get()
-    }
-}
-
-pub fn new_wasmi_vm<T>(
-    resolver: &WasmiImportResolver<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>,
-    code: &[u8],
-) -> Result<WasmiModule, WasmiVMError>
+impl<'a, I, T> TryFrom<CosmwasmCallWithoutInfoInput<'a, u32, I>> for WasmiInput<'a, AsWasmiVM<T>>
 where
-    T: IsWasmiVM<T>,
+    T: WasmiBaseVM,
+    I: AsFunctionName,
 {
-    let wasmi_module = wasmi::Module::from_buffer(code)?;
-    let not_started_module_instance = wasmi::ModuleInstance::new(&wasmi_module, resolver)?;
-    let module_instance = not_started_module_instance.run_start(&mut NopExternals)?;
-    let memory_exported = module_instance
-        .export_by_name("memory")
-        .ok_or(WasmiVMError::MemoryNotExported)?;
-    let memory = match memory_exported {
-        wasmi::ExternVal::Memory(mem) => Ok(mem),
-        _ => Err(WasmiVMError::MemoryExportedIsNotMemory),
-    }?;
-    Ok(WasmiModule {
-        module: module_instance,
-        memory,
-    })
+    type Error = VmErrorOf<T>;
+    fn try_from(
+        CosmwasmCallWithoutInfoInput(Tagged(env_ptr, _), Tagged(msg_ptr, _), _): CosmwasmCallWithoutInfoInput<
+            'a,
+            u32,
+            I,
+        >,
+    ) -> Result<Self, Self::Error> {
+        Ok(WasmiInput(
+            WasmiFunctionName(I::name().into()),
+            (
+                vec![
+                    RuntimeValue::I32(env_ptr as i32),
+                    RuntimeValue::I32(msg_ptr as i32),
+                ],
+                PhantomData,
+            ),
+            PhantomData,
+        ))
+    }
 }
 
 impl<T> VM for AsWasmiVM<T>
 where
-    T: IsWasmiVM<T>,
+    T: WasmiBaseVM,
 {
-    type Input<'a> = WasmiInput<'a, T>;
-    type Output<'a> = WasmiOutput<'a, T>;
-    type Error = <T as MinWasmiVM<T>>::Error;
     fn raw_call<'a, O>(
         &mut self,
         WasmiInput(WasmiFunctionName(function_name), (function_args, _), _): Self::Input<'a>,
@@ -455,7 +436,7 @@ where
     where
         O: for<'x> TryFrom<Self::Output<'x>, Error = VmErrorOf<Self>>,
     {
-        let WasmiModule { module, memory } = self.0.module();
+        let WasmiModule { module, memory } = self.0.executing_module();
         let value = module
             .invoke_export(&function_name, &function_args, self)
             .map_err(WasmiVMError::WasmiError)?;
@@ -469,39 +450,139 @@ where
     }
 }
 
-impl<T> Pointable for AsWasmiVM<T> {
-    type Pointer = u32;
-}
-
-impl<T> ReadableMemory for AsWasmiVM<T>
+impl<T> VMBase for AsWasmiVM<T>
 where
-    T: IsWasmiVM<T>,
+    T: WasmiBaseVM,
 {
-    type Error = IsWasmiVMErrorOf<T>;
-    fn read(&self, offset: Self::Pointer, buffer: &mut [u8]) -> Result<(), Self::Error> {
+    type Input<'x> = WasmiInput<'x, Self>;
+    type Output<'x> = WasmiOutput<'x, Self>;
+    type QueryCustom = VmQueryCustomOf<T>;
+    type MessageCustom = VmMessageCustomOf<T>;
+    type CodeId = VmCodeIdOf<T>;
+    type Address = VmAddressOf<T>;
+    type StorageKey = VmStorageKeyOf<T>;
+    type StorageValue = VmStorageValueOf<T>;
+    type Error = VmErrorOf<T>;
+
+    fn new_contract(&mut self, code_id: Self::CodeId) -> Result<Self::Address, Self::Error> {
+        self.0.new_contract(code_id)
+    }
+
+    fn set_code_id(
+        &mut self,
+        address: Self::Address,
+        new_code_id: Self::CodeId,
+    ) -> Result<(), Self::Error> {
+        self.0.set_code_id(address, new_code_id)
+    }
+
+    fn code_id(&mut self, address: Self::Address) -> Result<Self::CodeId, Self::Error> {
+        self.0.code_id(address)
+    }
+
+    fn query_continuation(
+        &mut self,
+        address: Self::Address,
+        message: &[u8],
+    ) -> Result<cosmwasm_minimal_std::QueryResult, Self::Error> {
+        self.0.query_continuation(address, message)
+    }
+
+    fn continue_execute(
+        &mut self,
+        address: Self::Address,
+        funds: Vec<Coin>,
+        message: &[u8],
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<Option<Binary>, Self::Error> {
         self.0
-            .module()
-            .memory
-            .get_into(offset, buffer)
-            .map_err(|_| WasmiVMError::LowLevelMemoryReadError.into())
+            .continue_execute(address, funds, message, event_handler)
+    }
+
+    fn continue_instantiate(
+        &mut self,
+        address: Self::Address,
+        funds: Vec<Coin>,
+        message: &[u8],
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<Option<Binary>, Self::Error> {
+        self.0
+            .continue_instantiate(address, funds, message, event_handler)
+    }
+
+    fn continue_migrate(
+        &mut self,
+        address: Self::Address,
+        funds: Vec<Coin>,
+        message: &[u8],
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<Option<Binary>, Self::Error> {
+        self.0
+            .continue_migrate(address, funds, message, event_handler)
+    }
+
+    fn query_custom(
+        &mut self,
+        query: Self::QueryCustom,
+    ) -> Result<SystemResult<CosmwasmQueryResult>, Self::Error> {
+        self.0.query_custom(query)
+    }
+
+    fn message_custom(
+        &mut self,
+        message: Self::MessageCustom,
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<Option<Binary>, Self::Error> {
+        self.0.message_custom(message, event_handler)
+    }
+
+    fn query_raw(
+        &mut self,
+        address: Self::Address,
+        key: Self::StorageKey,
+    ) -> Result<Option<Self::StorageValue>, Self::Error> {
+        self.0.query_raw(address, key)
+    }
+
+    fn transfer(&mut self, to: &Self::Address, funds: &[Coin]) -> Result<(), Self::Error> {
+        self.0.transfer(to, funds)
+    }
+
+    fn burn(&mut self, funds: &[Coin]) -> Result<(), Self::Error> {
+        self.0.burn(funds)
+    }
+
+    fn balance(&self, account: &Self::Address, denom: String) -> Result<Coin, Self::Error> {
+        self.0.balance(account, denom)
+    }
+
+    fn all_balance(&self, account: &Self::Address) -> Result<Vec<Coin>, Self::Error> {
+        self.0.all_balance(account)
+    }
+
+    fn query_info(&mut self, address: Self::Address) -> Result<ContractInfoResponse, Self::Error> {
+        self.0.query_info(address)
+    }
+
+    fn db_read(
+        &mut self,
+        key: Self::StorageKey,
+    ) -> Result<Option<Self::StorageValue>, Self::Error> {
+        self.0.db_read(key)
+    }
+
+    fn db_write(
+        &mut self,
+        key: Self::StorageKey,
+        value: Self::StorageValue,
+    ) -> Result<(), Self::Error> {
+        self.0.db_write(key, value)
+    }
+
+    fn abort(&mut self, message: String) -> Result<(), Self::Error> {
+        self.0.abort(message)
     }
 }
-
-impl<T> WritableMemory for AsWasmiVM<T>
-where
-    T: IsWasmiVM<T>,
-{
-    type Error = IsWasmiVMErrorOf<T>;
-    fn write(&self, offset: Self::Pointer, buffer: &[u8]) -> Result<(), Self::Error> {
-        self.0
-            .module()
-            .memory
-            .set(offset, buffer)
-            .map_err(|_| WasmiVMError::LowLevelMemoryWriteError.into())
-    }
-}
-
-impl<T> ReadWriteMemory for AsWasmiVM<T> where T: IsWasmiVM<T> {}
 
 impl<T> Transactional for AsWasmiVM<T>
 where
@@ -519,126 +600,63 @@ where
     }
 }
 
-impl<T> Loader for AsWasmiVM<T>
-where
-    T: Loader,
-{
-    type CodeId = LoaderCodeIdOf<T>;
-    type Input = LoaderInputOf<T>;
-    type Output = LoaderOutputOf<T>;
-    type Error = LoaderErrorOf<T>;
-    fn execution_continuation<I>(
-        &mut self,
-        address: BankAccountIdOf<T>,
-        input: Self::Input,
-        message: &[u8],
-        event_handler: &mut dyn FnMut(Event),
-    ) -> Result<Option<Binary>, LoaderErrorOf<T>>
-    where
-        I: cosmwasm_vm::input::Input,
-        I::Output: serde::de::DeserializeOwned
-            + cosmwasm_minimal_std::ReadLimit
-            + cosmwasm_minimal_std::DeserializeLimit
-            + Into<
-                cosmwasm_minimal_std::ContractResult<
-                    cosmwasm_minimal_std::Response<Self::MessageCustom>,
-                >,
-            >,
-    {
-        self.0
-            .execution_continuation::<I>(address, input, message, event_handler)
-    }
-    fn query_continuation(
-        &mut self,
-        address: BankAccountIdOf<T>,
-        message: &[u8],
-    ) -> Result<cosmwasm_minimal_std::QueryResult, LoaderErrorOf<Self>> {
-        self.0.query_continuation(address, message)
-    }
-    fn new(&mut self, code_id: Self::CodeId) -> Result<BankAccountIdOf<T>, LoaderErrorOf<T>> {
-        self.0.new(code_id)
-    }
-    fn set_code_id(
-        &mut self,
-        address: BankAccountIdOf<Self>,
-        new_code_id: Self::CodeId,
-    ) -> Result<(), LoaderErrorOf<T>> {
-        self.0.set_code_id(address, new_code_id)
-    }
-    fn code_id(
-        &mut self,
-        address: BankAccountIdOf<Self>,
-    ) -> Result<Self::CodeId, LoaderErrorOf<T>> {
-        self.0.code_id(address)
+impl<T: Has<U>, U> Has<U> for AsWasmiVM<T> {
+    fn get(&self) -> U {
+        self.0.get()
     }
 }
 
-impl<T> Host for AsWasmiVM<T>
+pub fn new_wasmi_vm<T>(
+    resolver: &WasmiImportResolver<T>,
+    code: &[u8],
+) -> Result<WasmiModule, WasmiVMError>
 where
-    T: Host,
+    T: WasmiBaseVM,
 {
-    type Key = T::Key;
-    type Value = T::Value;
-    type QueryCustom = T::QueryCustom;
-    type MessageCustom = T::MessageCustom;
-    type Error = HostErrorOf<T>;
-    fn db_read(&mut self, key: Self::Key) -> Result<Option<Self::Value>, HostErrorOf<T>> {
-        self.0.db_read(key)
-    }
-    fn db_write(&mut self, key: Self::Key, value: Self::Value) -> Result<(), HostErrorOf<T>> {
-        self.0.db_write(key, value)
-    }
-    fn abort(&mut self, message: String) -> Result<(), HostErrorOf<T>> {
-        self.0.abort(message)
-    }
-    fn query_custom(
-        &mut self,
-        query: Self::QueryCustom,
-    ) -> Result<SystemResult<CosmwasmQueryResult>, HostErrorOf<T>> {
-        self.0.query_custom(query)
-    }
-    fn message_custom(
-        &mut self,
-        message: Self::MessageCustom,
-        event_handler: &mut dyn FnMut(Event),
-    ) -> Result<Option<Binary>, HostErrorOf<T>> {
-        self.0.message_custom(message, event_handler)
-    }
-    fn query_raw(
-        &mut self,
-        address: BankAccountIdOf<Self>,
-        key: Self::Key,
-    ) -> Result<Option<Self::Value>, HostErrorOf<T>> {
-        self.0.query_raw(address, key)
-    }
-    fn query_info(
-        &mut self,
-        address: BankAccountIdOf<Self>,
-    ) -> Result<ContractInfoResponse, HostErrorOf<T>> {
-        self.0.query_info(address)
+    let wasmi_module = wasmi::Module::from_buffer(code)?;
+    let not_started_module_instance = wasmi::ModuleInstance::new(&wasmi_module, resolver)?;
+    let module_instance = not_started_module_instance.run_start(&mut NopExternals)?;
+    let memory_exported = module_instance
+        .export_by_name("memory")
+        .ok_or(WasmiVMError::MemoryNotExported)?;
+    let memory = match memory_exported {
+        wasmi::ExternVal::Memory(mem) => Ok(mem),
+        _ => Err(WasmiVMError::MemoryExportedIsNotMemory),
+    }?;
+    Ok(WasmiModule {
+        module: module_instance,
+        memory,
+    })
+}
+
+impl<T> Pointable for AsWasmiVM<T>
+where
+    T: WasmiBaseVM,
+{
+    type Pointer = PointerOf<T>;
+}
+
+impl<T> ReadableMemory for AsWasmiVM<T>
+where
+    T: WasmiBaseVM,
+{
+    type Error = ReadableMemoryErrorOf<T>;
+    fn read(&self, offset: Self::Pointer, buffer: &mut [u8]) -> Result<(), Self::Error> {
+        self.0.read(offset, buffer)
     }
 }
 
-impl<T> Bank for AsWasmiVM<T>
+impl<T> WritableMemory for AsWasmiVM<T>
 where
-    T: Bank,
+    T: WasmiBaseVM,
 {
-    type AccountId = T::AccountId;
-    type Error = T::Error;
-    fn transfer(&mut self, to: &Self::AccountId, funds: &[Coin]) -> Result<(), Self::Error> {
-        self.0.transfer(to, funds)
-    }
-    fn burn(&mut self, funds: &[Coin]) -> Result<(), Self::Error> {
-        self.0.burn(funds)
-    }
-
-    fn query(
-        &mut self,
-        query: BankQuery,
-    ) -> Result<SystemResult<CosmwasmQueryResult>, Self::Error> {
-        self.0.query(query)
+    type Error = WritableMemoryErrorOf<T>;
+    fn write(&self, offset: Self::Pointer, buffer: &[u8]) -> Result<(), Self::Error> {
+        self.0.write(offset, buffer)
     }
 }
+
+impl<T> ReadWriteMemory for AsWasmiVM<T> where T: WasmiBaseVM {}
 
 #[allow(dead_code)]
 mod host_functions {
@@ -646,14 +664,12 @@ mod host_functions {
     use cosmwasm_minimal_std::QueryRequest;
     use cosmwasm_vm::{
         executor::{constants, marshall_out, passthrough_in, passthrough_out, ConstantReadLimit},
-        host::HostQueryCustomOf,
         system::cosmwasm_system_query_raw,
     };
 
-    pub fn definitions<T>(
-    ) -> BTreeMap<WasmiModuleName, WasmiHostModule<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>>
+    pub fn definitions<T>() -> BTreeMap<WasmiModuleName, WasmiHostModule<T>>
     where
-        T: IsWasmiVM<T>,
+        T: WasmiBaseVM,
     {
         BTreeMap::from([(
             WasmiModuleName("env".to_owned()),
@@ -662,121 +678,112 @@ mod host_functions {
                     WasmiFunctionName("db_read".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0001),
-                        env_db_read::<T> as WasmiHostFunction<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>,
+                        env_db_read::<T> as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("db_write".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0002),
-                        env_db_write::<T> as WasmiHostFunction<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>,
+                        env_db_write::<T> as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("db_remove".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0003),
-                        env_db_remove::<T> as WasmiHostFunction<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>,
+                        env_db_remove::<T> as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("db_scan".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0004),
-                        env_db_scan::<T> as WasmiHostFunction<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>,
+                        env_db_scan::<T> as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("db_next".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0005),
-                        env_db_next::<T> as WasmiHostFunction<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>,
+                        env_db_next::<T> as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("addr_validate".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0006),
-                        env_addr_validate::<T>
-                            as WasmiHostFunction<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>,
+                        env_addr_validate::<T> as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("addr_canonicalize".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0007),
-                        env_addr_canonicalize::<T>
-                            as WasmiHostFunction<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>,
+                        env_addr_canonicalize::<T> as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("addr_humanize".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0008),
-                        env_addr_humanize::<T>
-                            as WasmiHostFunction<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>,
+                        env_addr_humanize::<T> as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("secp256k1_verify".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0009),
-                        env_secp256k1_verify::<T>
-                            as WasmiHostFunction<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>,
+                        env_secp256k1_verify::<T> as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("secp256k1_batch_verify".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x000A),
-                        env_secp256k1_batch_verify::<T>
-                            as WasmiHostFunction<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>,
+                        env_secp256k1_batch_verify::<T> as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("secp256k1_recover_pubkey".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x000B),
-                        env_secp256k1_recove_pubkey::<T>
-                            as WasmiHostFunction<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>,
+                        env_secp256k1_recove_pubkey::<T> as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("ed25519_verify".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x000C),
-                        env_ed25519_verify::<T>
-                            as WasmiHostFunction<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>,
+                        env_ed25519_verify::<T> as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("ed25519_batch_verify".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x000D),
-                        env_ed25519_batch_verify::<T>
-                            as WasmiHostFunction<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>,
+                        env_ed25519_batch_verify::<T> as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("debug".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x000E),
-                        env_debug::<T> as WasmiHostFunction<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>,
+                        env_debug::<T> as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("query_chain".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x000F),
-                        env_query_chain::<T>
-                            as WasmiHostFunction<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>,
+                        env_query_chain::<T> as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("abort".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0010),
-                        env_abort::<T> as WasmiHostFunction<AsWasmiVM<T>, IsWasmiVMErrorOf<T>>,
+                        env_abort::<T> as WasmiHostFunction<T>,
                     ),
                 ),
             ]),
@@ -786,9 +793,9 @@ mod host_functions {
     fn env_db_read<T>(
         vm: &mut AsWasmiVM<T>,
         values: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, IsWasmiVMErrorOf<T>>
+    ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
-        T: IsWasmiVM<T>,
+        T: WasmiBaseVM,
     {
         log::debug!("db_read");
         match &values[..] {
@@ -797,7 +804,7 @@ mod host_functions {
                     AsWasmiVM<T>,
                     ConstantReadLimit<{ constants::MAX_LENGTH_DB_KEY }>,
                 >(vm, *key_pointer as u32)?;
-                let value = vm.0.db_read(key);
+                let value = vm.db_read(key);
                 match value {
                     Ok(Some(value)) => {
                         let Tagged(value_pointer, _) =
@@ -815,9 +822,9 @@ mod host_functions {
     fn env_db_write<T>(
         vm: &mut AsWasmiVM<T>,
         values: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, IsWasmiVMErrorOf<T>>
+    ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
-        T: IsWasmiVM<T>,
+        T: WasmiBaseVM,
     {
         log::debug!("db_write");
         match &values[..] {
@@ -830,7 +837,7 @@ mod host_functions {
                     AsWasmiVM<T>,
                     ConstantReadLimit<{ constants::MAX_LENGTH_DB_VALUE }>,
                 >(vm, *value_pointer as u32)?;
-                vm.0.db_write(key, value)?;
+                vm.db_write(key, value)?;
                 Ok(None)
             }
             _ => Err(WasmiVMError::InvalidHostSignature.into()),
@@ -840,9 +847,9 @@ mod host_functions {
     fn env_db_remove<T>(
         _: &mut AsWasmiVM<T>,
         _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, IsWasmiVMErrorOf<T>>
+    ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
-        T: IsWasmiVM<T>,
+        T: WasmiBaseVM,
     {
         log::debug!("db_remove");
         Ok(None)
@@ -851,9 +858,9 @@ mod host_functions {
     fn env_db_scan<T>(
         _: &mut AsWasmiVM<T>,
         _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, IsWasmiVMErrorOf<T>>
+    ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
-        T: IsWasmiVM<T>,
+        T: WasmiBaseVM,
     {
         log::debug!("db_scan");
         Ok(None)
@@ -862,9 +869,9 @@ mod host_functions {
     fn env_db_next<T>(
         _: &mut AsWasmiVM<T>,
         _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, IsWasmiVMErrorOf<T>>
+    ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
-        T: IsWasmiVM<T>,
+        T: WasmiBaseVM,
     {
         log::debug!("db_next");
         Ok(None)
@@ -873,9 +880,9 @@ mod host_functions {
     fn env_addr_validate<T>(
         _: &mut AsWasmiVM<T>,
         _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, IsWasmiVMErrorOf<T>>
+    ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
-        T: IsWasmiVM<T>,
+        T: WasmiBaseVM,
     {
         log::debug!("addr_validate");
         Ok(Some(RuntimeValue::I32(0)))
@@ -884,9 +891,9 @@ mod host_functions {
     fn env_addr_canonicalize<T>(
         _: &mut AsWasmiVM<T>,
         _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, IsWasmiVMErrorOf<T>>
+    ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
-        T: IsWasmiVM<T>,
+        T: WasmiBaseVM,
     {
         log::debug!("addr_canonicalize");
         Ok(None)
@@ -895,9 +902,9 @@ mod host_functions {
     fn env_addr_humanize<T>(
         _: &mut AsWasmiVM<T>,
         _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, IsWasmiVMErrorOf<T>>
+    ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
-        T: IsWasmiVM<T>,
+        T: WasmiBaseVM,
     {
         log::debug!("addr_humanize");
         Ok(None)
@@ -906,9 +913,9 @@ mod host_functions {
     fn env_secp256k1_verify<T>(
         _: &mut AsWasmiVM<T>,
         _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, IsWasmiVMErrorOf<T>>
+    ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
-        T: IsWasmiVM<T>,
+        T: WasmiBaseVM,
     {
         log::debug!("secp256k1_verify");
         Ok(None)
@@ -917,9 +924,9 @@ mod host_functions {
     fn env_secp256k1_batch_verify<T>(
         _: &mut AsWasmiVM<T>,
         _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, IsWasmiVMErrorOf<T>>
+    ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
-        T: IsWasmiVM<T>,
+        T: WasmiBaseVM,
     {
         log::debug!("secp256k1_batch_verify");
         Ok(None)
@@ -928,9 +935,9 @@ mod host_functions {
     fn env_secp256k1_recove_pubkey<T>(
         _: &mut AsWasmiVM<T>,
         _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, IsWasmiVMErrorOf<T>>
+    ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
-        T: IsWasmiVM<T>,
+        T: WasmiBaseVM,
     {
         log::debug!("secp256k1_recove_pubkey");
         Ok(None)
@@ -939,9 +946,9 @@ mod host_functions {
     fn env_ed25519_verify<T>(
         _: &mut AsWasmiVM<T>,
         _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, IsWasmiVMErrorOf<T>>
+    ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
-        T: IsWasmiVM<T>,
+        T: WasmiBaseVM,
     {
         log::debug!("ed25519_verify");
         Ok(None)
@@ -950,9 +957,9 @@ mod host_functions {
     fn env_ed25519_batch_verify<T>(
         _: &mut AsWasmiVM<T>,
         _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, IsWasmiVMErrorOf<T>>
+    ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
-        T: IsWasmiVM<T>,
+        T: WasmiBaseVM,
     {
         log::debug!("ed25519_batch_verify");
         Ok(None)
@@ -961,9 +968,9 @@ mod host_functions {
     fn env_debug<T>(
         _: &mut AsWasmiVM<T>,
         _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, IsWasmiVMErrorOf<T>>
+    ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
-        T: IsWasmiVM<T>,
+        T: WasmiBaseVM,
     {
         log::debug!("debug");
         Ok(None)
@@ -972,19 +979,18 @@ mod host_functions {
     fn env_query_chain<T>(
         vm: &mut AsWasmiVM<T>,
         values: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, IsWasmiVMErrorOf<T>>
+    ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
-        T: IsWasmiVM<T>,
+        T: WasmiBaseVM,
     {
         log::debug!("query_chain");
         match &values[..] {
             [RuntimeValue::I32(query_pointer)] => {
-                let request = marshall_out::<AsWasmiVM<T>, QueryRequest<HostQueryCustomOf<T>>>(
+                let request = marshall_out::<AsWasmiVM<T>, QueryRequest<VmQueryCustomOf<T>>>(
                     vm,
                     *query_pointer as u32,
                 )?;
-                let value =
-                    cosmwasm_system_query_raw::<AsWasmiVM<T>, HostQueryCustomOf<T>>(vm, request)?;
+                let value = cosmwasm_system_query_raw::<AsWasmiVM<T>>(vm, request)?;
                 let Tagged(value_pointer, _) = passthrough_in::<AsWasmiVM<T>, ()>(vm, &value)?;
                 Ok(Some(RuntimeValue::I32(value_pointer as i32)))
             }
@@ -995,10 +1001,9 @@ mod host_functions {
     fn env_abort<T>(
         vm: &mut AsWasmiVM<T>,
         values: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, IsWasmiVMErrorOf<T>>
+    ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
-        T: IsWasmiVM<T>,
-        IsWasmiVMErrorOf<T>: From<ExecutorError>,
+        T: WasmiBaseVM,
     {
         log::debug!("abort");
         match &values[..] {
@@ -1007,7 +1012,7 @@ mod host_functions {
                     AsWasmiVM<T>,
                     ConstantReadLimit<{ constants::MAX_LENGTH_ABORT }>,
                 >(vm, *message_pointer as u32)?;
-                vm.0.abort(String::from_utf8_lossy(&message).into())?;
+                vm.abort(String::from_utf8_lossy(&message).into())?;
                 Ok(None)
             }
             _ => Err(WasmiVMError::InvalidHostSignature.into()),

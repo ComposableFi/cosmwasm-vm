@@ -33,12 +33,9 @@
 
 extern crate alloc;
 
-pub mod bank;
 pub mod executor;
 pub mod has;
-pub mod host;
 pub mod input;
-pub mod loader;
 pub mod memory;
 pub mod system;
 pub mod tagged;
