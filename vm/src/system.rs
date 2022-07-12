@@ -53,6 +53,7 @@ pub enum SystemError {
     UnsupportedMessage,
     FailedToSerialize,
     ContractExecutionFailure(String),
+    ImmutableCantMigrate,
     MustBeAdmin,
 }
 
@@ -160,11 +161,12 @@ where
     V: CosmwasmCallVM<I>,
 {
     log::debug!("SystemRun");
-    let env: Env = vm.get();
-    let ensure_admin = move |target_contract_admin: &Option<String>| -> Result<(), VmErrorOf<V>> {
-        let executing_contract_admin = env.contract.address.as_str();
-        match target_contract_admin {
-            Some(target_admin) if target_admin.as_str() == executing_contract_admin => Ok(()),
+    let info: MessageInfo = vm.get();
+    let ensure_admin = move |contract_admin: &Option<String>| -> Result<(), VmErrorOf<V>> {
+        let sender = info.sender.as_str();
+        match contract_admin {
+            None => Err(SystemError::ImmutableCantMigrate.into()),
+            Some(admin) if admin.as_str() == sender => Ok(()),
             _ => Err(SystemError::MustBeAdmin.into()),
         }
     };
