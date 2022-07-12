@@ -36,7 +36,10 @@ use crate::{
     input::{Input, OutputOf},
     memory::{PointerOf, ReadWriteMemory, ReadableMemoryErrorOf, WritableMemoryErrorOf},
     transaction::{Transactional, TransactionalErrorOf},
-    vm::{VmAddressOf, VmErrorOf, VmInputOf, VmMessageCustomOf, VmOutputOf, VmQueryCustomOf, VM},
+    vm::{
+        VmAddressOf, VmErrorOf, VmGasCheckpoint, VmInputOf, VmMessageCustomOf, VmOutputOf,
+        VmQueryCustomOf, VM,
+    },
 };
 use alloc::{format, string::String, vec, vec::Vec};
 use core::fmt::Debug;
@@ -205,6 +208,10 @@ where
                         sub_events.push(event);
                     };
                     vm.transaction_begin()?;
+                    vm.gas_checkpoint_push(match gas_limit {
+                        Some(limit) => VmGasCheckpoint::Limited(limit),
+                        None => VmGasCheckpoint::Unlimited,
+                    })?;
                     let sub_res = match msg {
                         CosmosMsg::Custom(message) => vm
                             .message_custom(message, &mut event_handler)
@@ -321,6 +328,8 @@ where
                     };
 
                     log::debug!("Submessage result: {:?}", sub_res);
+
+                    vm.gas_checkpoint_pop()?;
 
                     let sub_cont = match (sub_res, reply_on.clone()) {
                         (Ok(v), ReplyOn::Never | ReplyOn::Error) => {

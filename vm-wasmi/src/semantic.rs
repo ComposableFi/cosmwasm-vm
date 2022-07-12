@@ -1,6 +1,6 @@
 use super::*;
 use alloc::string::ToString;
-use core::{assert_matches::assert_matches, str::FromStr};
+use core::{assert_matches::assert_matches, num::NonZeroU32, str::FromStr};
 use cosmwasm_minimal_std::{
     Addr, Attribute, Binary, BlockInfo, Coin, ContractInfo, CosmwasmExecutionResult,
     CosmwasmQueryResult, Empty, Env, Event, InstantiateResult, MessageInfo, QueryResult, Timestamp,
@@ -11,6 +11,7 @@ use cosmwasm_vm::{
         cosmwasm_system_entrypoint, cosmwasm_system_run, CosmwasmCodeId, CosmwasmContractMeta,
     },
 };
+use wasm_instrument::gas_metering::Rules;
 
 pub fn initialize() {
     use std::sync::Once;
@@ -29,6 +30,7 @@ enum SimpleVMError {
     NoCustomQuery,
     NoCustomMessage,
     Unsupported,
+    OutOfGas,
 }
 impl From<WasmiVMError> for SimpleVMError {
     fn from(e: WasmiVMError) -> Self {
@@ -55,6 +57,7 @@ impl From<MemoryWriteError> for SimpleVMError {
         SimpleVMError::VMError(e.into())
     }
 }
+
 impl Display for SimpleVMError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "{:?}", self)
@@ -62,12 +65,63 @@ impl Display for SimpleVMError {
 }
 impl HostError for SimpleVMError {}
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+struct Gas {
+    checkpoints: Vec<u64>,
+}
+
+impl Gas {
+    fn new(initial_value: u64) -> Self {
+        Gas {
+            checkpoints: vec![initial_value],
+        }
+    }
+    fn current(&self) -> &u64 {
+        self.checkpoints.last().expect("impossible")
+    }
+    fn current_mut(&mut self) -> &mut u64 {
+        self.checkpoints.last_mut().expect("impossible")
+    }
+    fn push(&mut self, checkpoint: VmGasCheckpoint) -> Result<(), SimpleVMError> {
+        match checkpoint {
+            VmGasCheckpoint::Unlimited => {
+                let parent = self.current_mut();
+                let value = *parent;
+                *parent = 0;
+                self.checkpoints.push(value);
+                Ok(())
+            }
+            VmGasCheckpoint::Limited(limit) if limit <= *self.current() => {
+                *self.current_mut() -= limit;
+                self.checkpoints.push(limit);
+                Ok(())
+            }
+            _ => Err(SimpleVMError::OutOfGas),
+        }
+    }
+    fn pop(&mut self) {
+        let child = self.checkpoints.pop().expect("impossible");
+        let parent = self.current_mut();
+        *parent += child;
+    }
+    fn charge(&mut self, value: u64) -> Result<(), SimpleVMError> {
+        let current = self.current_mut();
+        if *current >= value {
+            *current -= value;
+            Ok(())
+        } else {
+            Err(SimpleVMError::OutOfGas)
+        }
+    }
+}
+
 struct SimpleWasmiVMExtension {
     storage: BTreeMap<BankAccount, BTreeMap<Vec<u8>, Vec<u8>>>,
     codes: BTreeMap<CosmwasmCodeId, Vec<u8>>,
     contracts: BTreeMap<BankAccount, CosmwasmContractMeta>,
     next_account_id: BankAccount,
     transaction_depth: u32,
+    gas: Gas,
 }
 
 struct SimpleWasmiVM<'a> {
@@ -84,9 +138,9 @@ impl<'a> WasmiModuleExecutor for SimpleWasmiVM<'a> {
     }
 }
 
-impl<'a> WasmiExternals for SimpleWasmiVM<'a> {
-    fn host_functions(&self) -> &BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<Self>> {
-        &self.host_functions
+impl<'a> Has<BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<Self>>> for SimpleWasmiVM<'a> {
+    fn get(&self) -> BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<Self>> {
+        self.host_functions.clone()
     }
 }
 
@@ -121,7 +175,7 @@ impl<'a> SimpleWasmiVM<'a> {
         &mut self,
         address: <Self as VMBase>::Address,
         funds: Vec<Coin>,
-        f: impl FnOnce(&mut AsWasmiVM<SimpleWasmiVM>) -> R,
+        f: impl FnOnce(&mut WasmiVM<SimpleWasmiVM>) -> R,
     ) -> Result<R, VmErrorOf<Self>> {
         log::debug!("Loading sub-vm, contract address: {:?}", address);
         let code = (|| {
@@ -140,7 +194,7 @@ impl<'a> SimpleWasmiVM<'a> {
         let host_functions_definitions =
             WasmiImportResolver(host_functions::definitions::<SimpleWasmiVM>());
         let module = new_wasmi_vm(&host_functions_definitions, &code)?;
-        let mut sub_vm: AsWasmiVM<SimpleWasmiVM> = AsWasmiVM(SimpleWasmiVM {
+        let mut sub_vm: WasmiVM<SimpleWasmiVM> = WasmiVM(SimpleWasmiVM {
             host_functions: host_functions_definitions
                 .0
                 .into_iter()
@@ -166,8 +220,8 @@ impl<'a> SimpleWasmiVM<'a> {
 }
 
 impl<'a> VMBase for SimpleWasmiVM<'a> {
-    type Input<'x> = WasmiInput<'x, AsWasmiVM<Self>>;
-    type Output<'x> = WasmiOutput<'x, AsWasmiVM<Self>>;
+    type Input<'x> = WasmiInput<'x, WasmiVM<Self>>;
+    type Output<'x> = WasmiOutput<'x, WasmiVM<Self>>;
     type QueryCustom = Empty;
     type MessageCustom = Empty;
     type CodeId = CosmwasmContractMeta;
@@ -199,7 +253,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         message: &[u8],
     ) -> Result<QueryResult, Self::Error> {
         self.load_subvm(address, vec![], |sub_vm| {
-            cosmwasm_query::<AsWasmiVM<SimpleWasmiVM>>(sub_vm, message)
+            cosmwasm_query::<WasmiVM<SimpleWasmiVM>>(sub_vm, message)
         })?
     }
 
@@ -295,12 +349,12 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         Ok(())
     }
 
-    fn balance(&self, _: &Self::Address, _: String) -> Result<Coin, Self::Error> {
+    fn balance(&mut self, _: &Self::Address, _: String) -> Result<Coin, Self::Error> {
         log::debug!("Query balance.");
         Err(SimpleVMError::Unsupported)
     }
 
-    fn all_balance(&self, _: &Self::Address) -> Result<Vec<Coin>, Self::Error> {
+    fn all_balance(&mut self, _: &Self::Address) -> Result<Vec<Coin>, Self::Error> {
         log::debug!("Query all balance.");
         Ok(vec![])
     }
@@ -341,11 +395,60 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         Ok(())
     }
 
+    fn db_remove(&mut self, key: Self::StorageKey) -> Result<(), Self::Error> {
+        let contract_addr = self.env.contract.address.clone().try_into()?;
+        self.extension
+            .storage
+            .get_mut(&contract_addr)
+            .map(|contract_storage| contract_storage.remove(&key));
+        Ok(())
+    }
+
     fn abort(&mut self, message: String) -> Result<(), Self::Error> {
         log::debug!("Contract aborted: {}", message);
         Err(SimpleVMError::from(WasmiVMError::from(
             SystemError::ContractExecutionFailure(message),
         )))
+    }
+
+    fn charge(&mut self, value: VmGas) -> Result<(), Self::Error> {
+        let gas_to_charge = match value {
+            VmGas::Instrumentation { metered } => metered as u64,
+            x => {
+                log::debug!("Charging gas: {:?}", x);
+                1u64
+            }
+        };
+        self.extension.gas.charge(gas_to_charge)?;
+        Ok(())
+    }
+
+    fn gas_checkpoint_push(&mut self, checkpoint: VmGasCheckpoint) -> Result<(), Self::Error> {
+        log::debug!("> Gas before: {:?}", self.extension.gas);
+        self.extension.gas.push(checkpoint)?;
+        log::debug!("> Gas after: {:?}", self.extension.gas);
+        Ok(())
+    }
+
+    fn gas_checkpoint_pop(&mut self) -> Result<(), Self::Error> {
+        log::debug!("> Gas before: {:?}", self.extension.gas);
+        self.extension.gas.pop();
+        log::debug!("> Gas after: {:?}", self.extension.gas);
+        Ok(())
+    }
+
+    fn gas_ensure_available(&mut self) -> Result<(), Self::Error> {
+        let checkpoint = self
+            .extension
+            .gas
+            .checkpoints
+            .last()
+            .expect("invalis gas checkpoint state");
+        if *checkpoint > 0 {
+            Ok(())
+        } else {
+            Err(SimpleVMError::OutOfGas)
+        }
     }
 }
 
@@ -404,17 +507,42 @@ impl<'a> Transactional for SimpleWasmiVM<'a> {
     }
 }
 
+struct ConstantCostRules;
+impl Rules for ConstantCostRules {
+    fn instruction_cost(
+        &self,
+        _: &wasm_instrument::parity_wasm::elements::Instruction,
+    ) -> Option<u32> {
+        Some(42)
+    }
+
+    fn memory_grow_cost(&self) -> wasm_instrument::gas_metering::MemoryGrowCost {
+        wasm_instrument::gas_metering::MemoryGrowCost::Linear(
+            NonZeroU32::new(1024).expect("impossible"),
+        )
+    }
+}
+
+fn instrument_contract(code: &[u8]) -> Vec<u8> {
+    let module =
+        wasm_instrument::parity_wasm::elements::Module::from_bytes(code).expect("impossible");
+    let instrumented_module =
+        wasm_instrument::gas_metering::inject(module, &ConstantCostRules, "env")
+            .expect("impossible");
+    instrumented_module.into_bytes().expect("impossible")
+}
+
 fn create_simple_vm<'a>(
     sender: BankAccount,
     address: BankAccount,
     funds: Vec<Coin>,
     code: &[u8],
     extension: &'a mut SimpleWasmiVMExtension,
-) -> AsWasmiVM<SimpleWasmiVM<'a>> {
+) -> WasmiVM<SimpleWasmiVM<'a>> {
     initialize();
     let host_functions_definitions = WasmiImportResolver(host_functions::definitions());
     let module = new_wasmi_vm(&host_functions_definitions, code).unwrap();
-    AsWasmiVM(SimpleWasmiVM {
+    WasmiVM(SimpleWasmiVM {
         host_functions: host_functions_definitions
             .0
             .clone()
@@ -444,7 +572,7 @@ fn create_simple_vm<'a>(
 
 #[test]
 fn test_bare() {
-    let code = include_bytes!("../../fixtures/cw20_base.wasm").to_vec();
+    let code = instrument_contract(include_bytes!("../../fixtures/cw20_base.wasm"));
     let sender = BankAccount(0);
     let address = BankAccount(10_000);
     let funds = vec![];
@@ -461,10 +589,11 @@ fn test_bare() {
         )]),
         next_account_id: BankAccount(10_001),
         transaction_depth: 0,
+        gas: Gas::new(100_000_000),
     };
     let mut vm = create_simple_vm(sender, address, funds, &code, &mut extension);
     assert_matches!(
-        cosmwasm_call::<InstantiateInput<Empty>, AsWasmiVM<SimpleWasmiVM>>(
+        cosmwasm_call::<InstantiateInput<Empty>, WasmiVM<SimpleWasmiVM>>(
             &mut vm,
             r#"{
               "name": "Picasso",
@@ -480,7 +609,7 @@ fn test_bare() {
         InstantiateResult(CosmwasmExecutionResult::Ok(_))
     );
     assert_eq!(
-        cosmwasm_query::<AsWasmiVM<SimpleWasmiVM>>(&mut vm, r#"{ "token_info": {} }"#.as_bytes(),)
+        cosmwasm_query::<WasmiVM<SimpleWasmiVM>>(&mut vm, r#"{ "token_info": {} }"#.as_bytes(),)
             .unwrap(),
         QueryResult(CosmwasmQueryResult::Ok(Binary(
             r#"{"name":"Picasso","symbol":"PICA","decimals":12,"total_supply":"0"}"#
@@ -492,7 +621,7 @@ fn test_bare() {
 
 #[test]
 fn test_orchestration_base() {
-    let code = include_bytes!("../../fixtures/cw20_base.wasm").to_vec();
+    let code = instrument_contract(include_bytes!("../../fixtures/cw20_base.wasm"));
     let sender = BankAccount(0);
     let address = BankAccount(10_000);
     let funds = vec![];
@@ -509,10 +638,11 @@ fn test_orchestration_base() {
         )]),
         next_account_id: BankAccount(10_001),
         transaction_depth: 0,
+        gas: Gas::new(100_000_000),
     };
     let mut vm = create_simple_vm(sender, address, funds, &code, &mut extension);
     assert_eq!(
-        cosmwasm_system_entrypoint::<InstantiateInput, AsWasmiVM<SimpleWasmiVM>>(
+        cosmwasm_system_entrypoint::<InstantiateInput, WasmiVM<SimpleWasmiVM>>(
             &mut vm,
             format!(
                 r#"{{
@@ -534,7 +664,7 @@ fn test_orchestration_base() {
         (None, vec![])
     );
     assert_eq!(
-        cosmwasm_system_entrypoint::<ExecuteInput, AsWasmiVM<SimpleWasmiVM>>(
+        cosmwasm_system_entrypoint::<ExecuteInput, WasmiVM<SimpleWasmiVM>>(
             &mut vm,
             r#"{
               "mint": {
@@ -570,7 +700,7 @@ fn test_orchestration_base() {
 
 #[test]
 fn test_orchestration_advanced() {
-    let code = include_bytes!("../../fixtures/hackatom.wasm").to_vec();
+    let code = instrument_contract(include_bytes!("../../fixtures/hackatom.wasm"));
     let sender = BankAccount(0);
     let address = BankAccount(10_000);
     let funds = vec![];
@@ -587,10 +717,11 @@ fn test_orchestration_advanced() {
         )]),
         next_account_id: BankAccount(10_001),
         transaction_depth: 0,
+        gas: Gas::new(100_000_000),
     };
     let mut vm = create_simple_vm(sender, address, funds, &code, &mut extension);
     assert_eq!(
-        cosmwasm_query::<AsWasmiVM<SimpleWasmiVM>>(
+        cosmwasm_query::<WasmiVM<SimpleWasmiVM>>(
             &mut vm,
             r#"{ "recurse": { "depth": 10, "work": 10 }}"#.as_bytes()
         )
@@ -605,8 +736,8 @@ fn test_orchestration_advanced() {
 
 #[test]
 fn test_reply() {
-    let code = include_bytes!("../../fixtures/reflect.wasm").to_vec();
-    let code_hackatom = include_bytes!("../../fixtures/hackatom.wasm").to_vec();
+    let code = instrument_contract(include_bytes!("../../fixtures/reflect.wasm"));
+    let code_hackatom = instrument_contract(include_bytes!("../../fixtures/hackatom.wasm"));
     let sender = BankAccount(0);
     let address = BankAccount(10_000);
     let hackatom_address = BankAccount(10_001);
@@ -634,6 +765,7 @@ fn test_reply() {
         ]),
         next_account_id: BankAccount(10_002),
         transaction_depth: 0,
+        gas: Gas::new(100_000_000),
     };
     {
         let mut vm = create_simple_vm(
@@ -669,7 +801,7 @@ fn test_reply() {
     {
         let mut vm = create_simple_vm(sender, address, funds, &code, &mut extension);
         assert_eq!(
-            cosmwasm_system_entrypoint::<InstantiateInput, AsWasmiVM<SimpleWasmiVM>>(
+            cosmwasm_system_entrypoint::<InstantiateInput, WasmiVM<SimpleWasmiVM>>(
                 &mut vm,
                 r#"{}"#.as_bytes(),
             )
@@ -677,7 +809,7 @@ fn test_reply() {
             (None, vec![])
         );
         assert_eq!(
-            cosmwasm_system_entrypoint::<ExecuteInput, AsWasmiVM<SimpleWasmiVM>>(
+            cosmwasm_system_entrypoint::<ExecuteInput, WasmiVM<SimpleWasmiVM>>(
                 &mut vm,
                 r#"{
                   "reflect_sub_msg": {

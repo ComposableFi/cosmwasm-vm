@@ -34,6 +34,36 @@ use cosmwasm_minimal_std::{
 };
 use serde::de::DeserializeOwned;
 
+pub enum VmGasCheckpoint {
+    Unlimited,
+    Limited(u64)
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum VmGas {
+    Instrumentation { metered: u32 },
+    RawCall,
+    NewContract,
+    SetCodeId,
+    GetCodeId,
+    QueryContinuation,
+    ContinueExecute,
+    ContinueInstantiate,
+    ContinueMigrate,
+    QueryCustom,
+    MessageCustom,
+    QueryRaw,
+    Transfer,
+    Burn,
+    Balance,
+    AllBalance,
+    QueryInfo,
+    QueryChain,
+    DbRead,
+    DbWrite,
+    DbRemove,
+}
+
 pub type VmInputOf<'a, T> = <T as VMBase>::Input<'a>;
 pub type VmOutputOf<'a, T> = <T as VMBase>::Output<'a>;
 pub type VmErrorOf<T> = <T as VMBase>::Error;
@@ -151,4 +181,16 @@ pub trait VMBase {
     ) -> Result<(), Self::Error>;
 
     fn abort(&mut self, message: String) -> Result<(), Self::Error>;
+
+    /// Charge gas value.
+    fn charge(&mut self, value: VmGas) -> Result<(), Self::Error>;
+
+    /// Push a gas checkpoint, used to trap once the checkpoint is reached.
+    fn gas_checkpoint_push(&mut self, checkpoint: VmGasCheckpoint) -> Result<(), Self::Error>;
+
+    /// Pop a previously pushed gas checkpoint.
+    fn gas_checkpoint_pop(&mut self) -> Result<(), Self::Error>;
+
+    /// Ensure that some gas is available.
+    fn gas_ensure_available(&mut self) -> Result<(), Self::Error>;
 }
