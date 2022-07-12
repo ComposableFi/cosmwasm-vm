@@ -34,33 +34,58 @@ use cosmwasm_minimal_std::{
 };
 use serde::de::DeserializeOwned;
 
+/// Gas checkpoint, used to meter sub-call gas usage.
 pub enum VmGasCheckpoint {
+    /// Unlimited gas in a sub-call, the sub-call might exhaust the parent gas.
     Unlimited,
-    Limited(u64)
+    /// Limited gas with fixed amount, the sub-call will only be able to execute under this gas limit.
+    Limited(u64),
 }
 
+/// Gasable VM calls.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum VmGas {
+    /// Instrumentation gas raised by the injected code.
     Instrumentation { metered: u32 },
+    /// Cost of calling `raw_call`.
     RawCall,
+    /// Cost of `new_contract`.
     NewContract,
+    /// Cost of `set_code_id`.
     SetCodeId,
+    /// Cost of `code_id`.
     GetCodeId,
+    /// Cost of `query_continuation`.
     QueryContinuation,
+    /// Cost of `continue_execute`.
     ContinueExecute,
+    /// Cost of `continue_instantiate`.
     ContinueInstantiate,
+    /// Cost of `continue_migrate`.
     ContinueMigrate,
+    /// Cost of `query_custom`.
     QueryCustom,
+    /// Cost of `message_custom`.
     MessageCustom,
+    /// Cost of `query_raw`.
     QueryRaw,
+    /// Cost of `transfer`.
     Transfer,
+    /// Cost of `burn`.
     Burn,
+    /// Cost of `balance`.
     Balance,
+    /// Cost of `all_balance`.
     AllBalance,
+    /// Cost of `query_info`.
     QueryInfo,
+    /// Cost of `query_chain`.
     QueryChain,
+    /// Cost of `db_read`.
     DbRead,
+    /// Cost of `db_write`.
     DbWrite,
+    /// Cost of `db_remove`.
     DbRemove,
 }
 
@@ -74,7 +99,9 @@ pub type VmStorageKeyOf<T> = <T as VMBase>::StorageKey;
 pub type VmStorageValueOf<T> = <T as VMBase>::StorageValue;
 pub type VmCodeIdOf<T> = <T as VMBase>::CodeId;
 
+/// A way of calling a VM. From the abstract `call` to `raw_call`.
 pub trait VM: VMBase {
+    /// Execute an abstract call against the VM.
     fn call<'a, I>(&mut self, input: I) -> Result<I::Output, Self::Error>
     where
         I: Input + TryInto<VmInputOf<'a, Self>, Error = Self::Error>,
@@ -84,38 +111,54 @@ pub trait VM: VMBase {
         Ok(self.raw_call::<I::Output>(input)?)
     }
 
+    /// Execute a raw call against the VM.
     fn raw_call<'a, O>(&mut self, input: Self::Input<'a>) -> Result<O, Self::Error>
     where
         O: for<'x> TryFrom<Self::Output<'x>, Error = Self::Error>;
 }
 
+/// Base functions required to be implemented by a VM to run CosmWasm contracts.
 pub trait VMBase {
+    /// Input type, abstract type representing function inputs.
     type Input<'a>;
+    /// Output type, abstract type representing function outputs.
     type Output<'a>;
+    /// Custom query, also known as chain extension.
     type QueryCustom: DeserializeOwned + Debug;
+    /// Custom message, also known as chain extension.
     type MessageCustom: DeserializeOwned + Debug;
+    /// Unique identifier of a wasm blob representing a contract code.
     type CodeId;
+    /// Unique identifier for contract instances and users under the system.
     type Address;
+    /// Type of key used by the underlying DB.
     type StorageKey;
+    /// Type of value used by the underlying DB.
     type StorageValue;
+    /// Possible errors raised by this VM.
     type Error;
 
+    /// Create a new contract from the given code id.
     fn new_contract(&mut self, code_id: Self::CodeId) -> Result<Self::Address, Self::Error>;
 
+    /// Change the code id of a contract, actually migrating it.
     fn set_code_id(
         &mut self,
         address: Self::Address,
         new_code_id: Self::CodeId,
     ) -> Result<(), Self::Error>;
 
+    /// Get the code id of a given contract.
     fn code_id(&mut self, address: Self::Address) -> Result<Self::CodeId, Self::Error>;
 
+    /// Continue execution by calling query at the given contract address.
     fn query_continuation(
         &mut self,
         address: Self::Address,
         message: &[u8],
     ) -> Result<QueryResult, Self::Error>;
 
+    /// Continue execution by calling execute at the given contract address.
     fn continue_execute(
         &mut self,
         address: Self::Address,
@@ -124,6 +167,7 @@ pub trait VMBase {
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error>;
 
+    /// Continue execution by calling instantiate at the given contract address.
     fn continue_instantiate(
         &mut self,
         address: Self::Address,
@@ -132,6 +176,7 @@ pub trait VMBase {
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error>;
 
+    /// Continue execution by calling migrate at the given contract address.
     fn continue_migrate(
         &mut self,
         address: Self::Address,
@@ -140,17 +185,20 @@ pub trait VMBase {
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error>;
 
+    /// Custom CosmWasm query. Usually a host extension.
     fn query_custom(
         &mut self,
         query: Self::QueryCustom,
     ) -> Result<SystemResult<CosmwasmQueryResult>, Self::Error>;
 
+    /// Custom CosmWasm message. Usually a host extension.
     fn message_custom(
         &mut self,
         message: Self::MessageCustom,
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error>;
 
+    /// Query raw value in a contract db.
     fn query_raw(
         &mut self,
         address: Self::Address,
@@ -164,22 +212,29 @@ pub trait VMBase {
     fn burn(&mut self, funds: &[Coin]) -> Result<(), Self::Error>;
 
     /// Query the balance of `denom` tokens.
-    fn balance(&self, account: &Self::Address, denom: String) -> Result<Coin, Self::Error>;
+    fn balance(&mut self, account: &Self::Address, denom: String) -> Result<Coin, Self::Error>;
 
     /// Query for the balance of all tokens.
-    fn all_balance(&self, account: &Self::Address) -> Result<Vec<Coin>, Self::Error>;
+    fn all_balance(&mut self, account: &Self::Address) -> Result<Vec<Coin>, Self::Error>;
 
+    /// Query the contract info.
     fn query_info(&mut self, address: Self::Address) -> Result<ContractInfoResponse, Self::Error>;
 
+    /// Read an entry from the current contract db.
     fn db_read(&mut self, key: Self::StorageKey)
         -> Result<Option<Self::StorageValue>, Self::Error>;
 
+    /// Write into the current contract db.
     fn db_write(
         &mut self,
         key: Self::StorageKey,
         value: Self::StorageValue,
     ) -> Result<(), Self::Error>;
 
+    /// Remove an entry from the current contract db.
+    fn db_remove(&mut self, key: Self::StorageKey) -> Result<(), Self::Error>;
+
+    /// Abort execution, called when the contract panic.
     fn abort(&mut self, message: String) -> Result<(), Self::Error>;
 
     /// Charge gas value.

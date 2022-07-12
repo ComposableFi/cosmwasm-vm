@@ -147,6 +147,7 @@ pub trait AsFunctionName {
     fn name() -> &'static str;
 }
 
+/// Structure that hold the function inputs for `f(env, messageInfo, msg) -> X`.
 pub struct CosmwasmCallInput<'a, Pointer, I>(
     pub Tagged<Pointer, Env>,
     pub Tagged<Pointer, MessageInfo>,
@@ -157,27 +158,33 @@ impl<'a, Pointer, I: Input> Input for CosmwasmCallInput<'a, Pointer, I> {
     type Output = Pointer;
 }
 
+/// Structure that hold the function inputs for `f(env, msg) -> X`.
 pub struct CosmwasmCallWithoutInfoInput<'a, Pointer, I>(
     pub Tagged<Pointer, Env>,
     pub Tagged<Pointer, &'a [u8]>,
     pub PhantomData<I>,
 );
-
 impl<'a, Pointer, I: Input> Input for CosmwasmCallWithoutInfoInput<'a, Pointer, I> {
     type Output = Pointer;
 }
 
+/// Whether an input type require the `MessageInfo` message to be passed.
 pub trait HasInfo {
     fn has_info() -> bool;
 }
 
+/// Errors likely to happen while doing low level executor calls.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ExecutorError {
+    /// Unable to serialize the structure to JSON.
     FailedToSerialize,
+    /// Unable to deserialize the JSON payload to the given type.
     FailedToDeserialize,
+    /// The requested allocation size is too big and would overflow the memory.
     AllocationWouldOverflow,
+    /// The requrested deallocation size is too big and would overflow the memory (must be impossible).
     DeallocationWouldOverflow,
-    QueryReadLimitWouldOverflow,
+    /// The read limit is too big and could not be converted to a pointer.
     CallReadLimitWouldOverflow,
 }
 
@@ -208,10 +215,8 @@ pub mod constants {
     /// This is an arbitrary value, for performance / memory contraints. If you need to batch-verify a
     /// larger number of signatures, let us know.
     pub const MAX_COUNT_ED25519_BATCH: usize = 256;
-
     /// Max length for a debug message
     pub const MAX_LENGTH_DEBUG: usize = 2 * MI;
-
     /// Max length for an abort message
     pub const MAX_LENGTH_ABORT: usize = 2 * MI;
 }
@@ -228,7 +233,7 @@ impl<const K: usize> ReadLimit for ConstantReadLimit<K> {
 ///
 /// # Arguments
 ///
-/// * `vm` - the virtual machine running a contract.
+/// * `vm` - the virtual machine.
 /// * `len` - the len of the chunk to allocate.
 ///
 /// Returns the chunk pointer.
@@ -250,7 +255,8 @@ where
 ///
 /// # Arguments
 ///
-/// * `vm` - the virtual machine running a contract.
+/// * `vm` - the virtual machine.
+/// * `pointer` - the pointer pointing the memory we will deallocate.
 ///
 ///
 pub fn deallocate<V, P, L>(vm: &mut V, pointer: L) -> Result<(), VmErrorOf<V>>
@@ -268,8 +274,14 @@ where
     Ok(())
 }
 
-/// Passthrough raw bytes into a contract memory via an allocated chunk.
+/// Allocate memory in the contract and write raw bytes representing some value of type `T`.
 ///
+/// # Arguments
+///
+/// * `vm` - the virtual machine.
+/// * `data` - the raw bytes that will be written in the contract memory.
+///
+/// Returns either the tagged pointer or a `VmErrorOf<V>`.
 pub fn passthrough_in<V, T>(vm: &mut V, data: &[u8]) -> Result<Tagged<V::Pointer, T>, VmErrorOf<V>>
 where
     V: VM + ReadWriteMemory,
@@ -284,7 +296,14 @@ where
     Ok(Tagged::new(pointer))
 }
 
+/// Extract the bytes held by the region identified with the `pointer`.
 ///
+/// # Arguments
+///
+/// * `vm` - the virtual machine.
+/// * `pointer` - the region pointer from which we will read the bytes.
+///
+/// Returns either the bytes read or a `VmErrorOf<V>`.
 pub fn passthrough_out<V, T>(vm: &V, pointer: V::Pointer) -> Result<Vec<u8>, VmErrorOf<V>>
 where
     V: VM + ReadableMemory,
@@ -303,6 +322,14 @@ where
     Ok(buffer)
 }
 
+/// Allocate memory in the contract and write the type `T` serialized in JSON at the newly allocated space.
+///
+/// # Arguments
+///
+/// * `vm` - the virtual machine.
+/// * `x` - the value the will be serialized to JSON and written in the contract memory.
+///
+/// Returns either the tagged (type T) pointer to the allocated region or a `VmErrorOf<V>`.
 pub fn marshall_in<V, T>(vm: &mut V, x: &T) -> Result<Tagged<V::Pointer, T>, VmErrorOf<V>>
 where
     V: VM + ReadWriteMemory,
@@ -317,6 +344,14 @@ where
     Ok(passthrough_in(vm, &serialized)?)
 }
 
+/// Read a JSON serialized value of type `T` from a region identified by the `pointer`.
+///
+/// # Arguments
+///
+/// * `vm` - the virtual machine.
+/// * `pointer` - the region pointer from which we will read and deserialized a JSON payload of type `T`.
+///
+/// Returns either the value `T` or a `VmErrorOf<V>`.
 pub fn marshall_out<V, T>(vm: &V, pointer: V::Pointer) -> Result<T, VmErrorOf<V>>
 where
     V: VM + ReadableMemory,
@@ -336,6 +371,14 @@ where
     Ok(serde_json::from_slice(&output).map_err(|_| ExecutorError::FailedToDeserialize)?)
 }
 
+/// Execute a generic contract export (`instantiate`, `execute`, `migrate` etc...), providing the custom raw `message` input.
+///
+/// # Arguments
+///
+/// * `vm` - the virtual machine.
+/// * `message` - the contract message passed to the export, usually specific to the contract (InstantiateMsg, ExecuteMsg etc...).
+///
+/// Returns either the associated `I::Output` or a `VmErrorOf<V>`.
 pub fn cosmwasm_call<I, V>(vm: &mut V, message: &[u8]) -> Result<I::Output, VmErrorOf<V>>
 where
     V: VM + ReadWriteMemory + Has<Env> + Has<MessageInfo>,
@@ -373,6 +416,14 @@ where
     marshall_out(vm, pointer)
 }
 
+/// Execute a contract `query` function, providing the custom raw `message` input.
+///
+/// # Arguments
+///
+/// * `vm` - the virtual machine.
+/// * `message` - the contract message passed to the export, usually specific to the contract (InstantiateMsg, ExecuteMsg etc...).
+///
+/// Returns either a `QueryResult` or a `VmErrorOf<V>`.
 pub fn cosmwasm_query<V>(vm: &mut V, message: &[u8]) -> Result<QueryResult, VmErrorOf<V>>
 where
     V: VM + ReadWriteMemory + Has<Env>,

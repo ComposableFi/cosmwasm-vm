@@ -51,6 +51,7 @@ use cosmwasm_minimal_std::{
 };
 use serde::de::DeserializeOwned;
 
+/// Errors likely to happen while a VM is executing.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum SystemError {
     UnsupportedMessage,
@@ -69,6 +70,7 @@ enum SubCallContinuation<E> {
 
 pub type CosmwasmCodeId = u64;
 
+/// Minimum metadata associated to contracts.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CosmwasmContractMeta {
     pub code_id: CosmwasmCodeId,
@@ -130,6 +132,11 @@ where
     for<'x> VmInputOf<'x, Self>:
         TryFrom<CosmwasmQueryInput<'x, PointerOf<Self>>, Error = VmErrorOf<Self>>;
 
+/// High level dispatch for a CosmWasm VM.
+/// This call will manage and handle subcall as well as the transactions etc...
+/// The implementation must be semantically valid w.r.t https://github.com/CosmWasm/cosmwasm/blob/main/SEMANTICS.md
+///
+/// Returns either the value produced by the contract along the generated events or a `VmErrorOf<V>`
 pub fn cosmwasm_system_entrypoint<I, V>(
     vm: &mut V,
     message: &[u8],
@@ -389,6 +396,9 @@ where
     }
 }
 
+/// High level query for a CosmWasm VM.
+///
+/// Returns either the value returned by the contract `query` export or a `VmErrorOf<V>`
 pub fn cosmwasm_system_query<V>(
     vm: &mut V,
     request: QueryRequest<VmQueryCustomOf<V>>,
@@ -451,6 +461,9 @@ where
     }
 }
 
+/// High level query for a CosmWasm VM with remarshalling for contract execution continuation.
+///
+/// Returns either the JSON serialized value returned by the contract `query` export or a `VmErrorOf<V>`
 pub fn cosmwasm_system_query_raw<V>(
     vm: &mut V,
     request: QueryRequest<VmQueryCustomOf<V>>,
