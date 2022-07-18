@@ -259,18 +259,15 @@ where
 /// * `pointer` - the pointer pointing the memory we will deallocate.
 ///
 ///
-pub fn deallocate<V, P, L>(vm: &mut V, pointer: L) -> Result<(), VmErrorOf<V>>
+pub fn deallocate<V>(vm: &mut V, pointer: V::Pointer) -> Result<(), VmErrorOf<V>>
 where
-    V: VM,
+    V: VM + ReadWriteMemory,
     for<'x> Unit: TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
-    for<'x> VmInputOf<'x, V>: TryFrom<DeallocateInput<P>, Error = VmErrorOf<V>>,
-    P: Copy + TryFrom<L> + Debug + for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
+    for<'x> VmInputOf<'x, V>: TryFrom<DeallocateInput<V::Pointer>, Error = VmErrorOf<V>>,
     VmErrorOf<V>: From<ExecutorError>,
 {
     log::trace!("Deallocate");
-    let pointer_value =
-        P::try_from(pointer).map_err(|_| ExecutorError::DeallocationWouldOverflow)?;
-    vm.call(DeallocateInput(pointer_value))?;
+    vm.call(DeallocateInput(pointer))?;
     Ok(())
 }
 
@@ -385,7 +382,9 @@ where
     I: Input + HasInfo,
     I::Output: DeserializeOwned + ReadLimit + DeserializeLimit,
     V::Pointer: for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
+    for<'x> Unit: TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
     for<'x> VmInputOf<'x, V>: TryFrom<AllocateInput<V::Pointer>, Error = VmErrorOf<V>>
+        + TryFrom<DeallocateInput<V::Pointer>, Error = VmErrorOf<V>>
         + TryFrom<CosmwasmCallInput<'x, V::Pointer, I>, Error = VmErrorOf<V>>
         + TryFrom<CosmwasmCallWithoutInfoInput<'x, V::Pointer, I>, Error = VmErrorOf<V>>,
     VmErrorOf<V>:
@@ -413,7 +412,9 @@ where
             vm.call(input)
         }
     }?;
-    marshall_out(vm, pointer)
+    let result = marshall_out(vm, pointer)?;
+    deallocate(vm, pointer)?;
+    Ok(result)
 }
 
 /// Execute a contract `query` function, providing the custom raw `message` input.

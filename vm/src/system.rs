@@ -30,7 +30,7 @@ use crate::{
     executor::{
         cosmwasm_call, AllocateInput, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
         CosmwasmQueryInput, DeallocateInput, ExecuteInput, ExecutorError, HasInfo,
-        InstantiateInput, MigrateInput, ReplyInput,
+        InstantiateInput, MigrateInput, ReplyInput, Unit,
     },
     has::Has,
     input::{Input, OutputOf},
@@ -99,6 +99,7 @@ where
 
 pub trait CosmwasmCallVM<I> = CosmwasmBaseVM
 where
+    for<'x> Unit: TryFrom<VmOutputOf<'x, Self>, Error = VmErrorOf<Self>>,
     for<'x> VmInputOf<'x, Self>: TryFrom<DeallocateInput<PointerOf<Self>>, Error = VmErrorOf<Self>>
         + TryFrom<
             CosmwasmCallInput<'x, PointerOf<Self>, InstantiateInput<VmMessageCustomOf<Self>>>,
