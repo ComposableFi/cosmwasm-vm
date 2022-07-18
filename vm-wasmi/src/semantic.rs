@@ -6,7 +6,7 @@ use cosmwasm_minimal_std::{
     CosmwasmQueryResult, Empty, Env, Event, InstantiateResult, MessageInfo, QueryResult, Timestamp,
 };
 use cosmwasm_vm::{
-    executor::{cosmwasm_call, cosmwasm_query, ExecuteInput, InstantiateInput, MigrateInput},
+    executor::{cosmwasm_call, ExecuteInput, InstantiateInput, MigrateInput, QueryInput},
     system::{
         cosmwasm_system_entrypoint, cosmwasm_system_run, CosmwasmCodeId, CosmwasmContractMeta,
     },
@@ -253,7 +253,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         message: &[u8],
     ) -> Result<QueryResult, Self::Error> {
         self.load_subvm(address, vec![], |sub_vm| {
-            cosmwasm_query::<WasmiVM<SimpleWasmiVM>>(sub_vm, message)
+            cosmwasm_call::<QueryInput, WasmiVM<SimpleWasmiVM>>(sub_vm, message)
         })?
     }
 
@@ -609,8 +609,11 @@ fn test_bare() {
         InstantiateResult(CosmwasmExecutionResult::Ok(_))
     );
     assert_eq!(
-        cosmwasm_query::<WasmiVM<SimpleWasmiVM>>(&mut vm, r#"{ "token_info": {} }"#.as_bytes(),)
-            .unwrap(),
+        cosmwasm_call::<QueryInput, WasmiVM<SimpleWasmiVM>>(
+            &mut vm,
+            r#"{ "token_info": {} }"#.as_bytes(),
+        )
+        .unwrap(),
         QueryResult(CosmwasmQueryResult::Ok(Binary(
             r#"{"name":"Picasso","symbol":"PICA","decimals":12,"total_supply":"0"}"#
                 .as_bytes()
@@ -721,7 +724,7 @@ fn test_orchestration_advanced() {
     };
     let mut vm = create_simple_vm(sender, address, funds, &code, &mut extension);
     assert_eq!(
-        cosmwasm_query::<WasmiVM<SimpleWasmiVM>>(
+        cosmwasm_call::<QueryInput, WasmiVM<SimpleWasmiVM>>(
             &mut vm,
             r#"{ "recurse": { "depth": 10, "work": 10 }}"#.as_bytes()
         )

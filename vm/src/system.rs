@@ -29,8 +29,8 @@
 use crate::{
     executor::{
         cosmwasm_call, AllocateInput, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
-        CosmwasmQueryInput, DeallocateInput, ExecuteInput, ExecutorError, HasInfo,
-        InstantiateInput, MigrateInput, ReplyInput, Unit,
+        DeallocateInput, ExecuteInput, ExecutorError, HasInfo, InstantiateInput, MigrateInput,
+        ReplyInput, Unit,
     },
     has::Has,
     input::{Input, OutputOf},
@@ -127,11 +127,6 @@ where
         + ReadLimit
         + DeserializeLimit
         + Into<ContractResult<Response<VmMessageCustomOf<Self>>>>;
-
-pub trait CosmwasmQueryVM = CosmwasmBaseVM
-where
-    for<'x> VmInputOf<'x, Self>:
-        TryFrom<CosmwasmQueryInput<'x, PointerOf<Self>>, Error = VmErrorOf<Self>>;
 
 /// High level dispatch for a CosmWasm VM.
 /// This call will manage and handle subcall as well as the transactions etc...
@@ -405,7 +400,7 @@ pub fn cosmwasm_system_query<V>(
     request: QueryRequest<VmQueryCustomOf<V>>,
 ) -> Result<SystemResult<CosmwasmQueryResult>, VmErrorOf<V>>
 where
-    V: CosmwasmQueryVM,
+    V: CosmwasmBaseVM,
 {
     log::debug!("SystemQuery");
     match request {
@@ -470,7 +465,7 @@ pub fn cosmwasm_system_query_raw<V>(
     request: QueryRequest<VmQueryCustomOf<V>>,
 ) -> Result<Binary, VmErrorOf<V>>
 where
-    V: CosmwasmQueryVM,
+    V: CosmwasmBaseVM,
 {
     log::debug!("SystemQueryRaw");
     let output = cosmwasm_system_query(vm, request)?;

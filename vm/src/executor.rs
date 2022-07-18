@@ -69,13 +69,18 @@ impl<Pointer> AsFunctionName for DeallocateInput<Pointer> {
 }
 
 /// The type representing a call to a contract `query` export.
-pub struct CosmwasmQueryInput<'a, Pointer>(pub Tagged<Pointer, Env>, pub Tagged<Pointer, &'a [u8]>);
-impl<'a, Pointer> Input for CosmwasmQueryInput<'a, Pointer> {
-    type Output = Pointer;
+pub struct QueryInput;
+impl Input for QueryInput {
+    type Output = QueryResult;
 }
-impl<'a, Pointer> AsFunctionName for CosmwasmQueryInput<'a, Pointer> {
+impl AsFunctionName for QueryInput {
     fn name() -> &'static str {
         "query"
+    }
+}
+impl HasInfo for QueryInput {
+    fn has_info() -> bool {
+        false
     }
 }
 
@@ -415,27 +420,4 @@ where
     let result = marshall_out(vm, pointer)?;
     deallocate(vm, pointer)?;
     Ok(result)
-}
-
-/// Execute a contract `query` function, providing the custom raw `message` input.
-///
-/// # Arguments
-///
-/// * `vm` - the virtual machine.
-/// * `message` - the contract message passed to the export, usually specific to the contract (InstantiateMsg, ExecuteMsg etc...).
-///
-/// Returns either a `QueryResult` or a `VmErrorOf<V>`.
-pub fn cosmwasm_query<V>(vm: &mut V, message: &[u8]) -> Result<QueryResult, VmErrorOf<V>>
-where
-    V: VM + ReadWriteMemory + Has<Env>,
-    V::Pointer: for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
-    for<'x> VmInputOf<'x, V>: TryFrom<AllocateInput<V::Pointer>, Error = VmErrorOf<V>>
-        + TryFrom<CosmwasmQueryInput<'x, V::Pointer>, Error = VmErrorOf<V>>,
-    VmErrorOf<V>: From<ReadableMemoryErrorOf<V>> + From<ExecutorError>,
-{
-    log::trace!("Query");
-    let env = vm.get();
-    let input = CosmwasmQueryInput(marshall_in(vm, &env)?, passthrough_in(vm, message)?);
-    let pointer = vm.call(input)?;
-    marshall_out(vm, pointer)
 }

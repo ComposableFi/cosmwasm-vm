@@ -63,7 +63,6 @@ use cosmwasm_vm::executor::AllocateInput;
 use cosmwasm_vm::executor::AsFunctionName;
 use cosmwasm_vm::executor::CosmwasmCallInput;
 use cosmwasm_vm::executor::CosmwasmCallWithoutInfoInput;
-use cosmwasm_vm::executor::CosmwasmQueryInput;
 use cosmwasm_vm::executor::DeallocateInput;
 use cosmwasm_vm::executor::ExecutorError;
 use cosmwasm_vm::executor::Unit;
@@ -343,28 +342,6 @@ where
         Ok(WasmiInput(
             WasmiFunctionName(DeallocateInput::<u32>::name().into()),
             (vec![RuntimeValue::I32(ptr as i32)], PhantomData),
-            PhantomData,
-        ))
-    }
-}
-
-impl<'a, T> TryFrom<CosmwasmQueryInput<'a, u32>> for WasmiInput<'a, WasmiVM<T>>
-where
-    T: WasmiBaseVM,
-{
-    type Error = VmErrorOf<T>;
-    fn try_from(
-        CosmwasmQueryInput(Tagged(env_ptr, _), Tagged(msg_ptr, _)): CosmwasmQueryInput<'a, u32>,
-    ) -> Result<Self, Self::Error> {
-        Ok(WasmiInput(
-            WasmiFunctionName(CosmwasmQueryInput::<u32>::name().into()),
-            (
-                vec![
-                    RuntimeValue::I32(env_ptr as i32),
-                    RuntimeValue::I32(msg_ptr as i32),
-                ],
-                PhantomData,
-            ),
             PhantomData,
         ))
     }
@@ -897,9 +874,9 @@ mod host_functions {
         match &values[..] {
             [RuntimeValue::I32(key_pointer)] => {
                 let key = passthrough_out::<
-                        WasmiVM<T>,
+                    WasmiVM<T>,
                     ConstantReadLimit<{ constants::MAX_LENGTH_DB_KEY }>,
-                    >(vm, *key_pointer as u32)?;
+                >(vm, *key_pointer as u32)?;
                 vm.db_remove(key)?;
                 Ok(None)
             }
