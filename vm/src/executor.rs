@@ -343,7 +343,7 @@ where
 {
     log::trace!("MarshallIn");
     let serialized = serde_json::to_vec(x).map_err(|_| ExecutorError::FailedToSerialize)?;
-    Ok(passthrough_in(vm, &serialized)?)
+    passthrough_in(vm, &serialized)
 }
 
 /// Read a JSON serialized value of type `T` from a region identified by the `pointer`.

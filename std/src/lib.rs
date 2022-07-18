@@ -62,7 +62,7 @@ pub trait ReadLimit {
     fn read_limit() -> usize;
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ReplyResult<T>(pub CosmwasmExecutionResult<T>);
 impl<T> DeserializeLimit for ReplyResult<T> {
     fn deserialize_limit() -> usize {
@@ -74,13 +74,13 @@ impl<T> ReadLimit for ReplyResult<T> {
         read_limits::RESULT_REPLY
     }
 }
-impl<T> Into<ContractResult<Response<T>>> for ReplyResult<T> {
-    fn into(self) -> ContractResult<Response<T>> {
-        self.0
+impl<T> From<ReplyResult<T>> for ContractResult<Response<T>> {
+    fn from(ReplyResult(result): ReplyResult<T>) -> Self {
+        result
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct QueryResult(pub CosmwasmQueryResult);
 impl DeserializeLimit for QueryResult {
     fn deserialize_limit() -> usize {
@@ -93,7 +93,7 @@ impl ReadLimit for QueryResult {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ExecuteResult<T>(pub CosmwasmExecutionResult<T>);
 impl<T> DeserializeLimit for ExecuteResult<T> {
     fn deserialize_limit() -> usize {
@@ -105,13 +105,13 @@ impl<T> ReadLimit for ExecuteResult<T> {
         read_limits::RESULT_EXECUTE
     }
 }
-impl<T> Into<ContractResult<Response<T>>> for ExecuteResult<T> {
-    fn into(self) -> ContractResult<Response<T>> {
-        self.0
+impl<T> From<ExecuteResult<T>> for ContractResult<Response<T>> {
+    fn from(ExecuteResult(result): ExecuteResult<T>) -> Self {
+        result
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct InstantiateResult<T>(pub CosmwasmExecutionResult<T>);
 impl<T> DeserializeLimit for InstantiateResult<T> {
     fn deserialize_limit() -> usize {
@@ -123,13 +123,13 @@ impl<T> ReadLimit for InstantiateResult<T> {
         read_limits::RESULT_INSTANTIATE
     }
 }
-impl<T> Into<ContractResult<Response<T>>> for InstantiateResult<T> {
-    fn into(self) -> ContractResult<Response<T>> {
-        self.0
+impl<T> From<InstantiateResult<T>> for ContractResult<Response<T>> {
+    fn from(InstantiateResult(result): InstantiateResult<T>) -> Self {
+        result
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct MigrateResult<T>(pub CosmwasmExecutionResult<T>);
 impl<T> DeserializeLimit for MigrateResult<T> {
     fn deserialize_limit() -> usize {
@@ -141,13 +141,13 @@ impl<T> ReadLimit for MigrateResult<T> {
         read_limits::RESULT_MIGRATE
     }
 }
-impl<T> Into<ContractResult<Response<T>>> for MigrateResult<T> {
-    fn into(self) -> ContractResult<Response<T>> {
-        self.0
+impl<T> From<MigrateResult<T>> for ContractResult<Response<T>> {
+    fn from(MigrateResult(result): MigrateResult<T>) -> Self {
+        result
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryRequest<C = Empty> {
     Custom(C),
@@ -167,7 +167,7 @@ impl<C> ReadLimit for QueryRequest<C> {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum BankQuery {
     /// This calls into the native bank module for one denomination
@@ -179,7 +179,7 @@ pub enum BankQuery {
     AllBalances { address: String },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub struct BalanceResponse {
     /// Always returns a Coin with the requested denom.
@@ -187,14 +187,14 @@ pub struct BalanceResponse {
     pub amount: Coin,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub struct AllBalanceResponse {
     /// Returns all non-zero coins held by this account.
     pub amount: Vec<Coin>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum WasmQuery {
     /// this queries the public API of another contract at a known address (with known ABI)
@@ -217,7 +217,7 @@ pub enum WasmQuery {
     ContractInfo { contract_addr: String },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ContractInfoResponse {
     pub code_id: u64,
     /// address that instantiated this contract
@@ -247,7 +247,7 @@ impl ContractInfoResponse {
 /// This is used for cases when we use ReplyOn::Never and the id doesn't matter
 pub const UNUSED_MSG_ID: u64 = 0;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Response<T = Empty> {
     /// Optional list of messages to pass. These will be executed in order.
     /// If the ReplyOn variant matches the result (Always, Success on Ok, Error on Err),
@@ -275,7 +275,7 @@ pub struct Response<T = Empty> {
 /// Use this to define when the contract gets a response callback.
 /// If you only need it for errors or success you can select just those in order
 /// to save gas.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ReplyOn {
     /// Always perform a callback after SubMsg is processed
@@ -294,7 +294,7 @@ pub enum ReplyOn {
 /// Note: On error the submessage execution will revert any partial state changes due to this
 /// message, but not revert any state changes in the calling contract. If this is required, it must
 /// be done manually in the `reply` entry point.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct SubMsg<T = Empty> {
     /// An arbitrary ID chosen by the contract.
     /// This is typically used to match `Reply`s in the `reply` entry point to the submessage.
@@ -306,7 +306,7 @@ pub struct SubMsg<T = Empty> {
 
 /// The result object returned to `reply`. We always get the ID from the submessage
 /// back and then must handle success and error cases ourselves.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Reply {
     /// The ID that the contract set when emitting the `SubMsg`.
     /// Use this to identify which submessage triggered the `reply`.
@@ -314,7 +314,7 @@ pub struct Reply {
     pub result: SubMsgResult,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SubMsgResult {
     Ok(SubMsgResponse),
@@ -335,7 +335,7 @@ impl From<SubMsgResult> for Result<SubMsgResponse, String> {
 
 /// The information we get back from a successful sub message execution,
 /// with full Cosmos SDK events.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct SubMsgResponse {
     pub events: Vec<Event>,
     pub data: Option<Binary>,
@@ -347,7 +347,7 @@ pub trait CustomMsg: Serialize + Clone + core::fmt::Debug + PartialEq {}
 
 impl CustomMsg for Empty {}
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 // See https://github.com/serde-rs/serde/issues/1296 why we cannot add De-Serialize trait bounds to T
 pub enum CosmosMsg<T = Empty> {
@@ -361,7 +361,7 @@ pub enum CosmosMsg<T = Empty> {
 /// The message types of the bank module.
 ///
 /// See https://github.com/cosmos/cosmos-sdk/blob/v0.40.0/proto/cosmos/bank/v1beta1/tx.proto
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum BankMsg {
     /// Sends native tokens from the contract to the given address.
@@ -381,7 +381,7 @@ pub enum BankMsg {
 /// The message types of the wasm module.
 ///
 /// See https://github.com/CosmWasm/wasmd/blob/v0.14.0/x/wasm/internal/types/tx.proto
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum WasmMsg {
     /// Dispatches a call to another contract at a known address (with known ABI).
@@ -440,7 +440,7 @@ pub enum WasmMsg {
 ///
 /// [*Cosmos SDK* event]: https://docs.cosmos.network/master/core/events.html
 /// [*Cosmos SDK* StringEvent]: https://github.com/cosmos/cosmos-sdk/blob/v0.42.5/proto/cosmos/base/abci/v1beta1/abci.proto#L56-L70
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Event {
     /// The event type. This is renamed to "ty" because "type" is reserved in Rust. This sucks, we
     /// know.
@@ -461,7 +461,7 @@ impl Event {
 }
 
 /// An key value pair that is used in the context of event attributes in logs
-#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 pub struct Attribute {
     pub key: String,
     pub value: String,
@@ -509,10 +509,10 @@ impl PartialEq<&Attribute> for Attribute {
 /// It is designed to be expressable in correct JSON and JSON Schema but
 /// contains no meaningful data. Previously we used enums without cases,
 /// but those cannot represented as valid JSON Schema (https://github.com/CosmWasm/cosmwasm/issues/451)
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Empty {}
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ContractResult<S> {
     Ok(S),
@@ -541,7 +541,7 @@ impl<S> From<ContractResult<S>> for Result<S, String> {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 pub struct Coin {
     pub denom: String,
     #[serde(with = "string")]
@@ -905,7 +905,7 @@ mod string {
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Timestamp(#[serde(with = "string")] pub u128);
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Env {
     pub block: BlockInfo,
     /// Information on the transaction this message was executed in.
@@ -916,7 +916,7 @@ pub struct Env {
     pub contract: ContractInfo,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TransactionInfo {
     /// The position of this transaction in the block. The first
     /// transaction has index 0.
@@ -926,7 +926,7 @@ pub struct TransactionInfo {
     pub index: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct BlockInfo {
     /// The height of a block is the number of blocks preceding it in the blockchain.
     pub height: u64,
@@ -947,7 +947,7 @@ pub struct BlockInfo {
 ///
 /// [MsgInstantiateContract]: https://github.com/CosmWasm/wasmd/blob/v0.15.0/x/wasm/internal/types/tx.proto#L47-L61
 /// [MsgExecuteContract]: https://github.com/CosmWasm/wasmd/blob/v0.15.0/x/wasm/internal/types/tx.proto#L68-L78
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct MessageInfo {
     /// The `sender` field from `MsgInstantiateContract` and `MsgExecuteContract`.
     /// You can think of this as the address that initiated the action (i.e. the message). What
@@ -965,7 +965,7 @@ pub struct MessageInfo {
     pub funds: Vec<Coin>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ContractInfo {
     pub address: Addr,
 }
@@ -979,7 +979,7 @@ pub struct ContractInfo {
 ///
 /// Such errors are only created by the VM. The error type is defined in the standard library, to
 /// ensure the contract understands the error format without creating a dependency on cosmwasm-vm.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SystemError {
     InvalidRequest {
@@ -1006,7 +1006,7 @@ pub enum SystemError {
 /// define the serialization, which is a public interface. Every language that compiles
 /// to Wasm and runs in the ComsWasm VM needs to create the same JSON representation.
 ///
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SystemResult<S> {
     Ok(S),

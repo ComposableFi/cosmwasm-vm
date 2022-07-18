@@ -59,7 +59,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
- "wasmi",
+ "wasmi 0.11.0 (git+https://github.com/hussein-aitlahcen/wasmi?rev=411cb956a8183e482d58e22791a9c85d97566284)",
  "wat",
 ]
 
@@ -75,7 +75,7 @@ dependencies = [
  "serde",
  "serde_json",
  "wasm-instrument",
- "wasmi",
+ "wasmi 0.11.0 (git+https://github.com/ComposableFi/wasmi?rev=24d5ac2067f598339226fb374a794d870d94a04b)",
  "wat",
 ]
 
@@ -343,11 +343,29 @@ dependencies = [
 [[package]]
 name = "wasmi"
 version = "0.11.0"
+source = "git+https://github.com/ComposableFi/wasmi?rev=24d5ac2067f598339226fb374a794d870d94a04b#24d5ac2067f598339226fb374a794d870d94a04b"
+dependencies = [
+ "parity-wasm 0.42.2",
+ "wasmi-validation 0.4.1 (git+https://github.com/ComposableFi/wasmi?rev=24d5ac2067f598339226fb374a794d870d94a04b)",
+ "wasmi_core 0.1.0 (git+https://github.com/ComposableFi/wasmi?rev=24d5ac2067f598339226fb374a794d870d94a04b)",
+]
+
+[[package]]
+name = "wasmi"
+version = "0.11.0"
 source = "git+https://github.com/hussein-aitlahcen/wasmi?rev=411cb956a8183e482d58e22791a9c85d97566284#411cb956a8183e482d58e22791a9c85d97566284"
 dependencies = [
  "parity-wasm 0.42.2",
- "wasmi-validation",
- "wasmi_core",
+ "wasmi-validation 0.4.1 (git+https://github.com/hussein-aitlahcen/wasmi?rev=411cb956a8183e482d58e22791a9c85d97566284)",
+ "wasmi_core 0.1.0 (git+https://github.com/hussein-aitlahcen/wasmi?rev=411cb956a8183e482d58e22791a9c85d97566284)",
+]
+
+[[package]]
+name = "wasmi-validation"
+version = "0.4.1"
+source = "git+https://github.com/ComposableFi/wasmi?rev=24d5ac2067f598339226fb374a794d870d94a04b#24d5ac2067f598339226fb374a794d870d94a04b"
+dependencies = [
+ "parity-wasm 0.42.2",
 ]
 
 [[package]]
@@ -355,6 +373,18 @@ name = "wasmi-validation"
 version = "0.4.1"
 source = "git+https://github.com/hussein-aitlahcen/wasmi?rev=411cb956a8183e482d58e22791a9c85d97566284#411cb956a8183e482d58e22791a9c85d97566284"
 dependencies = [
+ "parity-wasm 0.42.2",
+]
+
+[[package]]
+name = "wasmi_core"
+version = "0.1.0"
+source = "git+https://github.com/ComposableFi/wasmi?rev=24d5ac2067f598339226fb374a794d870d94a04b#24d5ac2067f598339226fb374a794d870d94a04b"
+dependencies = [
+ "libm",
+ "memory_units",
+ "num-rational",
+ "num-traits",
  "parity-wasm 0.42.2",
 ]
 

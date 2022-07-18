@@ -187,7 +187,7 @@ where
             ..
         })) => {
             // https://github.com/CosmWasm/wasmd/blob/ac92fdcf37388cc8dc24535f301f64395f8fb3da/x/wasm/keeper/events.go#L16
-            if attributes.len() > 0 {
+            if !attributes.is_empty() {
                 event_handler(Event::new("wasm".into(), attributes));
             }
             // https://github.com/CosmWasm/wasmd/blob/ac92fdcf37388cc8dc24535f301f64395f8fb3da/x/wasm/keeper/events.go#L29
@@ -334,7 +334,7 @@ where
 
                     vm.gas_checkpoint_pop()?;
 
-                    let sub_cont = match (sub_res, reply_on.clone()) {
+                    let sub_cont = match (sub_res, reply_on) {
                         (Ok(v), ReplyOn::Never | ReplyOn::Error) => {
                             log::debug!("Commit & Continue");
                             vm.transaction_commit()?;
@@ -365,7 +365,7 @@ where
 
                     match sub_cont {
                         // Current value might be overwritten.
-                        SubCallContinuation::Continue(v) => Ok(v.or_else(|| current)),
+                        SubCallContinuation::Continue(v) => Ok(v.or(current)),
                         // Abort result in no value indeed.
                         SubCallContinuation::Abort(e) => Err(e),
                         // Might be overwritten again.
@@ -381,7 +381,7 @@ where
                                 &raw_response,
                                 &mut event_handler,
                             )
-                            .map(|v| v.or_else(|| current))
+                            .map(|v| v.or(current))
                         }
                     }
                 },
@@ -441,7 +441,7 @@ where
                 let vm_contract_addr = contract_addr.try_into()?;
                 let value = vm.query_raw(vm_contract_addr, key)?;
                 Ok(SystemResult::Ok(ContractResult::Ok(Binary(
-                    value.unwrap_or_else(|| Vec::new()),
+                    value.unwrap_or_default(),
                 ))))
             }
             WasmQuery::ContractInfo { contract_addr } => {

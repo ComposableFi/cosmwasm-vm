@@ -32,8 +32,10 @@
 
         # Crane pinned to nightly Rust
         crane-nightly = crane-lib.overrideToolchain rust-nightly;
-      in rec {
-        packages.cosmwasm-vm = crane-nightly.buildPackage ({
+
+        # Default args to crane
+        common-args = {
+          pname = "cosmwasm-vm";
           src = lib.cleanSourceWith {
             filter = lib.cleanSourceFilter;
             src = lib.cleanSourceWith {
@@ -42,7 +44,24 @@
               src = ./.;
             };
           };
-        });
+        };
+
+        # Common dependencies used for caching
+        common-deps = crane-nightly.buildDepsOnly common-args;
+
+        common-cached-args = common-args // {
+          cargoArtifacts = common-deps;
+        };
+
+      in rec {
+        packages.cosmwasm-vm = crane-nightly.buildPackage common-cached-args;
         packages.default = packages.cosmwasm-vm;
+        checks = {
+          package = packages.default;
+          clippy = crane-nightly.cargoClippy (common-cached-args // {
+            cargoClippyExtraArgs = "-- --deny warnings";
+          });
+          fmt = crane-nightly.cargoFmt common-args;
+        };
       });
 }

@@ -108,7 +108,7 @@ pub trait VM: VMBase {
         I::Output: for<'x> TryFrom<VmOutputOf<'x, Self>, Error = Self::Error>,
     {
         let input = input.try_into()?;
-        Ok(self.raw_call::<I::Output>(input)?)
+        self.raw_call::<I::Output>(input)
     }
 
     /// Execute a raw call against the VM.

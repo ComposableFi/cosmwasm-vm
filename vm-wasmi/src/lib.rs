@@ -83,9 +83,9 @@ use cosmwasm_vm::transaction::Transactional;
 use cosmwasm_vm::transaction::TransactionalErrorOf;
 use cosmwasm_vm::vm::*;
 use either::Either;
+use wasmi::CanResume;
 use wasmi::Externals;
 use wasmi::FuncInstance;
-use wasmi::HostError;
 use wasmi::ImportResolver;
 use wasmi::NopExternals;
 use wasmi::RuntimeValue;
@@ -104,7 +104,6 @@ pub type WasmiHostModule<T> = BTreeMap<WasmiFunctionName, WasmiHostModuleEntry<T
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum WasmiVMError {
-    WasmiError(wasmi::Error),
     ExecutorError(ExecutorError),
     SystemError(SystemError),
     MemoryReadError(MemoryReadError),
@@ -118,16 +117,6 @@ pub enum WasmiVMError {
     UnexpectedUnit,
     ExpectedUnit,
     InvalidHostSignature,
-}
-impl From<wasmi::Error> for WasmiVMError {
-    fn from(e: wasmi::Error) -> Self {
-        WasmiVMError::WasmiError(e)
-    }
-}
-impl From<wasmi::Trap> for WasmiVMError {
-    fn from(e: wasmi::Trap) -> Self {
-        wasmi::Error::from(e).into()
-    }
 }
 impl From<ExecutorError> for WasmiVMError {
     fn from(e: ExecutorError) -> Self {
@@ -170,7 +159,8 @@ pub trait WasmiBaseVM = WasmiModuleExecutor
 where
     VmAddressOf<Self>:
         Clone + TryFrom<Addr, Error = VmErrorOf<Self>> + TryFrom<String, Error = VmErrorOf<Self>>,
-    VmErrorOf<Self>: From<WasmiVMError>
+    VmErrorOf<Self>: From<wasmi::Error>
+        + From<WasmiVMError>
         + From<MemoryReadError>
         + From<MemoryWriteError>
         + From<ReadableMemoryErrorOf<Self>>
@@ -179,7 +169,7 @@ where
         + From<SystemError>
         + From<TransactionalErrorOf<Self>>
         + Debug
-        + HostError,
+        + CanResume,
     ReadableMemoryErrorOf<Self>: From<MemoryReadError>,
     WritableMemoryErrorOf<Self>: From<MemoryWriteError>;
 
@@ -192,18 +182,19 @@ impl<T> Externals for WasmiVM<T>
 where
     T: WasmiBaseVM,
 {
+    type Error = VmErrorOf<T>;
     fn invoke_index(
         &mut self,
         index: usize,
         args: wasmi::RuntimeArgs,
-    ) -> Result<Option<RuntimeValue>, wasmi::Trap> {
-        Ok(<Self as Has<
-            BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<T>>,
-        >>::get(&self)
-        .get(&WasmiHostFunctionIndex(index))
-        .ok_or(VmErrorOf::<T>::from(
-            WasmiVMError::HostFunctionNotFound(WasmiHostFunctionIndex(index)),
-        ))?(self, args.as_ref())?)
+    ) -> Result<Option<RuntimeValue>, Self::Error> {
+        <Self as Has<BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<T>>>>::get(self)
+            .get(&WasmiHostFunctionIndex(index))
+            .ok_or_else(|| {
+                VmErrorOf::<T>::from(WasmiVMError::HostFunctionNotFound(WasmiHostFunctionIndex(
+                    index,
+                )))
+            })?(self, args.as_ref())
     }
 }
 
@@ -218,18 +209,23 @@ where
         field_name: &str,
         signature: &wasmi::Signature,
     ) -> Result<wasmi::FuncRef, wasmi::Error> {
-        let module = self.0.get(&WasmiModuleName(module_name.to_owned())).ok_or(
-            wasmi::Error::Instantiation(format!(
-                "A module tried to load an unknown host module: {}",
-                module_name
-            )),
-        )?;
+        let module = self
+            .0
+            .get(&WasmiModuleName(module_name.to_owned()))
+            .ok_or_else(|| {
+                wasmi::Error::Instantiation(format!(
+                    "A module tried to load an unknown host module: {}",
+                    module_name
+                ))
+            })?;
         let (WasmiHostFunctionIndex(function_index), _) = *module
             .get(&WasmiFunctionName(field_name.to_owned()))
-            .ok_or(wasmi::Error::Instantiation(format!(
-                "A module tried to load an unknown host function: {}.{}",
-                module_name, field_name
-            )))?;
+            .ok_or_else(|| {
+                wasmi::Error::Instantiation(format!(
+                    "A module tried to load an unknown host function: {}.{}",
+                    module_name, field_name
+                ))
+            })?;
         Ok(FuncInstance::alloc_host(signature.clone(), function_index))
     }
 
@@ -411,16 +407,14 @@ where
     {
         self.0.charge(VmGas::RawCall)?;
         let WasmiModule { module, memory } = self.0.executing_module();
-        let value = module
-            .invoke_export(&function_name, &function_args, self)
-            .map_err(WasmiVMError::WasmiError)?;
-        Ok(O::try_from(WasmiOutput(
+        let value = module.invoke_export(&function_name, &function_args, self)?;
+        O::try_from(WasmiOutput(
             match value {
                 Some(non_unit) => Either::Right((&memory, non_unit)),
                 None => Either::Left(&memory),
             },
             PhantomData,
-        ))?)
+        ))
     }
 }
 
@@ -621,13 +615,14 @@ impl<T: Has<U>, U> Has<U> for WasmiVM<T> {
 pub fn new_wasmi_vm<T>(
     resolver: &WasmiImportResolver<T>,
     code: &[u8],
-) -> Result<WasmiModule, WasmiVMError>
+) -> Result<WasmiModule, VmErrorOf<T>>
 where
     T: WasmiBaseVM,
 {
     let wasmi_module = wasmi::Module::from_buffer(code)?;
     let not_started_module_instance = wasmi::ModuleInstance::new(&wasmi_module, resolver)?;
-    let module_instance = not_started_module_instance.run_start(&mut NopExternals)?;
+    let module_instance =
+        not_started_module_instance.run_start(&mut NopExternals(PhantomData::<VmErrorOf<T>>))?;
     let memory_exported = module_instance
         .export_by_name("memory")
         .ok_or(WasmiVMError::MemoryNotExported)?;
@@ -817,7 +812,7 @@ mod host_functions {
         T: WasmiBaseVM,
     {
         log::debug!("db_read");
-        match &values[..] {
+        match values {
             [RuntimeValue::I32(key_pointer)] => {
                 let key = passthrough_out::<
                     WasmiVM<T>,
@@ -831,7 +826,7 @@ mod host_functions {
                         Ok(Some(RuntimeValue::I32(value_pointer as i32)))
                     }
                     Ok(None) => Ok(Some(RuntimeValue::I32(0))),
-                    Err(e) => Err(e.into()),
+                    Err(e) => Err(e),
                 }
             }
             _ => Err(WasmiVMError::InvalidHostSignature.into()),
@@ -846,7 +841,7 @@ mod host_functions {
         T: WasmiBaseVM,
     {
         log::debug!("db_write");
-        match &values[..] {
+        match values {
             [RuntimeValue::I32(key_pointer), RuntimeValue::I32(value_pointer)] => {
                 let key = passthrough_out::<
                     WasmiVM<T>,
@@ -871,7 +866,7 @@ mod host_functions {
         T: WasmiBaseVM,
     {
         log::debug!("db_read");
-        match &values[..] {
+        match values {
             [RuntimeValue::I32(key_pointer)] => {
                 let key = passthrough_out::<
                     WasmiVM<T>,
@@ -1013,7 +1008,7 @@ mod host_functions {
         T: WasmiBaseVM,
     {
         log::debug!("query_chain");
-        match &values[..] {
+        match values {
             [RuntimeValue::I32(query_pointer)] => {
                 vm.charge(VmGas::QueryChain)?;
                 let request = marshall_out::<WasmiVM<T>, QueryRequest<VmQueryCustomOf<T>>>(
@@ -1036,7 +1031,7 @@ mod host_functions {
         T: WasmiBaseVM,
     {
         log::debug!("abort");
-        match &values[..] {
+        match values {
             [RuntimeValue::I32(message_pointer)] => {
                 let message: Vec<u8> = passthrough_out::<
                     WasmiVM<T>,
@@ -1056,7 +1051,7 @@ mod host_functions {
     where
         T: WasmiBaseVM,
     {
-        match &values[..] {
+        match values {
             [RuntimeValue::I32(value)] => {
                 vm.charge(VmGas::Instrumentation {
                     metered: *value as u32,

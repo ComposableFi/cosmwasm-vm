@@ -23,6 +23,7 @@ pub fn initialize() {
 
 #[derive(Debug)]
 enum SimpleVMError {
+    Interpreter(wasmi::Error),
     VMError(WasmiVMError),
     CodeNotFound(CosmwasmCodeId),
     ContractNotFound(BankAccount),
@@ -31,6 +32,11 @@ enum SimpleVMError {
     NoCustomMessage,
     Unsupported,
     OutOfGas,
+}
+impl From<wasmi::Error> for SimpleVMError {
+    fn from(e: wasmi::Error) -> Self {
+        Self::Interpreter(e)
+    }
 }
 impl From<WasmiVMError> for SimpleVMError {
     fn from(e: WasmiVMError) -> Self {
@@ -57,13 +63,16 @@ impl From<MemoryWriteError> for SimpleVMError {
         SimpleVMError::VMError(e.into())
     }
 }
-
 impl Display for SimpleVMError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "{:?}", self)
     }
 }
-impl HostError for SimpleVMError {}
+impl CanResume for SimpleVMError {
+    fn can_resume(&self) -> bool {
+        false
+    }
+}
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 struct Gas {
@@ -198,8 +207,7 @@ impl<'a> SimpleWasmiVM<'a> {
             host_functions: host_functions_definitions
                 .0
                 .into_iter()
-                .map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
-                .flatten()
+                .flat_map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
                 .collect(),
             executing_module: module,
             env: Env {
@@ -458,7 +466,7 @@ struct BankAccount(u128);
 impl TryFrom<Addr> for BankAccount {
     type Error = SimpleVMError;
     fn try_from(value: Addr) -> Result<Self, Self::Error> {
-        Ok(value.to_string().try_into()?)
+        value.to_string().try_into()
     }
 }
 
@@ -471,9 +479,9 @@ impl TryFrom<String> for BankAccount {
     }
 }
 
-impl Into<Addr> for BankAccount {
-    fn into(self) -> Addr {
-        Addr::unchecked(format!("{}", self.0))
+impl From<BankAccount> for Addr {
+    fn from(BankAccount(account): BankAccount) -> Self {
+        Addr::unchecked(format!("{}", account))
     }
 }
 
@@ -547,8 +555,7 @@ fn create_simple_vm<'a>(
             .0
             .clone()
             .into_iter()
-            .map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
-            .flatten()
+            .flat_map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
             .collect(),
         executing_module: module,
         env: Env {
@@ -747,7 +754,7 @@ fn test_reply() {
     let funds = vec![];
     let mut extension = SimpleWasmiVMExtension {
         storage: Default::default(),
-        codes: BTreeMap::from([(0x1337, code.clone()), (0x1338, code_hackatom.clone())]),
+        codes: BTreeMap::from([(0x1337, code.clone()), (0x1338, code_hackatom)]),
         contracts: BTreeMap::from([
             (
                 address,
