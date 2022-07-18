@@ -1,8 +1,8 @@
-name: "Build & Tests"
+name: "Build & Tests & Clippy & Fmt"
 on:
   push:
 jobs:
-  build-and-tests:
+  build-tests-clippy-fmt:
     runs-on:
       - ubuntu-latest
     container:
@@ -12,4 +12,4 @@ jobs:
       - run: |
           echo "experimental-features = nix-command flakes" > /etc/nix/nix.conf
       - run: |
-          nix build -L
+          nix flake check -L
