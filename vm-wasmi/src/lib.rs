@@ -594,6 +594,7 @@ where
     }
 
     fn db_remove(&mut self, key: Self::StorageKey) -> Result<(), Self::Error> {
+        self.0.charge(VmGas::DbRemove)?;
         self.0.db_remove(key)
     }
 
