@@ -29,7 +29,6 @@
 #![no_std]
 #![feature(generic_associated_types)]
 #![feature(trait_alias)]
-#![cfg_attr(test, feature(assert_matches))]
 
 extern crate alloc;
 
