@@ -31,63 +31,35 @@
 #![feature(trait_alias)]
 #![cfg_attr(test, feature(assert_matches))]
 
-#[cfg(test)]
-#[macro_use]
-extern crate std;
-
 extern crate alloc;
 
 #[cfg(test)]
 mod semantic;
 
-use alloc::borrow::ToOwned;
-use alloc::collections::BTreeMap;
-use alloc::format;
-use alloc::string::String;
-use alloc::vec;
-use alloc::vec::Vec;
-use core::fmt::Debug;
-use core::fmt::Display;
-use core::marker::PhantomData;
-use core::num::TryFromIntError;
-use cosmwasm_minimal_std::Binary;
-use cosmwasm_minimal_std::Coin;
-use cosmwasm_minimal_std::ContractInfoResponse;
-use cosmwasm_minimal_std::CosmwasmQueryResult;
-use cosmwasm_minimal_std::Env;
-use cosmwasm_minimal_std::Event;
-use cosmwasm_minimal_std::MessageInfo;
-use cosmwasm_minimal_std::SystemResult;
-use cosmwasm_vm::executor::AllocateInput;
-use cosmwasm_vm::executor::AsFunctionName;
-use cosmwasm_vm::executor::CosmwasmCallInput;
-use cosmwasm_vm::executor::CosmwasmCallWithoutInfoInput;
-use cosmwasm_vm::executor::DeallocateInput;
-use cosmwasm_vm::executor::ExecutorError;
-use cosmwasm_vm::executor::Unit;
+use alloc::{borrow::ToOwned, collections::BTreeMap, format, string::String, vec, vec::Vec};
+use core::{
+    fmt::{Debug, Display},
+    marker::PhantomData,
+    num::TryFromIntError,
+};
+use cosmwasm_minimal_std::{
+    Binary, Coin, ContractInfoResponse, CosmwasmQueryResult, Env, Event, MessageInfo, SystemResult,
+};
+use cosmwasm_vm::executor::{
+    AllocateInput, AsFunctionName, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
+    DeallocateInput, ExecutorError, Unit,
+};
 use cosmwasm_vm::has::Has;
-use cosmwasm_vm::memory::MemoryReadError;
-use cosmwasm_vm::memory::MemoryWriteError;
-use cosmwasm_vm::memory::Pointable;
-use cosmwasm_vm::memory::PointerOf;
-use cosmwasm_vm::memory::ReadWriteMemory;
-use cosmwasm_vm::memory::ReadableMemory;
-use cosmwasm_vm::memory::ReadableMemoryErrorOf;
-use cosmwasm_vm::memory::WritableMemory;
-use cosmwasm_vm::memory::WritableMemoryErrorOf;
-use cosmwasm_vm::system::CosmwasmContractMeta;
-use cosmwasm_vm::system::SystemError;
+use cosmwasm_vm::memory::{
+    MemoryReadError, MemoryWriteError, Pointable, PointerOf, ReadWriteMemory, ReadableMemory,
+    ReadableMemoryErrorOf, WritableMemory, WritableMemoryErrorOf,
+};
+use cosmwasm_vm::system::{CosmwasmContractMeta, SystemError};
 use cosmwasm_vm::tagged::Tagged;
-use cosmwasm_vm::transaction::Transactional;
-use cosmwasm_vm::transaction::TransactionalErrorOf;
+use cosmwasm_vm::transaction::{Transactional, TransactionalErrorOf};
 use cosmwasm_vm::vm::*;
 use either::Either;
-use wasmi::CanResume;
-use wasmi::Externals;
-use wasmi::FuncInstance;
-use wasmi::ImportResolver;
-use wasmi::NopExternals;
-use wasmi::RuntimeValue;
+use wasmi::{CanResume, Externals, FuncInstance, ImportResolver, NopExternals, RuntimeValue};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct WasmiFunctionName(String);

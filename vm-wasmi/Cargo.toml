@@ -3,14 +3,12 @@ name = "cosmwasm-vm-wasmi"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 serde = { version = "1", default-features = false, features = ["derive"] }
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
 either = { version = "1.6", default-features = false }
-wasmi = { git = "https://github.com/ComposableFi/wasmi", rev = "ddadd38d6816aca52e8c9fd7a121129896681666", default-features = false }
 log = { version = "0.4", default-features = false }
+wasmi = { git = "https://github.com/ComposableFi/wasmi", rev = "ddadd38d6816aca52e8c9fd7a121129896681666", default-features = false }
 
 cosmwasm-minimal-std =  { path = "../std", default-features = false }
 cosmwasm-vm = { path = "../vm", default-features = false }

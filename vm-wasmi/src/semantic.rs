@@ -1,3 +1,5 @@
+extern crate std;
+
 use super::*;
 use alloc::string::ToString;
 use core::{assert_matches::assert_matches, num::NonZeroU32, str::FromStr};
