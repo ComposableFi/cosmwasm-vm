@@ -50,7 +50,6 @@ use core::fmt::Debug;
 use core::fmt::Display;
 use core::marker::PhantomData;
 use core::num::TryFromIntError;
-use cosmwasm_minimal_std::Addr;
 use cosmwasm_minimal_std::Binary;
 use cosmwasm_minimal_std::Coin;
 use cosmwasm_minimal_std::ContractInfoResponse;
@@ -157,8 +156,7 @@ pub trait WasmiBaseVM = WasmiModuleExecutor
     + Has<MessageInfo>
     + Has<BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<Self>>>
 where
-    VmAddressOf<Self>:
-        Clone + TryFrom<Addr, Error = VmErrorOf<Self>> + TryFrom<String, Error = VmErrorOf<Self>>,
+    VmAddressOf<Self>: Clone + TryFrom<String, Error = VmErrorOf<Self>>,
     VmErrorOf<Self>: From<wasmi::Error>
         + From<WasmiVMError>
         + From<MemoryReadError>
