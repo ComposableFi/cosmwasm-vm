@@ -666,7 +666,7 @@ where
 impl<T> ReadWriteMemory for WasmiVM<T> where T: WasmiBaseVM {}
 
 #[allow(dead_code)]
-mod host_functions {
+pub mod host_functions {
     use super::*;
     use cosmwasm_minimal_std::QueryRequest;
     use cosmwasm_vm::{
