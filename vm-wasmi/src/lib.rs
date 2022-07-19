@@ -272,8 +272,8 @@ pub struct WasmiInput<'a, T>(WasmiFunctionName, WasmiFunctionArgs<'a>, PhantomDa
 
 #[derive(Clone)]
 pub struct WasmiModule {
-    module: wasmi::ModuleRef,
-    memory: wasmi::MemoryRef,
+    pub module: wasmi::ModuleRef,
+    pub memory: wasmi::MemoryRef,
 }
 
 impl<'a, T> TryFrom<WasmiOutput<'a, WasmiVM<T>>> for RuntimeValue
