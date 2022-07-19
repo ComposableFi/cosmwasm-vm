@@ -336,7 +336,7 @@ dependencies = [
 [[package]]
 name = "wasmi"
 version = "0.11.0"
-source = "git+https://github.com/ComposableFi/wasmi?rev=24d5ac2067f598339226fb374a794d870d94a04b#24d5ac2067f598339226fb374a794d870d94a04b"
+source = "git+https://github.com/ComposableFi/wasmi?rev=ddadd38d6816aca52e8c9fd7a121129896681666#ddadd38d6816aca52e8c9fd7a121129896681666"
 dependencies = [
  "parity-wasm 0.42.2",
  "wasmi-validation",
@@ -346,7 +346,7 @@ dependencies = [
 [[package]]
 name = "wasmi-validation"
 version = "0.4.1"
-source = "git+https://github.com/ComposableFi/wasmi?rev=24d5ac2067f598339226fb374a794d870d94a04b#24d5ac2067f598339226fb374a794d870d94a04b"
+source = "git+https://github.com/ComposableFi/wasmi?rev=ddadd38d6816aca52e8c9fd7a121129896681666#ddadd38d6816aca52e8c9fd7a121129896681666"
 dependencies = [
  "parity-wasm 0.42.2",
 ]
@@ -354,7 +354,7 @@ dependencies = [
 [[package]]
 name = "wasmi_core"
 version = "0.1.0"
-source = "git+https://github.com/ComposableFi/wasmi?rev=24d5ac2067f598339226fb374a794d870d94a04b#24d5ac2067f598339226fb374a794d870d94a04b"
+source = "git+https://github.com/ComposableFi/wasmi?rev=ddadd38d6816aca52e8c9fd7a121129896681666#ddadd38d6816aca52e8c9fd7a121129896681666"
 dependencies = [
  "libm",
  "memory_units",
