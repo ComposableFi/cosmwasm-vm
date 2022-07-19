@@ -198,7 +198,7 @@ where
     }
 }
 
-pub struct WasmiImportResolver<T: VMBase>(BTreeMap<WasmiModuleName, WasmiHostModule<T>>);
+pub struct WasmiImportResolver<T: VMBase>(pub BTreeMap<WasmiModuleName, WasmiHostModule<T>>);
 impl<T> ImportResolver for WasmiImportResolver<T>
 where
     T: WasmiBaseVM,
