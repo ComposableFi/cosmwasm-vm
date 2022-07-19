@@ -44,10 +44,10 @@ use crate::{
 use alloc::{format, string::String, vec, vec::Vec};
 use core::fmt::Debug;
 use cosmwasm_minimal_std::{
-    Addr, AllBalanceResponse, BalanceResponse, BankMsg, BankQuery, Binary, ContractResult,
-    CosmosMsg, CosmwasmQueryResult, DeserializeLimit, Env, Event, MessageInfo, QueryRequest,
-    QueryResult, ReadLimit, Reply, ReplyOn, Response, SubMsg, SubMsgResponse, SubMsgResult,
-    SystemResult, WasmMsg, WasmQuery,
+    AllBalanceResponse, BalanceResponse, BankMsg, BankQuery, Binary, ContractResult, CosmosMsg,
+    CosmwasmQueryResult, DeserializeLimit, Env, Event, MessageInfo, QueryRequest, QueryResult,
+    ReadLimit, Reply, ReplyOn, Response, SubMsg, SubMsgResponse, SubMsgResult, SystemResult,
+    WasmMsg, WasmQuery,
 };
 use serde::de::DeserializeOwned;
 
@@ -86,8 +86,7 @@ pub trait CosmwasmBaseVM = VM<CodeId = CosmwasmContractMeta, StorageKey = Vec<u8
 where
     VmMessageCustomOf<Self>: DeserializeOwned + Debug,
     VmQueryCustomOf<Self>: DeserializeOwned + Debug,
-    VmAddressOf<Self>:
-        Clone + TryFrom<Addr, Error = VmErrorOf<Self>> + TryFrom<String, Error = VmErrorOf<Self>>,
+    VmAddressOf<Self>: Clone + TryFrom<String, Error = VmErrorOf<Self>>,
     VmErrorOf<Self>: From<ReadableMemoryErrorOf<Self>>
         + From<WritableMemoryErrorOf<Self>>
         + From<ExecutorError>
