@@ -201,12 +201,6 @@ dependencies = [
 
 [[package]]
 name = "parity-wasm"
-version = "0.42.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be5e13c266502aadf83426d87d81a0f5d1ef45b8027f5a471c360abfe4bfae92"
-
-[[package]]
-name = "parity-wasm"
 version = "0.45.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1ad0aff30c1da14b1254fcb2af73e1fa9a28670e584a626f53a369d0e157304"
@@ -330,15 +324,15 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bca81f5279342b38b17d9acbf007a46ddeb73144e2bd5f0a21bfa9fc5d4ab3e"
 dependencies = [
- "parity-wasm 0.45.0",
+ "parity-wasm",
 ]
 
 [[package]]
 name = "wasmi"
 version = "0.11.0"
-source = "git+https://github.com/ComposableFi/wasmi?rev=ddadd38d6816aca52e8c9fd7a121129896681666#ddadd38d6816aca52e8c9fd7a121129896681666"
+source = "git+https://github.com/ComposableFi/wasmi?rev=cd8c0c775a1d197a35ff3d5c7d6cded3d476411b#cd8c0c775a1d197a35ff3d5c7d6cded3d476411b"
 dependencies = [
- "parity-wasm 0.42.2",
+ "parity-wasm",
  "wasmi-validation",
  "wasmi_core",
 ]
@@ -346,21 +340,21 @@ dependencies = [
 [[package]]
 name = "wasmi-validation"
 version = "0.4.1"
-source = "git+https://github.com/ComposableFi/wasmi?rev=ddadd38d6816aca52e8c9fd7a121129896681666#ddadd38d6816aca52e8c9fd7a121129896681666"
+source = "git+https://github.com/ComposableFi/wasmi?rev=cd8c0c775a1d197a35ff3d5c7d6cded3d476411b#cd8c0c775a1d197a35ff3d5c7d6cded3d476411b"
 dependencies = [
- "parity-wasm 0.42.2",
+ "parity-wasm",
 ]
 
 [[package]]
 name = "wasmi_core"
 version = "0.1.0"
-source = "git+https://github.com/ComposableFi/wasmi?rev=ddadd38d6816aca52e8c9fd7a121129896681666#ddadd38d6816aca52e8c9fd7a121129896681666"
+source = "git+https://github.com/ComposableFi/wasmi?rev=cd8c0c775a1d197a35ff3d5c7d6cded3d476411b#cd8c0c775a1d197a35ff3d5c7d6cded3d476411b"
 dependencies = [
  "libm",
  "memory_units",
  "num-rational",
  "num-traits",
- "parity-wasm 0.42.2",
+ "parity-wasm",
 ]
 
 [[package]]
