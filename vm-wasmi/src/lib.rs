@@ -402,11 +402,6 @@ where
     type StorageValue = VmStorageValueOf<T>;
     type Error = VmErrorOf<T>;
 
-    fn new_contract(&mut self, code_id: Self::CodeId) -> Result<Self::Address, Self::Error> {
-        self.charge(VmGas::NewContract)?;
-        self.0.new_contract(code_id)
-    }
-
     fn set_code_id(
         &mut self,
         address: Self::Address,
@@ -444,26 +439,25 @@ where
 
     fn continue_instantiate(
         &mut self,
-        address: Self::Address,
+        code_id: Self::CodeId,
         funds: Vec<Coin>,
         message: &[u8],
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error> {
         self.charge(VmGas::ContinueInstantiate)?;
         self.0
-            .continue_instantiate(address, funds, message, event_handler)
+            .continue_instantiate(code_id, funds, message, event_handler)
     }
 
     fn continue_migrate(
         &mut self,
         address: Self::Address,
-        funds: Vec<Coin>,
         message: &[u8],
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error> {
         self.charge(VmGas::ContinueMigrate)?;
         self.0
-            .continue_migrate(address, funds, message, event_handler)
+            .continue_migrate(address, message, event_handler)
     }
 
     fn query_custom(

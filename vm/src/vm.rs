@@ -49,8 +49,6 @@ pub enum VmGas {
     Instrumentation { metered: u32 },
     /// Cost of calling `raw_call`.
     RawCall,
-    /// Cost of `new_contract`.
-    NewContract,
     /// Cost of `set_code_id`.
     SetCodeId,
     /// Cost of `code_id`.
@@ -138,9 +136,6 @@ pub trait VMBase {
     /// Possible errors raised by this VM.
     type Error;
 
-    /// Create a new contract from the given code id.
-    fn new_contract(&mut self, code_id: Self::CodeId) -> Result<Self::Address, Self::Error>;
-
     /// Change the code id of a contract, actually migrating it.
     fn set_code_id(
         &mut self,
@@ -159,6 +154,7 @@ pub trait VMBase {
     ) -> Result<QueryResult, Self::Error>;
 
     /// Continue execution by calling execute at the given contract address.
+    /// Implementor must ensure that the funds are moved before executing the contract.
     fn continue_execute(
         &mut self,
         address: Self::Address,
@@ -167,20 +163,21 @@ pub trait VMBase {
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error>;
 
-    /// Continue execution by calling instantiate at the given contract address.
+    /// Continue execution by instantiating the given contract code_id.
+    /// Implementor must ensure that the funds are moved before executing the contract.
     fn continue_instantiate(
         &mut self,
-        address: Self::Address,
+        code_id: Self::CodeId,
         funds: Vec<Coin>,
         message: &[u8],
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error>;
 
     /// Continue execution by calling migrate at the given contract address.
+    /// Implementor must ensure that the funds are moved before executing the contract.
     fn continue_migrate(
         &mut self,
         address: Self::Address,
-        funds: Vec<Coin>,
         message: &[u8],
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error>;

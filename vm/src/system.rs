@@ -41,7 +41,7 @@ use crate::{
         VmQueryCustomOf, VM,
     },
 };
-use alloc::{format, string::String, vec, vec::Vec};
+use alloc::{format, string::String, vec::Vec};
 use core::fmt::Debug;
 use cosmwasm_minimal_std::{
     AllBalanceResponse, BalanceResponse, BankMsg, BankQuery, Binary, ContractResult, CosmosMsg,
@@ -225,10 +225,9 @@ where
                                 funds,
                             } => {
                                 let vm_contract_addr = contract_addr.try_into()?;
-                                vm.transfer(&vm_contract_addr, &funds)?;
                                 vm.continue_execute(
                                     vm_contract_addr,
-                                    vec![],
+                                    funds,
                                     &msg,
                                     &mut sub_event_handler,
                                 )
@@ -239,20 +238,16 @@ where
                                 msg,
                                 funds,
                                 label,
-                            } => {
-                                let vm_contract_addr = vm.new_contract(CosmwasmContractMeta {
+                            } => vm.continue_instantiate(
+                                CosmwasmContractMeta {
                                     code_id,
                                     admin,
                                     label,
-                                })?;
-                                vm.transfer(&vm_contract_addr, &funds)?;
-                                vm.continue_instantiate(
-                                    vm_contract_addr,
-                                    funds,
-                                    &msg,
-                                    &mut sub_event_handler,
-                                )
-                            }
+                                },
+                                funds,
+                                &msg,
+                                &mut sub_event_handler,
+                            ),
                             WasmMsg::Migrate {
                                 contract_addr,
                                 new_code_id,
@@ -272,7 +267,6 @@ where
                                 )?;
                                 vm.continue_migrate(
                                     vm_contract_addr,
-                                    vec![],
                                     &msg,
                                     &mut sub_event_handler,
                                 )

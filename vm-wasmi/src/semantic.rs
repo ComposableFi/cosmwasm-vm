@@ -240,15 +240,6 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
     type StorageValue = Vec<u8>;
     type Error = SimpleVMError;
 
-    fn new_contract(&mut self, meta: Self::CodeId) -> Result<Self::Address, Self::Error> {
-        let BankAccount(new_account_id) = self.extension.next_account_id;
-        self.extension.next_account_id = BankAccount(new_account_id + 1);
-        self.extension
-            .contracts
-            .insert(BankAccount(new_account_id), meta);
-        Ok(BankAccount(new_account_id))
-    }
-
     fn set_code_id(&mut self, _: Self::Address, _: Self::CodeId) -> Result<(), Self::Error> {
         Err(SimpleVMError::Unsupported)
     }
@@ -285,12 +276,17 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
 
     fn continue_instantiate(
         &mut self,
-        address: Self::Address,
+        code_id: Self::CodeId,
         funds: Vec<Coin>,
         message: &[u8],
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error> {
-        self.load_subvm(address, funds, |sub_vm| {
+        let BankAccount(address) = self.extension.next_account_id;
+        self.extension.next_account_id = BankAccount(address + 1);
+        self.extension
+            .contracts
+            .insert(BankAccount(address), code_id);
+        self.load_subvm(BankAccount(address), funds, |sub_vm| {
             cosmwasm_system_run::<InstantiateInput<Self::MessageCustom>, _>(
                 sub_vm,
                 message,
@@ -302,11 +298,10 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
     fn continue_migrate(
         &mut self,
         address: Self::Address,
-        funds: Vec<Coin>,
         message: &[u8],
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error> {
-        self.load_subvm(address, funds, |sub_vm| {
+        self.load_subvm(address, vec![], |sub_vm| {
             cosmwasm_system_run::<MigrateInput<Self::MessageCustom>, _>(
                 sub_vm,
                 message,
