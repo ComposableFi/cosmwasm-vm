@@ -129,7 +129,7 @@ impl Gas {
 struct SimpleWasmiVMExtension {
     storage: BTreeMap<BankAccount, BTreeMap<Vec<u8>, Vec<u8>>>,
     codes: BTreeMap<CosmwasmCodeId, Vec<u8>>,
-    contracts: BTreeMap<BankAccount, CosmwasmContractMeta>,
+    contracts: BTreeMap<BankAccount, CosmwasmContractMeta<BankAccount>>,
     next_account_id: BankAccount,
     transaction_depth: u32,
     gas: Gas,
@@ -234,7 +234,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
     type Output<'x> = WasmiOutput<'x, WasmiVM<Self>>;
     type QueryCustom = Empty;
     type MessageCustom = Empty;
-    type CodeId = CosmwasmContractMeta;
+    type CodeId = CosmwasmContractMeta<BankAccount>;
     type Address = BankAccount;
     type StorageKey = Vec<u8>;
     type StorageValue = Vec<u8>;

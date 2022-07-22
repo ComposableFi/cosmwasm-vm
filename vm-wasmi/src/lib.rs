@@ -43,7 +43,8 @@ use core::{
     num::TryFromIntError,
 };
 use cosmwasm_minimal_std::{
-    Binary, Coin, ContractInfoResponse, CosmwasmQueryResult, Env, Event, MessageInfo, SystemResult,
+    Addr, Binary, Coin, ContractInfoResponse, CosmwasmQueryResult, Env, Event, MessageInfo,
+    SystemResult,
 };
 use cosmwasm_vm::executor::{
     AllocateInput, AsFunctionName, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
@@ -121,14 +122,17 @@ impl Display for WasmiVMError {
 }
 
 pub trait WasmiBaseVM = WasmiModuleExecutor
-    + VMBase<CodeId = CosmwasmContractMeta, StorageKey = Vec<u8>, StorageValue = Vec<u8>>
-    + ReadWriteMemory<Pointer = u32>
+    + VMBase<
+        CodeId = CosmwasmContractMeta<VmAddressOf<Self>>,
+        StorageKey = Vec<u8>,
+        StorageValue = Vec<u8>,
+    > + ReadWriteMemory<Pointer = u32>
     + Transactional
     + Has<Env>
     + Has<MessageInfo>
     + Has<BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<Self>>>
 where
-    VmAddressOf<Self>: Clone + TryFrom<String, Error = VmErrorOf<Self>>,
+    VmAddressOf<Self>: Clone + TryFrom<String, Error = VmErrorOf<Self>> + Into<Addr>,
     VmErrorOf<Self>: From<wasmi::Error>
         + From<WasmiVMError>
         + From<MemoryReadError>
@@ -456,8 +460,7 @@ where
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error> {
         self.charge(VmGas::ContinueMigrate)?;
-        self.0
-            .continue_migrate(address, message, event_handler)
+        self.0.continue_migrate(address, message, event_handler)
     }
 
     fn query_custom(

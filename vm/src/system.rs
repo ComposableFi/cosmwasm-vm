@@ -44,10 +44,10 @@ use crate::{
 use alloc::{format, string::String, vec::Vec};
 use core::fmt::Debug;
 use cosmwasm_minimal_std::{
-    AllBalanceResponse, BalanceResponse, BankMsg, BankQuery, Binary, ContractResult, CosmosMsg,
-    CosmwasmQueryResult, DeserializeLimit, Env, Event, MessageInfo, QueryRequest, QueryResult,
-    ReadLimit, Reply, ReplyOn, Response, SubMsg, SubMsgResponse, SubMsgResult, SystemResult,
-    WasmMsg, WasmQuery,
+    Addr, AllBalanceResponse, BalanceResponse, BankMsg, BankQuery, Binary, ContractResult,
+    CosmosMsg, CosmwasmQueryResult, DeserializeLimit, Env, Event, MessageInfo, QueryRequest,
+    QueryResult, ReadLimit, Reply, ReplyOn, Response, SubMsg, SubMsgResponse, SubMsgResult,
+    SystemResult, WasmMsg, WasmQuery,
 };
 use serde::de::DeserializeOwned;
 
@@ -72,21 +72,24 @@ pub type CosmwasmCodeId = u64;
 
 /// Minimum metadata associated to contracts.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct CosmwasmContractMeta {
+pub struct CosmwasmContractMeta<Account> {
     pub code_id: CosmwasmCodeId,
-    pub admin: Option<String>,
+    pub admin: Option<Account>,
     pub label: String,
 }
 
-pub trait CosmwasmBaseVM = VM<CodeId = CosmwasmContractMeta, StorageKey = Vec<u8>, StorageValue = Vec<u8>>
-    + ReadWriteMemory
+pub trait CosmwasmBaseVM = VM<
+        CodeId = CosmwasmContractMeta<VmAddressOf<Self>>,
+        StorageKey = Vec<u8>,
+        StorageValue = Vec<u8>,
+    > + ReadWriteMemory
     + Transactional
     + Has<Env>
     + Has<MessageInfo>
 where
     VmMessageCustomOf<Self>: DeserializeOwned + Debug,
     VmQueryCustomOf<Self>: DeserializeOwned + Debug,
-    VmAddressOf<Self>: Clone + TryFrom<String, Error = VmErrorOf<Self>>,
+    VmAddressOf<Self>: Clone + TryFrom<String, Error = VmErrorOf<Self>> + Into<Addr>,
     VmErrorOf<Self>: From<ReadableMemoryErrorOf<Self>>
         + From<WritableMemoryErrorOf<Self>>
         + From<ExecutorError>
@@ -167,11 +170,10 @@ where
 {
     log::debug!("SystemRun");
     let info: MessageInfo = vm.get();
-    let ensure_admin = move |contract_admin: &Option<String>| -> Result<(), VmErrorOf<V>> {
-        let sender = info.sender.as_str();
-        match contract_admin {
+    let ensure_admin = move |contract_admin: Option<VmAddressOf<V>>| -> Result<(), VmErrorOf<V>> {
+        match contract_admin.map(Into::<Addr>::into) {
             None => Err(SystemError::ImmutableCantMigrate.into()),
-            Some(admin) if admin.as_str() == sender => Ok(()),
+            Some(admin) if admin == info.sender => Ok(()),
             _ => Err(SystemError::MustBeAdmin.into()),
         }
     };
@@ -241,7 +243,10 @@ where
                             } => vm.continue_instantiate(
                                 CosmwasmContractMeta {
                                     code_id,
-                                    admin,
+                                    admin: match admin {
+                                        Some(admin) => Some(admin.try_into()?),
+                                        None => None,
+                                    },
                                     label,
                                 },
                                 funds,
@@ -256,7 +261,7 @@ where
                                 let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
                                 let CosmwasmContractMeta { admin, label, .. } =
                                     vm.code_id(vm_contract_addr.clone())?;
-                                ensure_admin(&admin)?;
+                                ensure_admin(admin.clone())?;
                                 vm.set_code_id(
                                     vm_contract_addr.clone(),
                                     CosmwasmContractMeta {
@@ -265,23 +270,20 @@ where
                                         label,
                                     },
                                 )?;
-                                vm.continue_migrate(
-                                    vm_contract_addr,
-                                    &msg,
-                                    &mut sub_event_handler,
-                                )
+                                vm.continue_migrate(vm_contract_addr, &msg, &mut sub_event_handler)
                             }
                             WasmMsg::UpdateAdmin {
                                 contract_addr,
                                 admin: new_admin,
                             } => {
+                                let new_admin = new_admin.try_into()?;
                                 let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
                                 let CosmwasmContractMeta {
                                     code_id,
                                     admin,
                                     label,
                                 } = vm.code_id(vm_contract_addr.clone())?;
-                                ensure_admin(&admin)?;
+                                ensure_admin(admin)?;
                                 vm.set_code_id(
                                     vm_contract_addr,
                                     CosmwasmContractMeta {
@@ -299,7 +301,7 @@ where
                                     admin,
                                     label,
                                 } = vm.code_id(vm_contract_addr.clone())?;
-                                ensure_admin(&admin)?;
+                                ensure_admin(admin)?;
                                 vm.set_code_id(
                                     vm_contract_addr,
                                     CosmwasmContractMeta {
