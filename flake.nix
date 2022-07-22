@@ -63,5 +63,8 @@
           });
           fmt = crane-nightly.cargoFmt common-args;
         };
+        devShell = mkShell {
+          buildInputs = [ rust-nightly ];
+        };
       });
 }
