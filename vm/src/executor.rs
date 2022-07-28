@@ -73,9 +73,7 @@ impl AsFunctionName for QueryInput {
     const NAME: &'static str = "query";
 }
 impl HasInfo for QueryInput {
-    fn has_info() -> bool {
-        false
-    }
+    const HAS_INFO: bool = false;
 }
 
 /// The type representing a call to a contract `instantiate` export.
@@ -87,9 +85,7 @@ impl<T> AsFunctionName for InstantiateInput<T> {
     const NAME: &'static str = "instantiate";
 }
 impl<T> HasInfo for InstantiateInput<T> {
-    fn has_info() -> bool {
-        true
-    }
+    const HAS_INFO: bool = true;
 }
 
 /// The type representing a call to a contract `execute` export.
@@ -101,9 +97,7 @@ impl<T> AsFunctionName for ExecuteInput<T> {
     const NAME: &'static str = "execute";
 }
 impl<T> HasInfo for ExecuteInput<T> {
-    fn has_info() -> bool {
-        true
-    }
+    const HAS_INFO: bool = true;
 }
 
 /// The type representing a call to a contract `reply` export.
@@ -115,9 +109,7 @@ impl<T> AsFunctionName for ReplyInput<T> {
     const NAME: &'static str = "reply";
 }
 impl<T> HasInfo for ReplyInput<T> {
-    fn has_info() -> bool {
-        false
-    }
+    const HAS_INFO: bool = false;
 }
 
 /// The type representing a call to a contract `migrate` export.
@@ -129,9 +121,7 @@ impl<T> AsFunctionName for MigrateInput<T> {
     const NAME: &'static str = "migrate";
 }
 impl<T> HasInfo for MigrateInput<T> {
-    fn has_info() -> bool {
-        false
-    }
+    const HAS_INFO: bool = false;
 }
 
 pub trait AsFunctionName {
@@ -161,7 +151,7 @@ impl<'a, Pointer, I: Input> Input for CosmwasmCallWithoutInfoInput<'a, Pointer, 
 
 /// Whether an input type require the `MessageInfo` message to be passed.
 pub trait HasInfo {
-    fn has_info() -> bool;
+    const HAS_INFO: bool;
 }
 
 /// Errors likely to happen while doing low level executor calls.
@@ -383,25 +373,22 @@ where
 {
     log::trace!("Call");
     let env = vm.get();
-    let pointer = match I::has_info() {
-        true => {
-            let info = vm.get();
-            let input = CosmwasmCallInput(
-                marshall_in(vm, &env)?,
-                marshall_in(vm, &info)?,
-                passthrough_in(vm, message)?,
-                PhantomData,
-            );
-            vm.call(input)
-        }
-        false => {
-            let input = CosmwasmCallWithoutInfoInput(
-                marshall_in(vm, &env)?,
-                passthrough_in(vm, message)?,
-                PhantomData,
-            );
-            vm.call(input)
-        }
+    let pointer = if I::HAS_INFO {
+        let info = vm.get();
+        let input = CosmwasmCallInput(
+            marshall_in(vm, &env)?,
+            marshall_in(vm, &info)?,
+            passthrough_in(vm, message)?,
+            PhantomData,
+        );
+        vm.call(input)
+    } else {
+        let input = CosmwasmCallWithoutInfoInput(
+            marshall_in(vm, &env)?,
+            passthrough_in(vm, message)?,
+            PhantomData,
+        );
+        vm.call(input)
     }?;
     let result = marshall_out(vm, pointer)?;
     deallocate(vm, pointer)?;
