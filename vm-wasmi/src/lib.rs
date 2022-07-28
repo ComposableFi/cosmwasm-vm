@@ -296,7 +296,7 @@ where
     type Error = VmErrorOf<T>;
     fn try_from(AllocateInput(ptr): AllocateInput<u32>) -> Result<Self, Self::Error> {
         Ok(WasmiInput(
-            WasmiFunctionName(AllocateInput::<u32>::name().into()),
+            WasmiFunctionName(AllocateInput::<u32>::NAME.into()),
             (vec![RuntimeValue::I32(ptr as i32)], PhantomData),
             PhantomData,
         ))
@@ -310,7 +310,7 @@ where
     type Error = VmErrorOf<T>;
     fn try_from(DeallocateInput(ptr): DeallocateInput<u32>) -> Result<Self, Self::Error> {
         Ok(WasmiInput(
-            WasmiFunctionName(DeallocateInput::<u32>::name().into()),
+            WasmiFunctionName(DeallocateInput::<u32>::NAME.into()),
             (vec![RuntimeValue::I32(ptr as i32)], PhantomData),
             PhantomData,
         ))
@@ -327,7 +327,7 @@ where
         CosmwasmCallInput(Tagged(env_ptr, _), Tagged(info_ptr, _), Tagged(msg_ptr, _), _): CosmwasmCallInput<'a, u32, I>,
     ) -> Result<Self, Self::Error> {
         Ok(WasmiInput(
-            WasmiFunctionName(I::name().into()),
+            WasmiFunctionName(I::NAME.into()),
             (
                 vec![
                     RuntimeValue::I32(env_ptr as i32),
@@ -355,7 +355,7 @@ where
         >,
     ) -> Result<Self, Self::Error> {
         Ok(WasmiInput(
-            WasmiFunctionName(I::name().into()),
+            WasmiFunctionName(I::NAME.into()),
             (
                 vec![
                     RuntimeValue::I32(env_ptr as i32),

@@ -50,9 +50,7 @@ impl<Pointer> Input for AllocateInput<Pointer> {
     type Output = Pointer;
 }
 impl<Pointer> AsFunctionName for AllocateInput<Pointer> {
-    fn name() -> &'static str {
-        "allocate"
-    }
+    const NAME: &'static str = "allocate";
 }
 
 pub struct Unit;
@@ -63,9 +61,7 @@ impl<Pointer> Input for DeallocateInput<Pointer> {
     type Output = Unit;
 }
 impl<Pointer> AsFunctionName for DeallocateInput<Pointer> {
-    fn name() -> &'static str {
-        "deallocate"
-    }
+    const NAME: &'static str = "deallocate";
 }
 
 /// The type representing a call to a contract `query` export.
@@ -74,9 +70,7 @@ impl Input for QueryInput {
     type Output = QueryResult;
 }
 impl AsFunctionName for QueryInput {
-    fn name() -> &'static str {
-        "query"
-    }
+    const NAME: &'static str = "query";
 }
 impl HasInfo for QueryInput {
     fn has_info() -> bool {
@@ -90,9 +84,7 @@ impl<T> Input for InstantiateInput<T> {
     type Output = InstantiateResult<T>;
 }
 impl<T> AsFunctionName for InstantiateInput<T> {
-    fn name() -> &'static str {
-        "instantiate"
-    }
+    const NAME: &'static str = "instantiate";
 }
 impl<T> HasInfo for InstantiateInput<T> {
     fn has_info() -> bool {
@@ -106,9 +98,7 @@ impl<T> Input for ExecuteInput<T> {
     type Output = ExecuteResult<T>;
 }
 impl<T> AsFunctionName for ExecuteInput<T> {
-    fn name() -> &'static str {
-        "execute"
-    }
+    const NAME: &'static str = "execute";
 }
 impl<T> HasInfo for ExecuteInput<T> {
     fn has_info() -> bool {
@@ -122,9 +112,7 @@ impl<T> Input for ReplyInput<T> {
     type Output = ReplyResult<T>;
 }
 impl<T> AsFunctionName for ReplyInput<T> {
-    fn name() -> &'static str {
-        "reply"
-    }
+    const NAME: &'static str = "reply";
 }
 impl<T> HasInfo for ReplyInput<T> {
     fn has_info() -> bool {
@@ -138,9 +126,7 @@ impl<T> Input for MigrateInput<T> {
     type Output = MigrateResult<T>;
 }
 impl<T> AsFunctionName for MigrateInput<T> {
-    fn name() -> &'static str {
-        "migrate"
-    }
+    const NAME: &'static str = "migrate";
 }
 impl<T> HasInfo for MigrateInput<T> {
     fn has_info() -> bool {
@@ -149,7 +135,7 @@ impl<T> HasInfo for MigrateInput<T> {
 }
 
 pub trait AsFunctionName {
-    fn name() -> &'static str;
+    const NAME: &'static str;
 }
 
 /// Structure that hold the function inputs for `f(env, messageInfo, msg) -> X`.
