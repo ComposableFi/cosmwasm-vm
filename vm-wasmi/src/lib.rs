@@ -130,7 +130,6 @@ pub trait WasmiBaseVM = WasmiModuleExecutor
     + Transactional
     + Has<Env>
     + Has<MessageInfo>
-    + Has<BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<Self>>>
 where
     VmAddressOf<Self>: Clone + TryFrom<String, Error = VmErrorOf<Self>> + Into<Addr>,
     VmErrorOf<Self>: From<wasmi::Error>
@@ -147,8 +146,9 @@ where
     ReadableMemoryErrorOf<Self>: From<MemoryReadError>,
     WritableMemoryErrorOf<Self>: From<MemoryWriteError>;
 
-pub trait WasmiModuleExecutor: Sized {
+pub trait WasmiModuleExecutor: Sized + VMBase {
     fn executing_module(&self) -> WasmiModule;
+    fn host_function(&self, index: WasmiHostFunctionIndex) -> Option<&WasmiHostFunction<Self>>;
 }
 
 pub struct WasmiVM<T>(pub T);
@@ -162,8 +162,8 @@ where
         index: usize,
         args: wasmi::RuntimeArgs,
     ) -> Result<Option<RuntimeValue>, Self::Error> {
-        <Self as Has<BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<T>>>>::get(self)
-            .get(&WasmiHostFunctionIndex(index))
+        self.0
+            .host_function(WasmiHostFunctionIndex(index))
             .ok_or_else(|| {
                 VmErrorOf::<T>::from(WasmiVMError::HostFunctionNotFound(WasmiHostFunctionIndex(
                     index,

@@ -147,11 +147,8 @@ impl<'a> WasmiModuleExecutor for SimpleWasmiVM<'a> {
     fn executing_module(&self) -> WasmiModule {
         self.executing_module.clone()
     }
-}
-
-impl<'a> Has<BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<Self>>> for SimpleWasmiVM<'a> {
-    fn get(&self) -> BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<Self>> {
-        self.host_functions.clone()
+    fn host_function(&self, index: WasmiHostFunctionIndex) -> Option<&WasmiHostFunction<Self>> {
+        self.host_functions.get(&index)
     }
 }
 
