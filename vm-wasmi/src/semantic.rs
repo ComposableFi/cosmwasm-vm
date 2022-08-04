@@ -231,18 +231,45 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
     type Output<'x> = WasmiOutput<'x, WasmiVM<Self>>;
     type QueryCustom = Empty;
     type MessageCustom = Empty;
-    type CodeId = CosmwasmContractMeta<BankAccount>;
+    type ContractMeta = CosmwasmContractMeta<BankAccount>;
     type Address = BankAccount;
     type StorageKey = Vec<u8>;
     type StorageValue = Vec<u8>;
     type Error = SimpleVMError;
 
-    fn set_code_id(&mut self, _: Self::Address, _: Self::CodeId) -> Result<(), Self::Error> {
-        Err(SimpleVMError::Unsupported)
+    fn running_contract_meta(&mut self) -> Self::ContractMeta {
+        self.extension
+            .contracts
+            .get(
+                &BankAccount::try_from(self.env.contract.address.clone())
+                    .expect("contract address is set by vm, this should never happen"),
+            )
+            .cloned()
+            .expect("contract is inserted by vm, this should never happen")
     }
 
-    fn code_id(&mut self, _: Self::Address) -> Result<Self::CodeId, Self::Error> {
-        Err(SimpleVMError::Unsupported)
+    fn set_contract_meta(
+        &mut self,
+        address: Self::Address,
+        contract_meta: Self::ContractMeta,
+    ) -> Result<(), Self::Error> {
+        let meta = self
+            .extension
+            .contracts
+            .get_mut(&address)
+            .ok_or(SimpleVMError::ContractNotFound(address))?;
+
+        *meta = contract_meta;
+
+        Ok(())
+    }
+
+    fn contract_meta(&mut self, address: Self::Address) -> Result<Self::ContractMeta, Self::Error> {
+        self.extension
+            .contracts
+            .get_mut(&address)
+            .ok_or(SimpleVMError::ContractNotFound(address))
+            .cloned()
     }
 
     fn query_continuation(
@@ -273,16 +300,17 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
 
     fn continue_instantiate(
         &mut self,
-        code_id: Self::CodeId,
+        contract_meta: Self::ContractMeta,
         funds: Vec<Coin>,
         message: &[u8],
         event_handler: &mut dyn FnMut(Event),
-    ) -> Result<Option<Binary>, Self::Error> {
+    ) -> Result<(Self::Address, Option<Binary>), Self::Error> {
         let BankAccount(address) = self.extension.next_account_id;
         self.extension.next_account_id = BankAccount(address + 1);
         self.extension
             .contracts
-            .insert(BankAccount(address), code_id);
+            .insert(BankAccount(address), contract_meta);
+
         self.load_subvm(BankAccount(address), funds, |sub_vm| {
             cosmwasm_system_run::<InstantiateInput<Self::MessageCustom>, _>(
                 sub_vm,
@@ -290,6 +318,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
                 event_handler,
             )
         })?
+        .map(|data| (BankAccount(address), data))
     }
 
     fn continue_migrate(
@@ -544,6 +573,7 @@ fn create_simple_vm<'a>(
     initialize();
     let host_functions_definitions = WasmiImportResolver(host_functions::definitions());
     let module = new_wasmi_vm(&host_functions_definitions, code).unwrap();
+
     WasmiVM(SimpleWasmiVM {
         host_functions: host_functions_definitions
             .0
@@ -645,11 +675,10 @@ fn test_orchestration_base() {
         gas: Gas::new(100_000_000),
     };
     let mut vm = create_simple_vm(sender, address, funds, &code, &mut extension);
-    assert_eq!(
-        cosmwasm_system_entrypoint::<InstantiateInput, WasmiVM<SimpleWasmiVM>>(
-            &mut vm,
-            format!(
-                r#"{{
+    let _ = cosmwasm_system_entrypoint::<InstantiateInput, WasmiVM<SimpleWasmiVM>>(
+        &mut vm,
+        format!(
+            r#"{{
                   "name": "Picasso",
                   "symbol": "PICA",
                   "decimals": 12,
@@ -660,46 +689,41 @@ fn test_orchestration_base() {
                   }},
                   "marketing": null
                 }}"#,
-                sender.0
-            )
-            .as_bytes(),
+            sender.0
         )
-        .unwrap(),
-        (None, vec![])
-    );
-    assert_eq!(
-        cosmwasm_system_entrypoint::<ExecuteInput, WasmiVM<SimpleWasmiVM>>(
-            &mut vm,
-            r#"{
+        .as_bytes(),
+    )
+    .unwrap();
+
+    let (_, events) = cosmwasm_system_entrypoint::<ExecuteInput, WasmiVM<SimpleWasmiVM>>(
+        &mut vm,
+        r#"{
               "mint": {
                 "recipient": "0xCAFEBABE",
                 "amount": "5555"
               }
             }"#
-            .as_bytes(),
-        )
-        .unwrap(),
-        (
-            None,
-            vec![Event::new(
-                "wasm".into(),
-                vec![
-                    Attribute {
-                        key: "action".into(),
-                        value: "mint".into()
-                    },
-                    Attribute {
-                        key: "to".into(),
-                        value: "0xCAFEBABE".into()
-                    },
-                    Attribute {
-                        key: "amount".into(),
-                        value: "5555".into()
-                    }
-                ]
-            )]
-        )
-    );
+        .as_bytes(),
+    )
+    .unwrap();
+    let attributes = vec![
+        Attribute {
+            key: "action".into(),
+            value: "mint".into(),
+        },
+        Attribute {
+            key: "to".into(),
+            value: "0xCAFEBABE".into(),
+        },
+        Attribute {
+            key: "amount".into(),
+            value: "5555".into(),
+        },
+    ];
+
+    for attr in attributes {
+        assert!(events.iter().any(|e| e.attributes.contains(&attr)));
+    }
 }
 
 #[test]
@@ -783,39 +807,29 @@ fn test_reply() {
                 .unwrap(),
             &mut extension,
         );
-        assert_eq!(
-            cosmwasm_system_entrypoint::<InstantiateInput, _>(
-                &mut vm,
-                r#"{"verifier": "10000", "beneficiary": "10000"}"#.as_bytes(),
-            )
-            .unwrap(),
-            (
-                None,
-                vec![Event {
-                    ty: "wasm".into(),
-                    attributes: vec![Attribute {
-                        key: "Let the".into(),
-                        value: "hacking begin".into()
-                    }]
-                }]
-            )
-        );
+        let (_, events) = cosmwasm_system_entrypoint::<InstantiateInput, _>(
+            &mut vm,
+            r#"{"verifier": "10000", "beneficiary": "10000"}"#.as_bytes(),
+        )
+        .unwrap();
+
+        assert!(events.iter().any(|e| e.attributes.contains(&Attribute {
+            key: "Let the".into(),
+            value: "hacking begin".into()
+        })));
     }
     log::debug!("{:?}", extension.storage);
     {
         let mut vm = create_simple_vm(sender, address, funds, &code, &mut extension);
-        assert_eq!(
-            cosmwasm_system_entrypoint::<InstantiateInput, WasmiVM<SimpleWasmiVM>>(
-                &mut vm,
-                r#"{}"#.as_bytes(),
-            )
-            .unwrap(),
-            (None, vec![])
-        );
-        assert_eq!(
-            cosmwasm_system_entrypoint::<ExecuteInput, WasmiVM<SimpleWasmiVM>>(
-                &mut vm,
-                r#"{
+        let _ = cosmwasm_system_entrypoint::<InstantiateInput, WasmiVM<SimpleWasmiVM>>(
+            &mut vm,
+            r#"{}"#.as_bytes(),
+        )
+        .unwrap();
+
+        let (_, events) = cosmwasm_system_entrypoint::<ExecuteInput, WasmiVM<SimpleWasmiVM>>(
+            &mut vm,
+            r#"{
                   "reflect_sub_msg": {
                     "msgs": [{
                       "id": 10,
@@ -833,41 +847,27 @@ fn test_reply() {
                     }]
                   }
                 }"#
-                .as_bytes(),
-            )
-            .unwrap(),
-            (
-                None,
-                vec![
-                    Event::new(
-                        "wasm".into(),
-                        vec![Attribute {
-                            key: "action".into(),
-                            value: "reflect_subcall".into()
-                        },]
-                    ),
-                    Event::new(
-                        "wasm".into(),
-                        vec![
-                            Attribute {
-                                key: "action".into(),
-                                value: "release".into()
-                            },
-                            Attribute {
-                                key: "destination".into(),
-                                value: "10000".into()
-                            },
-                        ]
-                    ),
-                    Event::new(
-                        "wasm-hackatom".into(),
-                        vec![Attribute {
-                            key: "action".into(),
-                            value: "release".into()
-                        }]
-                    )
-                ]
-            )
-        );
+            .as_bytes(),
+        )
+        .unwrap();
+
+        let attributes = vec![
+            Attribute {
+                key: "action".into(),
+                value: "release".into(),
+            },
+            Attribute {
+                key: "destination".into(),
+                value: "10000".into(),
+            },
+            Attribute {
+                key: "action".into(),
+                value: "reflect_subcall".into(),
+            },
+        ];
+
+        for attr in attributes {
+            assert!(events.iter().any(|e| e.attributes.contains(&attr)));
+        }
     }
 }

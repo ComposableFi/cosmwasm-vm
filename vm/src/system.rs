@@ -1,4 +1,4 @@
-// actor_system.rs ---
+// system.rs ---
 
 // Copyright (C) 2022 Hussein Ait-Lahcen
 
@@ -41,15 +41,172 @@ use crate::{
         VmQueryCustomOf, VM,
     },
 };
-use alloc::{format, string::String, vec::Vec};
+use alloc::{fmt::Display, format, string::String, vec, vec::Vec};
 use core::fmt::Debug;
 use cosmwasm_minimal_std::{
-    Addr, AllBalanceResponse, BalanceResponse, BankMsg, BankQuery, Binary, ContractResult,
-    CosmosMsg, CosmwasmQueryResult, DeserializeLimit, Env, Event, MessageInfo, QueryRequest,
-    QueryResult, ReadLimit, Reply, ReplyOn, Response, SubMsg, SubMsgResponse, SubMsgResult,
-    SystemResult, WasmMsg, WasmQuery,
+    Addr, AllBalanceResponse, Attribute, BalanceResponse, BankMsg, BankQuery, Binary,
+    ContractResult, CosmosMsg, CosmwasmQueryResult, DeserializeLimit, Env, Event, MessageInfo,
+    QueryRequest, QueryResult, ReadLimit, Reply, ReplyOn, Response, SubMsg, SubMsgResponse,
+    SubMsgResult, SystemResult, WasmMsg, WasmQuery,
 };
 use serde::de::DeserializeOwned;
+
+// WasmModuleEventType is stored with any contract TX that returns non empty EventAttributes
+const WASM_MODULE_EVENT_TYPE: &str = "wasm";
+
+// CustomContractEventPrefix contracts can create custom events. To not mix them with other system events they got the `wasm-` prefix.
+const CUSTOM_CONTRACT_EVENT_PREFIX: &str = "wasm-";
+
+// Minimum length of an event type
+const CUSTOM_CONTRACT_EVENT_TYPE_MIN_LENGTH: usize = 2;
+
+const WASM_MODULE_EVENT_RESERVED_PREFIX: &str = "_";
+
+#[allow(unused)]
+enum SystemEventType {
+    StoreCode,
+    Instantiate,
+    Execute,
+    Migrate,
+    PinCode,
+    UnpinCode,
+    Sudo,
+    Reply,
+    GovContractResult,
+}
+
+#[allow(unused)]
+enum SystemAttributeKey {
+    ContractAddr,
+    CodeID,
+    ResultDataHex,
+    Feature,
+}
+
+struct SystemAttribute {
+    key: SystemAttributeKey,
+    value: String,
+}
+
+struct SystemEvent {
+    ty: SystemEventType,
+    attributes: Vec<SystemAttribute>,
+}
+
+impl From<SystemAttribute> for Attribute {
+    fn from(SystemAttribute { key, value }: SystemAttribute) -> Self {
+        let attr_str = match key {
+            SystemAttributeKey::ContractAddr => "_contract_address",
+            SystemAttributeKey::CodeID => "code_id",
+            SystemAttributeKey::ResultDataHex => "result",
+            SystemAttributeKey::Feature => "feature",
+        };
+
+        Attribute {
+            key: attr_str.into(),
+            value,
+        }
+    }
+}
+
+impl Display for SystemEventType {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter) -> alloc::fmt::Result {
+        let event_str = match self {
+            SystemEventType::StoreCode => "store_code",
+            SystemEventType::Instantiate => "instantiate",
+            SystemEventType::Execute => "execute",
+            SystemEventType::Migrate => "migrate",
+            SystemEventType::PinCode => "pin_code",
+            SystemEventType::UnpinCode => "unpin_code",
+            SystemEventType::Sudo => "sudo",
+            SystemEventType::Reply => "reply",
+            SystemEventType::GovContractResult => "gov_contract_result",
+        };
+
+        write!(f, "{}", event_str)
+    }
+}
+
+impl From<SystemEvent> for Event {
+    fn from(sys_event: SystemEvent) -> Self {
+        Event::new(
+            format!("{}", sys_event.ty),
+            sys_event.attributes.into_iter().map(Into::into).collect(),
+        )
+    }
+}
+
+trait EventHasCodeId {
+    const HAS_CODE_ID: bool;
+}
+
+impl<T> EventHasCodeId for InstantiateInput<T> {
+    const HAS_CODE_ID: bool = true;
+}
+
+impl<T> EventHasCodeId for ExecuteInput<T> {
+    const HAS_CODE_ID: bool = false;
+}
+
+impl<T> EventHasCodeId for MigrateInput<T> {
+    const HAS_CODE_ID: bool = true;
+}
+
+impl<T> EventHasCodeId for ReplyInput<T> {
+    const HAS_CODE_ID: bool = false;
+}
+
+trait EventIsTyped {
+    const TYPE: SystemEventType;
+}
+
+impl<T> EventIsTyped for InstantiateInput<T> {
+    const TYPE: SystemEventType = SystemEventType::Instantiate;
+}
+
+impl<T> EventIsTyped for ExecuteInput<T> {
+    const TYPE: SystemEventType = SystemEventType::Execute;
+}
+
+impl<T> EventIsTyped for MigrateInput<T> {
+    const TYPE: SystemEventType = SystemEventType::Migrate;
+}
+
+impl<T> EventIsTyped for ReplyInput<T> {
+    const TYPE: SystemEventType = SystemEventType::Reply;
+}
+
+pub trait HasEvent {
+    fn generate_event(address: String, code_id: CosmwasmCodeId) -> Event;
+}
+
+impl<I> HasEvent for I
+where
+    I: Input + EventHasCodeId + EventIsTyped,
+{
+    fn generate_event(address: String, code_id: CosmwasmCodeId) -> Event {
+        let addr_attr = SystemAttribute {
+            key: SystemAttributeKey::ContractAddr,
+            value: address,
+        };
+        let attributes = if I::HAS_CODE_ID {
+            vec![
+                addr_attr,
+                SystemAttribute {
+                    key: SystemAttributeKey::CodeID,
+                    value: format!("{}", code_id),
+                },
+            ]
+        } else {
+            vec![addr_attr]
+        };
+        SystemEvent {
+            ty: I::TYPE,
+            attributes,
+        }
+        .into()
+    }
+}
 
 /// Errors likely to happen while a VM is executing.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -59,6 +216,10 @@ pub enum SystemError {
     ContractExecutionFailure(String),
     ImmutableCantMigrate,
     MustBeAdmin,
+    ReservedEventPrefixIsUsed,
+    EmptyEventKey,
+    EmptyEventValue,
+    EventTypeIsTooShort,
 }
 
 #[derive(Debug)]
@@ -79,7 +240,7 @@ pub struct CosmwasmContractMeta<Account> {
 }
 
 pub trait CosmwasmBaseVM = VM<
-        CodeId = CosmwasmContractMeta<VmAddressOf<Self>>,
+        ContractMeta = CosmwasmContractMeta<VmAddressOf<Self>>,
         StorageKey = Vec<u8>,
         StorageValue = Vec<u8>,
     > + ReadWriteMemory
@@ -124,7 +285,7 @@ where
             Error = VmErrorOf<Self>,
         > + TryFrom<CosmwasmCallInput<'x, PointerOf<Self>, I>, Error = VmErrorOf<Self>>
         + TryFrom<CosmwasmCallWithoutInfoInput<'x, PointerOf<Self>, I>, Error = VmErrorOf<Self>>,
-    I: Input + HasInfo,
+    I: Input + HasInfo + HasEvent,
     OutputOf<I>: DeserializeOwned
         + ReadLimit
         + DeserializeLimit
@@ -160,6 +321,42 @@ where
     }
 }
 
+fn sanitize_custom_attributes(
+    attributes: &mut Vec<Attribute>,
+    contract_address: String,
+) -> Result<(), SystemError> {
+    for attr in attributes.iter_mut() {
+        let new_key = attr.key.trim();
+        if new_key.is_empty() {
+            return Err(SystemError::EmptyEventKey);
+        }
+
+        let new_value = attr.value.trim();
+        if new_value.is_empty() {
+            return Err(SystemError::EmptyEventValue);
+        }
+
+        // this must be checked after being trimmed
+        if new_key.starts_with(WASM_MODULE_EVENT_RESERVED_PREFIX) {
+            return Err(SystemError::ReservedEventPrefixIsUsed);
+        }
+
+        attr.key = new_key.into();
+        attr.value = new_value.into();
+    }
+
+    // contract address attribute is added to every event
+    attributes.push(
+        SystemAttribute {
+            key: SystemAttributeKey::ContractAddr,
+            value: contract_address,
+        }
+        .into(),
+    );
+
+    Ok(())
+}
+
 pub fn cosmwasm_system_run<I, V>(
     vm: &mut V,
     message: &[u8],
@@ -170,6 +367,7 @@ where
 {
     log::debug!("SystemRun");
     let info: MessageInfo = vm.get();
+    let env: Env = vm.get();
     let ensure_admin = move |contract_admin: Option<VmAddressOf<V>>| -> Result<(), VmErrorOf<V>> {
         match contract_admin.map(Into::<Addr>::into) {
             None => Err(SystemError::ImmutableCantMigrate.into()),
@@ -177,24 +375,52 @@ where
             _ => Err(SystemError::MustBeAdmin.into()),
         }
     };
-    let output = cosmwasm_call::<I, V>(vm, message).map(Into::into);
+    let output = cosmwasm_call::<I, V>(vm, message)
+        .map(Into::into)
+        .map(|data| {
+            let CosmwasmContractMeta { code_id, .. } = vm.running_contract_meta();
+            let event = I::generate_event(env.contract.address.clone().into_string(), code_id);
+            event_handler(event);
+
+            data
+        });
     log::debug!("Output: {:?}", output);
     match output {
         Ok(ContractResult::Ok(Response {
             messages,
-            attributes,
+            mut attributes,
             events,
             data,
             ..
         })) => {
             // https://github.com/CosmWasm/wasmd/blob/ac92fdcf37388cc8dc24535f301f64395f8fb3da/x/wasm/keeper/events.go#L16
             if !attributes.is_empty() {
-                event_handler(Event::new("wasm".into(), attributes));
+                sanitize_custom_attributes(
+                    &mut attributes,
+                    env.contract.address.clone().into_string(),
+                )?;
+                event_handler(Event::new(WASM_MODULE_EVENT_TYPE.into(), attributes));
             }
+
             // https://github.com/CosmWasm/wasmd/blob/ac92fdcf37388cc8dc24535f301f64395f8fb3da/x/wasm/keeper/events.go#L29
-            events.into_iter().for_each(|Event { ty, attributes, .. }| {
-                event_handler(Event::new(format!("wasm-{}", ty), attributes))
-            });
+            for Event {
+                ty, mut attributes, ..
+            } in events
+            {
+                let ty = ty.trim();
+                if ty.len() < CUSTOM_CONTRACT_EVENT_TYPE_MIN_LENGTH {
+                    return Err(SystemError::EventTypeIsTooShort.into());
+                }
+                sanitize_custom_attributes(
+                    &mut attributes,
+                    env.contract.address.clone().into_string(),
+                )?;
+                event_handler(Event::new(
+                    format!("{}{}", CUSTOM_CONTRACT_EVENT_PREFIX, ty),
+                    attributes,
+                ));
+            }
+
             messages.into_iter().try_fold(
                 data,
                 |current,
@@ -226,7 +452,7 @@ where
                                 msg: Binary(msg),
                                 funds,
                             } => {
-                                let vm_contract_addr = contract_addr.try_into()?;
+                                let vm_contract_addr = contract_addr.clone().try_into()?;
                                 vm.continue_execute(
                                     vm_contract_addr,
                                     funds,
@@ -240,29 +466,34 @@ where
                                 msg,
                                 funds,
                                 label,
-                            } => vm.continue_instantiate(
-                                CosmwasmContractMeta {
-                                    code_id,
-                                    admin: match admin {
-                                        Some(admin) => Some(admin.try_into()?),
-                                        None => None,
+                            } => {
+                                let (_, data) = vm.continue_instantiate(
+                                    CosmwasmContractMeta {
+                                        code_id,
+                                        admin: match admin {
+                                            Some(admin) => Some(admin.try_into()?),
+                                            None => None,
+                                        },
+                                        label,
                                     },
-                                    label,
-                                },
-                                funds,
-                                &msg,
-                                &mut sub_event_handler,
-                            ),
+                                    funds,
+                                    &msg,
+                                    &mut sub_event_handler,
+                                )?;
+
+                                Ok(data)
+                            }
                             WasmMsg::Migrate {
                                 contract_addr,
                                 new_code_id,
                                 msg: Binary(msg),
                             } => {
-                                let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
+                                let vm_contract_addr =
+                                    VmAddressOf::<V>::try_from(contract_addr.clone())?;
                                 let CosmwasmContractMeta { admin, label, .. } =
-                                    vm.code_id(vm_contract_addr.clone())?;
+                                    vm.contract_meta(vm_contract_addr.clone())?;
                                 ensure_admin(admin.clone())?;
-                                vm.set_code_id(
+                                vm.set_contract_meta(
                                     vm_contract_addr.clone(),
                                     CosmwasmContractMeta {
                                         code_id: new_code_id,
@@ -282,9 +513,9 @@ where
                                     code_id,
                                     admin,
                                     label,
-                                } = vm.code_id(vm_contract_addr.clone())?;
+                                } = vm.contract_meta(vm_contract_addr.clone())?;
                                 ensure_admin(admin)?;
-                                vm.set_code_id(
+                                vm.set_contract_meta(
                                     vm_contract_addr,
                                     CosmwasmContractMeta {
                                         code_id,
@@ -300,9 +531,9 @@ where
                                     code_id,
                                     admin,
                                     label,
-                                } = vm.code_id(vm_contract_addr.clone())?;
+                                } = vm.contract_meta(vm_contract_addr.clone())?;
                                 ensure_admin(admin)?;
-                                vm.set_code_id(
+                                vm.set_contract_meta(
                                     vm_contract_addr,
                                     CosmwasmContractMeta {
                                         code_id,

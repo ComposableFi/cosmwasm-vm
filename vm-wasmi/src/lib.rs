@@ -123,7 +123,7 @@ impl Display for WasmiVMError {
 
 pub trait WasmiBaseVM = WasmiModuleExecutor
     + VMBase<
-        CodeId = CosmwasmContractMeta<VmAddressOf<Self>>,
+        ContractMeta = CosmwasmContractMeta<VmAddressOf<Self>>,
         StorageKey = Vec<u8>,
         StorageValue = Vec<u8>,
     > + ReadWriteMemory<Pointer = u32>
@@ -400,24 +400,30 @@ where
     type Output<'x> = WasmiOutput<'x, Self>;
     type QueryCustom = VmQueryCustomOf<T>;
     type MessageCustom = VmMessageCustomOf<T>;
-    type CodeId = VmCodeIdOf<T>;
+    type ContractMeta = VmContracMetaOf<T>;
     type Address = VmAddressOf<T>;
     type StorageKey = VmStorageKeyOf<T>;
     type StorageValue = VmStorageValueOf<T>;
     type Error = VmErrorOf<T>;
 
-    fn set_code_id(
-        &mut self,
-        address: Self::Address,
-        new_code_id: Self::CodeId,
-    ) -> Result<(), Self::Error> {
-        self.charge(VmGas::SetCodeId)?;
-        self.0.set_code_id(address, new_code_id)
+    fn running_contract_meta(&mut self) -> Self::ContractMeta {
+        // TODO(aeryz): we didn't want result but charge returns a result
+        let _ = self.charge(VmGas::GetContractMeta);
+        self.0.running_contract_meta()
     }
 
-    fn code_id(&mut self, address: Self::Address) -> Result<Self::CodeId, Self::Error> {
-        self.charge(VmGas::GetCodeId)?;
-        self.0.code_id(address)
+    fn set_contract_meta(
+        &mut self,
+        address: Self::Address,
+        new_contract_meta: Self::ContractMeta,
+    ) -> Result<(), Self::Error> {
+        self.charge(VmGas::SetContractMeta)?;
+        self.0.set_contract_meta(address, new_contract_meta)
+    }
+
+    fn contract_meta(&mut self, address: Self::Address) -> Result<Self::ContractMeta, Self::Error> {
+        self.charge(VmGas::GetContractMeta)?;
+        self.0.contract_meta(address)
     }
 
     fn query_continuation(
@@ -443,14 +449,14 @@ where
 
     fn continue_instantiate(
         &mut self,
-        code_id: Self::CodeId,
+        contract_meta: Self::ContractMeta,
         funds: Vec<Coin>,
         message: &[u8],
         event_handler: &mut dyn FnMut(Event),
-    ) -> Result<Option<Binary>, Self::Error> {
+    ) -> Result<(Self::Address, Option<Binary>), Self::Error> {
         self.charge(VmGas::ContinueInstantiate)?;
         self.0
-            .continue_instantiate(code_id, funds, message, event_handler)
+            .continue_instantiate(contract_meta, funds, message, event_handler)
     }
 
     fn continue_migrate(
