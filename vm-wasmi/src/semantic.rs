@@ -853,7 +853,6 @@ fn test_new_contracts() {
     let registry_code = instrument_contract(include_bytes!("/Users/aeryz/dev/composable/asset-registry/target/wasm32-unknown-unknown/release/xcvm_asset_registry.wasm"));
 
     let alice = BankAccount(1);
-    let bob = BankAccount(2);
     let interpreter_address = BankAccount(10_000);
     let cw20_address = BankAccount(10_001);
     let registry_address = BankAccount(10_002);

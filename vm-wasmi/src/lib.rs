@@ -926,16 +926,18 @@ pub mod host_functions {
                 let start = passthrough_out::<
                     WasmiVM<T>,
                     ConstantReadLimit<{ constants::MAX_LENGTH_DB_KEY }>,
-                >(vm, *start_ptr as u32)
-                .unwrap_or(None);
-                let end = maybe_passthrough_out::<
+                >(vm, *start_ptr as u32)?;
+                let end = passthrough_out::<
                     WasmiVM<T>,
                     ConstantReadLimit<{ constants::MAX_LENGTH_DB_KEY }>,
-                >(vm, *end_ptr as u32)
-                .unwrap_or(None);
+                >(vm, *end_ptr as u32)?;
                 let order: Order =
                     TryInto::<Order>::try_into(*order).map_err(|_| WasmiVMError::InvalidValue)?;
-                let value = vm.db_scan(start.as_deref(), end.as_deref(), order)?;
+                let value = vm.db_scan(
+                    if start.is_empty() { None } else { Some(start) },
+                    if end.is_empty() { None } else { Some(end) },
+                    order,
+                )?;
                 Ok(Some(RuntimeValue::I32(value as i32)))
             }
             _ => Err(WasmiVMError::InvalidHostSignature.into()),

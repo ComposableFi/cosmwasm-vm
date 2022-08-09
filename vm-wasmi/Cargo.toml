@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-iterator = [ "cosmwasm-vm/iterator" ]
+iterator = [ "cosmwasm-vm/iterator", "cosmwasm-minimal-std/iterator" ]
 
 [dependencies]
 serde = { version = "1", default-features = false, features = ["derive"] }

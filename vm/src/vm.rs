@@ -32,6 +32,9 @@ use core::fmt::Debug;
 use cosmwasm_minimal_std::{
     Binary, Coin, ContractInfoResponse, CosmwasmQueryResult, Event, QueryResult, SystemResult,
 };
+#[cfg(feature="iterator")]
+use cosmwasm_minimal_std::Order;
+
 use serde::de::DeserializeOwned;
 
 /// Gas checkpoint, used to meter sub-call gas usage.
