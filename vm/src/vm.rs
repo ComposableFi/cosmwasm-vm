@@ -32,6 +32,9 @@ use core::fmt::Debug;
 use cosmwasm_minimal_std::{
     Binary, Coin, ContractInfoResponse, CosmwasmQueryResult, Event, QueryResult, SystemResult,
 };
+#[cfg(feature="iterator")]
+use cosmwasm_minimal_std::Order;
+
 use serde::de::DeserializeOwned;
 
 /// Gas checkpoint, used to meter sub-call gas usage.
@@ -49,10 +52,10 @@ pub enum VmGas {
     Instrumentation { metered: u32 },
     /// Cost of calling `raw_call`.
     RawCall,
-    /// Cost of `set_code_id`.
-    SetCodeId,
-    /// Cost of `code_id`.
-    GetCodeId,
+    /// Cost of `set_contract_meta`.
+    SetContractMeta,
+    /// Cost of `contract_meta`.
+    GetContractMeta,
     /// Cost of `query_continuation`.
     QueryContinuation,
     /// Cost of `continue_execute`.
@@ -85,6 +88,14 @@ pub enum VmGas {
     DbWrite,
     /// Cost of `db_remove`.
     DbRemove,
+    #[cfg(feature = "iterator")]
+    /// Cost of `db_scan`.
+    DbScan,
+    #[cfg(feature = "iterator")]
+    /// Cost of `db_next`.
+    DbNext,
+    /// Cost of `debug`
+    Debug,
 }
 
 pub type VmInputOf<'a, T> = <T as VMBase>::Input<'a>;
@@ -95,7 +106,7 @@ pub type VmMessageCustomOf<T> = <T as VMBase>::MessageCustom;
 pub type VmAddressOf<T> = <T as VMBase>::Address;
 pub type VmStorageKeyOf<T> = <T as VMBase>::StorageKey;
 pub type VmStorageValueOf<T> = <T as VMBase>::StorageValue;
-pub type VmCodeIdOf<T> = <T as VMBase>::CodeId;
+pub type VmContracMetaOf<T> = <T as VMBase>::ContractMeta;
 
 /// A way of calling a VM. From the abstract `call` to `raw_call`.
 pub trait VM: VMBase {
@@ -125,8 +136,8 @@ pub trait VMBase {
     type QueryCustom: DeserializeOwned + Debug;
     /// Custom message, also known as chain extension.
     type MessageCustom: DeserializeOwned + Debug;
-    /// Unique identifier of a wasm blob representing a contract code.
-    type CodeId;
+    /// Metadata of a contract.
+    type ContractMeta;
     /// Unique identifier for contract instances and users under the system.
     type Address;
     /// Type of key used by the underlying DB.
@@ -136,15 +147,32 @@ pub trait VMBase {
     /// Possible errors raised by this VM.
     type Error;
 
-    /// Change the code id of a contract, actually migrating it.
-    fn set_code_id(
+    // Get the contract metadata of the currently running contract.
+    fn running_contract_meta(&mut self) -> Result<Self::ContractMeta, Self::Error>;
+
+    #[cfg(feature = "iterator")]
+    fn db_scan(
+        &mut self,
+        start: Option<Self::StorageKey>,
+        end: Option<Self::StorageKey>,
+        order: Order,
+    ) -> Result<u32, Self::Error>;
+
+    #[cfg(feature = "iterator")]
+    fn db_next(
+        &mut self,
+        iterator_id: u32,
+    ) -> Result<(Self::StorageKey, Self::StorageValue), Self::Error>;
+
+    /// Change the contract meta of a contract, actually migrating it.
+    fn set_contract_meta(
         &mut self,
         address: Self::Address,
-        new_code_id: Self::CodeId,
+        new_contract_meta: Self::ContractMeta,
     ) -> Result<(), Self::Error>;
 
-    /// Get the code id of a given contract.
-    fn code_id(&mut self, address: Self::Address) -> Result<Self::CodeId, Self::Error>;
+    /// Get the contract metadata of a given contract.
+    fn contract_meta(&mut self, address: Self::Address) -> Result<Self::ContractMeta, Self::Error>;
 
     /// Continue execution by calling query at the given contract address.
     fn query_continuation(
@@ -167,11 +195,11 @@ pub trait VMBase {
     /// Implementor must ensure that the funds are moved before executing the contract.
     fn continue_instantiate(
         &mut self,
-        code_id: Self::CodeId,
+        contract_meta: Self::ContractMeta,
         funds: Vec<Coin>,
         message: &[u8],
         event_handler: &mut dyn FnMut(Event),
-    ) -> Result<Option<Binary>, Self::Error>;
+    ) -> Result<(Self::Address, Option<Binary>), Self::Error>;
 
     /// Continue execution by calling migrate at the given contract address.
     /// Implementor must ensure that the funds are moved before executing the contract.
@@ -216,6 +244,9 @@ pub trait VMBase {
 
     /// Query the contract info.
     fn query_info(&mut self, address: Self::Address) -> Result<ContractInfoResponse, Self::Error>;
+
+    /// Log the message
+    fn debug(&mut self, message: Vec<u8>) -> Result<(), Self::Error>;
 
     /// Read an entry from the current contract db.
     fn db_read(&mut self, key: Self::StorageKey)
