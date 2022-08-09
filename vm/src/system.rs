@@ -448,7 +448,7 @@ where
                                 msg: Binary(msg),
                                 funds,
                             } => {
-                                let vm_contract_addr = contract_addr.clone().try_into()?;
+                                let vm_contract_addr = contract_addr.try_into()?;
                                 vm.continue_execute(
                                     vm_contract_addr,
                                     funds,
@@ -484,8 +484,7 @@ where
                                 new_code_id,
                                 msg: Binary(msg),
                             } => {
-                                let vm_contract_addr =
-                                    VmAddressOf::<V>::try_from(contract_addr.clone())?;
+                                let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
                                 let CosmwasmContractMeta { admin, label, .. } =
                                     vm.contract_meta(vm_contract_addr.clone())?;
                                 ensure_admin(admin.clone())?;

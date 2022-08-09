@@ -504,7 +504,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         self.extension
             .storage
             .entry(contract_addr)
-            .or_insert(SimpleWasmiVMStorage::default())
+            .or_insert_with(SimpleWasmiVMStorage::default)
             .data
             .insert(key, value);
         Ok(())

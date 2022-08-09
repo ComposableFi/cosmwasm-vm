@@ -29,11 +29,11 @@
 use crate::input::Input;
 use alloc::{string::String, vec::Vec};
 use core::fmt::Debug;
+#[cfg(feature = "iterator")]
+use cosmwasm_minimal_std::Order;
 use cosmwasm_minimal_std::{
     Binary, Coin, ContractInfoResponse, CosmwasmQueryResult, Event, QueryResult, SystemResult,
 };
-#[cfg(feature="iterator")]
-use cosmwasm_minimal_std::Order;
 
 use serde::de::DeserializeOwned;
 
