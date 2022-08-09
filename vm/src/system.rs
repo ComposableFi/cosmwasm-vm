@@ -63,7 +63,7 @@ const CUSTOM_CONTRACT_EVENT_TYPE_MIN_LENGTH: usize = 2;
 const WASM_MODULE_EVENT_RESERVED_PREFIX: &str = "_";
 
 #[allow(unused)]
-enum SystemEventType {
+pub enum SystemEventType {
     StoreCode,
     Instantiate,
     Execute,
@@ -75,20 +75,19 @@ enum SystemEventType {
     GovContractResult,
 }
 
-#[allow(unused)]
-enum SystemAttributeKey {
+pub enum SystemAttributeKey {
     ContractAddr,
     CodeID,
     ResultDataHex,
     Feature,
 }
 
-struct SystemAttribute {
+pub struct SystemAttribute {
     key: SystemAttributeKey,
     value: String,
 }
 
-struct SystemEvent {
+pub struct SystemEvent {
     ty: SystemEventType,
     attributes: Vec<SystemAttribute>,
 }
@@ -136,7 +135,7 @@ impl From<SystemEvent> for Event {
     }
 }
 
-trait EventHasCodeId {
+pub trait EventHasCodeId {
     const HAS_CODE_ID: bool;
 }
 
@@ -156,7 +155,7 @@ impl<T> EventHasCodeId for ReplyInput<T> {
     const HAS_CODE_ID: bool = false;
 }
 
-trait EventIsTyped {
+pub trait EventIsTyped {
     const TYPE: SystemEventType;
 }
 
@@ -375,15 +374,8 @@ where
             _ => Err(SystemError::MustBeAdmin.into()),
         }
     };
-    let output = cosmwasm_call::<I, V>(vm, message)
-        .map(Into::into)
-        .map(|data| {
-            let CosmwasmContractMeta { code_id, .. } = vm.running_contract_meta();
-            let event = I::generate_event(env.contract.address.clone().into_string(), code_id);
-            event_handler(event);
+    let output = cosmwasm_call::<I, V>(vm, message).map(Into::into);
 
-            data
-        });
     log::debug!("Output: {:?}", output);
     match output {
         Ok(ContractResult::Ok(Response {
@@ -393,6 +385,10 @@ where
             data,
             ..
         })) => {
+            let CosmwasmContractMeta { code_id, .. } = vm.running_contract_meta()?;
+            let event = I::generate_event(env.contract.address.clone().into_string(), code_id);
+            event_handler(event);
+
             // https://github.com/CosmWasm/wasmd/blob/ac92fdcf37388cc8dc24535f301f64395f8fb3da/x/wasm/keeper/events.go#L16
             if !attributes.is_empty() {
                 sanitize_custom_attributes(

@@ -3,6 +3,8 @@ extern crate std;
 use super::*;
 use alloc::string::ToString;
 use core::{assert_matches::assert_matches, num::NonZeroU32, str::FromStr};
+#[cfg(feature = "iterator")]
+use cosmwasm_minimal_std::Order;
 use cosmwasm_minimal_std::{
     Addr, Attribute, Binary, BlockInfo, Coin, ContractInfo, CosmwasmExecutionResult,
     CosmwasmQueryResult, Empty, Env, Event, InstantiateResult, MessageInfo, QueryResult, Timestamp,
@@ -34,6 +36,8 @@ enum SimpleVMError {
     NoCustomMessage,
     Unsupported,
     OutOfGas,
+    // TODO(aeryz): WasmiVMError or SimpleVMError
+    IteratorDoesNotExist,
 }
 impl From<wasmi::Error> for SimpleVMError {
     fn from(e: wasmi::Error) -> Self {
@@ -126,8 +130,22 @@ impl Gas {
     }
 }
 
+#[cfg(feature = "iterator")]
+#[derive(Default, Debug)]
+struct Iter {
+    data: Vec<(Vec<u8>, Vec<u8>)>,
+    position: usize,
+}
+
+#[derive(Default, Debug)]
+struct SimpleWasmiVMStorage {
+    data: BTreeMap<Vec<u8>, Vec<u8>>,
+    #[cfg(feature = "iterator")]
+    iterators: BTreeMap<u32, Iter>,
+}
+
 struct SimpleWasmiVMExtension {
-    storage: BTreeMap<BankAccount, BTreeMap<Vec<u8>, Vec<u8>>>,
+    storage: BTreeMap<BankAccount, SimpleWasmiVMStorage>,
     codes: BTreeMap<CosmwasmCodeId, Vec<u8>>,
     contracts: BTreeMap<BankAccount, CosmwasmContractMeta<BankAccount>>,
     next_account_id: BankAccount,
@@ -237,15 +255,16 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
     type StorageValue = Vec<u8>;
     type Error = SimpleVMError;
 
-    fn running_contract_meta(&mut self) -> Self::ContractMeta {
-        self.extension
+    fn running_contract_meta(&mut self) -> Result<Self::ContractMeta, Self::Error> {
+        Ok(self
+            .extension
             .contracts
             .get(
                 &BankAccount::try_from(self.env.contract.address.clone())
                     .expect("contract address is set by vm, this should never happen"),
             )
             .cloned()
-            .expect("contract is inserted by vm, this should never happen")
+            .expect("contract is inserted by vm, this should never happen"))
     }
 
     fn set_contract_meta(
@@ -361,6 +380,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
             .storage
             .get(&address)
             .unwrap_or(&Default::default())
+            .data
             .get(&key)
             .cloned())
     }
@@ -397,17 +417,80 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         Err(SimpleVMError::Unsupported)
     }
 
+    fn debug(&mut self, message: Vec<u8>) -> Result<(), Self::Error> {
+        log::info!("[contract-debug] {}", String::from_utf8_lossy(&message));
+        Ok(())
+    }
+
+    #[cfg(feature = "iterator")]
+    fn db_scan(
+        &mut self,
+        _start: Option<Self::StorageKey>,
+        _end: Option<Self::StorageKey>,
+        _order: Order,
+    ) -> Result<u32, Self::Error> {
+        let contract_addr = self.env.contract.address.clone().try_into()?;
+        let mut empty = SimpleWasmiVMStorage::default();
+        let storage = self
+            .extension
+            .storage
+            .get_mut(&contract_addr)
+            .unwrap_or(&mut empty);
+
+        let data = storage.data.clone().into_iter().collect::<Vec<_>>();
+        // Exceeding u32 size is fatal
+        let last_id: u32 = storage
+            .iterators
+            .len()
+            .try_into()
+            .expect("Found more iterator IDs than supported");
+
+        let new_id = last_id + 1;
+        let iter = Iter { data, position: 0 };
+        storage.iterators.insert(new_id, iter);
+
+        Ok(new_id)
+    }
+
+    #[cfg(feature = "iterator")]
+    fn db_next(
+        &mut self,
+        iterator_id: u32,
+    ) -> Result<(Self::StorageKey, Self::StorageValue), Self::Error> {
+        let contract_addr = self.env.contract.address.clone().try_into()?;
+        let storage = self
+            .extension
+            .storage
+            .get_mut(&contract_addr)
+            .ok_or(SimpleVMError::IteratorDoesNotExist)?;
+
+        let iterator = storage
+            .iterators
+            .get_mut(&iterator_id)
+            .ok_or(SimpleVMError::IteratorDoesNotExist)?;
+
+        let position = iterator.position;
+        if iterator.data.len() > position {
+            iterator.position += 1;
+            Ok(iterator.data[position].clone())
+        } else {
+            // Empty data works like `None` in rust iterators
+            Ok((Default::default(), Default::default()))
+        }
+    }
+
     fn db_read(
         &mut self,
         key: Self::StorageKey,
     ) -> Result<Option<Self::StorageValue>, Self::Error> {
         let contract_addr = self.env.contract.address.clone().try_into()?;
-        let empty = BTreeMap::new();
+        let empty = SimpleWasmiVMStorage::default();
         Ok(self
             .extension
             .storage
             .get(&contract_addr)
             .unwrap_or(&empty)
+            .data
             .get(&key)
             .cloned())
     }
@@ -421,7 +504,8 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         self.extension
             .storage
             .entry(contract_addr)
-            .or_insert(BTreeMap::new())
+            .or_insert(SimpleWasmiVMStorage::default())
+            .data
             .insert(key, value);
         Ok(())
     }
@@ -431,7 +515,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         self.extension
             .storage
             .get_mut(&contract_addr)
-            .map(|contract_storage| contract_storage.remove(&key));
+            .map(|contract_storage| contract_storage.data.remove(&key));
         Ok(())
     }
 
@@ -760,6 +844,143 @@ fn test_orchestration_advanced() {
                 .to_vec()
         )))
     );
+}
+
+#[test]
+fn test_new_contracts() {
+    let interpreter_code = instrument_contract(include_bytes!("/Users/aeryz/dev/composable/interpreter/target/wasm32-unknown-unknown/release/xcvm_interpreter.wasm"));
+    let cw20_code = instrument_contract(include_bytes!("../../fixtures/cw20_base.wasm"));
+    let registry_code = instrument_contract(include_bytes!("/Users/aeryz/dev/composable/asset-registry/target/wasm32-unknown-unknown/release/xcvm_asset_registry.wasm"));
+
+    let alice = BankAccount(1);
+    let bob = BankAccount(2);
+    let interpreter_address = BankAccount(10_000);
+    let cw20_address = BankAccount(10_001);
+    let registry_address = BankAccount(10_002);
+
+    let interpreter_code_id = 0x1337;
+    let cw20_code_id = 0x1338;
+    let registry_code_id = 0x1339;
+
+    let mut extension = SimpleWasmiVMExtension {
+        storage: Default::default(),
+        codes: BTreeMap::from([
+            (interpreter_code_id, interpreter_code.clone()),
+            (cw20_code_id, cw20_code.clone()),
+            (registry_code_id, registry_code.clone()),
+        ]),
+        contracts: BTreeMap::from([
+            (
+                interpreter_address,
+                CosmwasmContractMeta {
+                    code_id: interpreter_code_id,
+                    admin: None,
+                    label: "".into(),
+                },
+            ),
+            (
+                cw20_address,
+                CosmwasmContractMeta {
+                    code_id: cw20_code_id,
+                    admin: None,
+                    label: "".into(),
+                },
+            ),
+            (
+                registry_address,
+                CosmwasmContractMeta {
+                    code_id: registry_code_id,
+                    admin: None,
+                    label: "".into(),
+                },
+            ),
+        ]),
+        next_account_id: BankAccount(10_003),
+        transaction_depth: 0,
+        gas: Gas::new(1_000_000_000),
+    };
+
+    {
+        let mut vm = create_simple_vm(alice, cw20_address, vec![], &cw20_code, &mut extension);
+        let _ = cosmwasm_system_entrypoint::<InstantiateInput, _>(
+            &mut vm,
+            r#"{
+                "name": "Picasso",
+                "symbol": "PICA",
+                "decimals": 12,
+                "initial_balances": [{
+                    "address": "10002",
+                    "amount": "1000000"
+                }],
+                "mint": null,
+                "marketing": null
+              }"#
+            .as_bytes(),
+        )
+        .unwrap();
+    }
+
+    {
+        let mut vm = create_simple_vm(
+            alice,
+            registry_address,
+            vec![],
+            &registry_code,
+            &mut extension,
+        );
+        let _ =
+            cosmwasm_system_entrypoint::<InstantiateInput, _>(&mut vm, r#"{}"#.as_bytes()).unwrap();
+
+        let _ = cosmwasm_system_entrypoint::<ExecuteInput, _>(
+            &mut vm,
+            r#"{
+            "set_assets": {"1": "123"}
+        }"#
+            .as_bytes(),
+        )
+        .unwrap();
+    }
+
+    {
+        let mut vm = create_simple_vm(
+            alice,
+            interpreter_address,
+            vec![],
+            &interpreter_code,
+            &mut extension,
+        );
+        let _ = cosmwasm_system_entrypoint::<InstantiateInput, _>(
+            &mut vm,
+            r#"{
+                "registry_address": "10002"
+            }"#
+            .as_bytes(),
+        )
+        .unwrap();
+
+        let _ = cosmwasm_system_entrypoint::<ExecuteInput, _>(
+            &mut vm,
+            r#"{
+            "execute": {
+                "program": {
+                    "tag": null,
+                    "instructions": [{
+                        "transfer": {
+                            "to": "2",
+                            "assets": {
+                                "1": {
+                                    "fixed": "100"
+                                }
+                            }
+                        }
+                    }]
+                }
+            }
+        }"#
+            .as_bytes(),
+        )
+        .unwrap();
+    }
 }
 
 #[test]

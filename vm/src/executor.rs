@@ -167,6 +167,8 @@ pub enum ExecutorError {
     DeallocationWouldOverflow,
     /// The read limit is too big and could not be converted to a pointer.
     CallReadLimitWouldOverflow,
+    /// Pointer is invalid
+    InvalidPointer,
 }
 
 pub mod constants {

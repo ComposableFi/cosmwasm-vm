@@ -85,6 +85,14 @@ pub enum VmGas {
     DbWrite,
     /// Cost of `db_remove`.
     DbRemove,
+    #[cfg(feature = "iterator")]
+    /// Cost of `db_scan`.
+    DbScan,
+    #[cfg(feature = "iterator")]
+    /// Cost of `db_next`.
+    DbNext,
+    /// Cost of `debug`
+    Debug,
 }
 
 pub type VmInputOf<'a, T> = <T as VMBase>::Input<'a>;
@@ -137,7 +145,21 @@ pub trait VMBase {
     type Error;
 
     // Get the contract metadata of the currently running contract.
-    fn running_contract_meta(&mut self) -> Self::ContractMeta;
+    fn running_contract_meta(&mut self) -> Result<Self::ContractMeta, Self::Error>;
+
+    #[cfg(feature = "iterator")]
+    fn db_scan(
+        &mut self,
+        start: Option<Self::StorageKey>,
+        end: Option<Self::StorageKey>,
+        order: Order,
+    ) -> Result<u32, Self::Error>;
+
+    #[cfg(feature = "iterator")]
+    fn db_next(
+        &mut self,
+        iterator_id: u32,
+    ) -> Result<(Self::StorageKey, Self::StorageValue), Self::Error>;
 
     /// Change the contract meta of a contract, actually migrating it.
     fn set_contract_meta(
@@ -219,6 +241,9 @@ pub trait VMBase {
 
     /// Query the contract info.
     fn query_info(&mut self, address: Self::Address) -> Result<ContractInfoResponse, Self::Error>;
+
+    /// Log the message
+    fn debug(&mut self, message: Vec<u8>) -> Result<(), Self::Error>;
 
     /// Read an entry from the current contract db.
     fn db_read(&mut self, key: Self::StorageKey)

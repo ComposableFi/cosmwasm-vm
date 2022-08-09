@@ -3,6 +3,9 @@ name = "cosmwasm-vm-wasmi"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+iterator = [ "cosmwasm-vm/iterator" ]
+
 [dependencies]
 serde = { version = "1", default-features = false, features = ["derive"] }
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
