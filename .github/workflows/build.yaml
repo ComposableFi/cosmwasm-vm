@@ -1,6 +1,7 @@
 name: "Build & Tests & Clippy & Fmt"
 on:
   push:
+  pull_request:
 jobs:
   build-tests-clippy-fmt:
     strategy:
