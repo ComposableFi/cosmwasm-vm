@@ -202,6 +202,14 @@ pub mod constants {
     pub const MAX_LENGTH_DEBUG: usize = 2 * MI;
     /// Max length for an abort message
     pub const MAX_LENGTH_ABORT: usize = 2 * MI;
+    /// Max length of a message hash
+    pub const MAX_LENGTH_MESSAGE_HASH: usize = 32;
+    /// Length of an edcsa signature
+    pub const EDCSA_SIGNATURE_LENGTH: usize = 64;
+    /// Max length for edcsa public key
+    pub const MAX_LENGTH_EDCSA_PUBKEY_LENGTH: usize = 65;
+    /// Length of an eddsa public key
+    pub const EDDSA_PUBKEY_LENGTH: usize = 32;
 }
 
 /// Allow for untyped marshalling to specify a limit while extracting the bytes from a contract memory.
@@ -251,6 +259,22 @@ where
 {
     log::trace!("Deallocate");
     vm.call(DeallocateInput(pointer))?;
+    Ok(())
+}
+
+pub fn passthrough_in_to<V>(
+    vm: &mut V,
+    destination: V::Pointer,
+    data: &[u8],
+) -> Result<(), VmErrorOf<V>>
+where
+    V: VM + ReadWriteMemory,
+    for<'x> VmInputOf<'x, V>: TryFrom<AllocateInput<V::Pointer>, Error = VmErrorOf<V>>,
+    V::Pointer: for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
+    VmErrorOf<V>:
+        From<ReadableMemoryErrorOf<V>> + From<WritableMemoryErrorOf<V>> + From<ExecutorError>,
+{
+    RawIntoRegion::try_from(Write(vm, destination, data))?;
     Ok(())
 }
 

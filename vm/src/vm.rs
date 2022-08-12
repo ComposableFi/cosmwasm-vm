@@ -96,6 +96,20 @@ pub enum VmGas {
     DbNext,
     /// Cost of `debug`
     Debug,
+    /// Cost of `secp256k1_verify`
+    Secp256k1Verify,
+    /// Cost of `secp256k1_recover_pubkey`
+    Secp256k1RecoverPubkey,
+    /// Cost of `ed25519_verify`
+    Ed25519Verify,
+    /// Cost of `ed25519_batch_verify`
+    Ed25519BatchVerify,
+    /// Cost of `addr_validate`
+    AddrValidate,
+    /// Cost of `addr_canonicalize`
+    AddrCanonicalize,
+    /// Cost of `addr_humanize`
+    AddrHumanize,
 }
 
 pub type VmInputOf<'a, T> = <T as VMBase>::Input<'a>;
@@ -104,6 +118,7 @@ pub type VmErrorOf<T> = <T as VMBase>::Error;
 pub type VmQueryCustomOf<T> = <T as VMBase>::QueryCustom;
 pub type VmMessageCustomOf<T> = <T as VMBase>::MessageCustom;
 pub type VmAddressOf<T> = <T as VMBase>::Address;
+pub type VmCanonicalAddressOf<T> = <T as VMBase>::CanonicalAddress;
 pub type VmStorageKeyOf<T> = <T as VMBase>::StorageKey;
 pub type VmStorageValueOf<T> = <T as VMBase>::StorageValue;
 pub type VmContracMetaOf<T> = <T as VMBase>::ContractMeta;
@@ -140,6 +155,8 @@ pub trait VMBase {
     type ContractMeta;
     /// Unique identifier for contract instances and users under the system.
     type Address;
+    /// TODO(aeryz)
+    type CanonicalAddress;
     /// Type of key used by the underlying DB.
     type StorageKey;
     /// Type of value used by the underlying DB.
@@ -163,6 +180,36 @@ pub trait VMBase {
         &mut self,
         iterator_id: u32,
     ) -> Result<(Self::StorageKey, Self::StorageValue), Self::Error>;
+
+    fn secp256k1_verify(
+        &mut self,
+        message_hash: &[u8],
+        signature: &[u8],
+        public_key: &[u8],
+    ) -> Result<bool, Self::Error>;
+
+    fn secp256k1_recover_pubkey(
+        &mut self,
+        message_hash: &[u8],
+        signature: &[u8],
+        recovery_param: u8,
+    ) -> Result<Vec<u8>, Self::Error>;
+
+    /// Verify message against a signature, with the public key of the signer, using
+    /// the ed25519 elliptic curve digital signature parametrization / algorithm.
+    fn ed25519_verify(
+        &mut self,
+        message: &[u8],
+        signature: &[u8],
+        public_key: &[u8],
+    ) -> Result<bool, Self::Error>;
+
+    fn ed25519_batch_verify(
+        &mut self,
+        messages: &[&[u8]],
+        signatures: &[&[u8]],
+        public_keys: &[&[u8]],
+    ) -> Result<bool, Self::Error>;
 
     /// Change the contract meta of a contract, actually migrating it.
     fn set_contract_meta(
@@ -235,7 +282,6 @@ pub trait VMBase {
 
     /// Burn the `funds` from the current contract.
     fn burn(&mut self, funds: &[Coin]) -> Result<(), Self::Error>;
-
     /// Query the balance of `denom` tokens.
     fn balance(&mut self, account: &Self::Address, denom: String) -> Result<Coin, Self::Error>;
 
@@ -261,6 +307,18 @@ pub trait VMBase {
 
     /// Remove an entry from the current contract db.
     fn db_remove(&mut self, key: Self::StorageKey) -> Result<(), Self::Error>;
+
+    fn addr_validate(&mut self, input: &str) -> Result<Result<(), Self::Error>, Self::Error>;
+
+    fn addr_canonicalize(
+        &mut self,
+        input: &str,
+    ) -> Result<Result<Self::CanonicalAddress, Self::Error>, Self::Error>;
+
+    fn addr_humanize(
+        &mut self,
+        addr: &Self::CanonicalAddress,
+    ) -> Result<Result<Self::Address, Self::Error>, Self::Error>;
 
     /// Abort execution, called when the contract panic.
     fn abort(&mut self, message: String) -> Result<(), Self::Error>;

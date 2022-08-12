@@ -45,8 +45,8 @@ use core::{
 #[cfg(feature = "iterator")]
 use cosmwasm_minimal_std::Order;
 use cosmwasm_minimal_std::{
-    Addr, Binary, Coin, ContractInfoResponse, CosmwasmQueryResult, Env, Event, MessageInfo,
-    SystemResult,
+    Addr, Binary, CanonicalAddr, Coin, ContractInfoResponse, CosmwasmQueryResult, Env, Event,
+    MessageInfo, SystemResult,
 };
 use cosmwasm_vm::executor::{
     AllocateInput, AsFunctionName, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
@@ -135,6 +135,7 @@ pub trait WasmiBaseVM = WasmiModuleExecutor
     + Has<MessageInfo>
 where
     VmAddressOf<Self>: Clone + TryFrom<String, Error = VmErrorOf<Self>> + Into<Addr>,
+    VmCanonicalAddressOf<Self>: Clone + From<Vec<u8>> + Into<CanonicalAddr>,
     VmErrorOf<Self>: From<wasmi::Error>
         + From<WasmiVMError>
         + From<MemoryReadError>
@@ -145,6 +146,7 @@ where
         + From<SystemError>
         + From<TransactionalErrorOf<Self>>
         + Debug
+        + Display
         + CanResume,
     ReadableMemoryErrorOf<Self>: From<MemoryReadError>,
     WritableMemoryErrorOf<Self>: From<MemoryWriteError>;
@@ -405,6 +407,7 @@ where
     type MessageCustom = VmMessageCustomOf<T>;
     type ContractMeta = VmContracMetaOf<T>;
     type Address = VmAddressOf<T>;
+    type CanonicalAddress = VmCanonicalAddressOf<T>;
     type StorageKey = VmStorageKeyOf<T>;
     type StorageValue = VmStorageValueOf<T>;
     type Error = VmErrorOf<T>;
@@ -569,6 +572,69 @@ where
         self.0.db_remove(key)
     }
 
+    fn secp256k1_verify(
+        &mut self,
+        message_hash: &[u8],
+        signature: &[u8],
+        public_key: &[u8],
+    ) -> Result<bool, Self::Error> {
+        self.0.charge(VmGas::Secp256k1Verify)?;
+        self.0.secp256k1_verify(message_hash, signature, public_key)
+    }
+
+    fn secp256k1_recover_pubkey(
+        &mut self,
+        message_hash: &[u8],
+        signature: &[u8],
+        recovery_param: u8,
+    ) -> Result<Vec<u8>, Self::Error> {
+        self.0.charge(VmGas::Secp256k1RecoverPubkey)?;
+        self.0
+            .secp256k1_recover_pubkey(message_hash, signature, recovery_param)
+    }
+
+    fn ed25519_verify(
+        &mut self,
+        message: &[u8],
+        signature: &[u8],
+        public_key: &[u8],
+    ) -> Result<bool, Self::Error> {
+        self.0.charge(VmGas::Ed25519Verify)?;
+        self.0.ed25519_verify(message, signature, public_key)
+    }
+
+    fn ed25519_batch_verify(
+        &mut self,
+        messages: &[&[u8]],
+        signatures: &[&[u8]],
+        public_keys: &[&[u8]],
+    ) -> Result<bool, Self::Error> {
+        self.0.charge(VmGas::Ed25519BatchVerify)?;
+        self.0
+            .ed25519_batch_verify(messages, signatures, public_keys)
+    }
+
+    fn addr_validate(&mut self, input: &str) -> Result<Result<(), Self::Error>, Self::Error> {
+        self.0.charge(VmGas::AddrValidate)?;
+        self.0.addr_validate(input)
+    }
+
+    fn addr_canonicalize(
+        &mut self,
+        input: &str,
+    ) -> Result<Result<Self::CanonicalAddress, Self::Error>, Self::Error> {
+        self.0.charge(VmGas::AddrCanonicalize)?;
+        self.0.addr_canonicalize(input)
+    }
+
+    fn addr_humanize(
+        &mut self,
+        addr: &Self::CanonicalAddress,
+    ) -> Result<Result<Self::Address, Self::Error>, Self::Error> {
+        self.0.charge(VmGas::AddrHumanize)?;
+        self.0.addr_humanize(addr)
+    }
+
     fn abort(&mut self, message: String) -> Result<(), Self::Error> {
         self.0.abort(message)
     }
@@ -701,7 +767,10 @@ pub mod host_functions {
     use cosmwasm_minimal_std::Order;
     use cosmwasm_minimal_std::QueryRequest;
     use cosmwasm_vm::{
-        executor::{constants, marshall_out, passthrough_in, passthrough_out, ConstantReadLimit},
+        executor::{
+            constants, marshall_out, passthrough_in, passthrough_in_to, passthrough_out,
+            ConstantReadLimit,
+        },
         system::cosmwasm_system_query_raw,
     };
 
@@ -778,17 +847,10 @@ pub mod host_functions {
                     ),
                 ),
                 (
-                    WasmiFunctionName("secp256k1_batch_verify".to_owned()),
-                    (
-                        WasmiHostFunctionIndex(0x000A),
-                        env_secp256k1_batch_verify::<T> as WasmiHostFunction<T>,
-                    ),
-                ),
-                (
                     WasmiFunctionName("secp256k1_recover_pubkey".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x000B),
-                        env_secp256k1_recove_pubkey::<T> as WasmiHostFunction<T>,
+                        env_secp256k1_recover_pubkey::<T> as WasmiHostFunction<T>,
                     ),
                 ),
                 (
@@ -971,82 +1033,216 @@ pub mod host_functions {
     }
 
     fn env_addr_validate<T>(
-        _: &mut WasmiVM<T>,
-        _: &[RuntimeValue],
+        vm: &mut WasmiVM<T>,
+        values: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
         T: WasmiBaseVM,
     {
         log::debug!("addr_validate");
-        Ok(Some(RuntimeValue::I32(0)))
+        match values {
+            [RuntimeValue::I32(address_pointer)] => {
+                let address = passthrough_out::<
+                    WasmiVM<T>,
+                    ConstantReadLimit<{ constants::MAX_LENGTH_HUMAN_ADDRESS }>,
+                >(vm, *address_pointer as u32)?;
+
+                let address = match String::from_utf8(address) {
+                    Ok(address) => address,
+                    Err(e) => {
+                        let Tagged(value_pointer, _) =
+                            passthrough_in::<WasmiVM<T>, ()>(vm, e.as_bytes())?;
+                        return Ok(Some(RuntimeValue::I32(value_pointer as i32)));
+                    }
+                };
+
+                match vm.addr_validate(&address)? {
+                    Ok(_) => Ok(Some(RuntimeValue::I32(0))),
+                    Err(e) => {
+                        let Tagged(value_pointer, _) =
+                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{}", e).as_bytes())?;
+                        Ok(Some(RuntimeValue::I32(value_pointer as i32)))
+                    }
+                }
+            }
+            _ => Err(WasmiVMError::InvalidHostSignature.into()),
+        }
     }
 
     fn env_addr_canonicalize<T>(
-        _: &mut WasmiVM<T>,
-        _: &[RuntimeValue],
+        vm: &mut WasmiVM<T>,
+        values: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
         T: WasmiBaseVM,
     {
         log::debug!("addr_canonicalize");
-        Ok(None)
+        match values {
+            [RuntimeValue::I32(address_pointer), RuntimeValue::I32(destination_pointer)] => {
+                let address = passthrough_out::<
+                    WasmiVM<T>,
+                    ConstantReadLimit<{ constants::MAX_LENGTH_HUMAN_ADDRESS }>,
+                >(vm, *address_pointer as u32)?;
+
+                let address = match String::from_utf8(address) {
+                    Ok(address) => address,
+                    Err(_) => {
+                        let Tagged(value_pointer, _) = passthrough_in::<WasmiVM<T>, ()>(
+                            vm,
+                            b"address is not a valid UTF-8 string",
+                        )?;
+                        return Ok(Some(RuntimeValue::I32(value_pointer as i32)));
+                    }
+                };
+
+                match vm.addr_canonicalize(&address)? {
+                    Ok(canonical_address) => {
+                        passthrough_in_to::<WasmiVM<T>>(
+                            vm,
+                            *destination_pointer as u32,
+                            &canonical_address.into(),
+                        )?;
+                        Ok(Some(RuntimeValue::I32(0)))
+                    }
+                    Err(e) => {
+                        let Tagged(value_pointer, _) =
+                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{}", e).as_bytes())?;
+                        Ok(Some(RuntimeValue::I32(value_pointer as i32)))
+                    }
+                }
+            }
+            _ => Err(WasmiVMError::InvalidHostSignature.into()),
+        }
     }
 
     fn env_addr_humanize<T>(
-        _: &mut WasmiVM<T>,
-        _: &[RuntimeValue],
+        vm: &mut WasmiVM<T>,
+        values: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
         T: WasmiBaseVM,
     {
         log::debug!("addr_humanize");
-        Ok(None)
+        match values {
+            [RuntimeValue::I32(address_pointer), RuntimeValue::I32(destination_pointer)] => {
+                let address = passthrough_out::<
+                    WasmiVM<T>,
+                    ConstantReadLimit<{ constants::MAX_LENGTH_CANONICAL_ADDRESS }>,
+                >(vm, *address_pointer as u32)?;
+
+                match vm.addr_humanize(&address.into())? {
+                    Ok(address) => {
+                        passthrough_in_to::<WasmiVM<T>>(
+                            vm,
+                            *destination_pointer as u32,
+                            address.into().as_bytes(),
+                        )?;
+                        Ok(Some(RuntimeValue::I32(0)))
+                    }
+                    Err(e) => {
+                        let Tagged(value_pointer, _) =
+                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{}", e).as_bytes())?;
+                        Ok(Some(RuntimeValue::I32(value_pointer as i32)))
+                    }
+                }
+            }
+            _ => Err(WasmiVMError::InvalidHostSignature.into()),
+        }
     }
 
     fn env_secp256k1_verify<T>(
-        _: &mut WasmiVM<T>,
-        _: &[RuntimeValue],
+        vm: &mut WasmiVM<T>,
+        values: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
         T: WasmiBaseVM,
     {
-        log::debug!("secp256k1_verify");
-        Ok(None)
+        match values {
+            [RuntimeValue::I32(message_hash_ptr), RuntimeValue::I32(signature_ptr), RuntimeValue::I32(public_key_ptr)] =>
+            {
+                let message_hash = passthrough_out::<
+                    WasmiVM<T>,
+                    ConstantReadLimit<{ constants::MAX_LENGTH_MESSAGE_HASH }>,
+                >(vm, *message_hash_ptr as u32)?;
+                let signature = passthrough_out::<
+                    WasmiVM<T>,
+                    ConstantReadLimit<{ constants::EDCSA_SIGNATURE_LENGTH }>,
+                >(vm, *signature_ptr as u32)?;
+                let public_key = passthrough_out::<
+                    WasmiVM<T>,
+                    ConstantReadLimit<{ constants::MAX_LENGTH_EDCSA_PUBKEY_LENGTH }>,
+                >(vm, *public_key_ptr as u32)?;
+
+                let result = vm.secp256k1_verify(&message_hash, &signature, &public_key)?;
+                Ok(Some(RuntimeValue::I32(result as i32)))
+            }
+            _ => Err(WasmiVMError::InvalidHostSignature.into()),
+        }
     }
 
-    fn env_secp256k1_batch_verify<T>(
-        _: &mut WasmiVM<T>,
-        _: &[RuntimeValue],
+    fn env_secp256k1_recover_pubkey<T>(
+        vm: &mut WasmiVM<T>,
+        values: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
         T: WasmiBaseVM,
     {
-        log::debug!("secp256k1_batch_verify");
-        Ok(None)
-    }
+        log::debug!("secp256k1_recover_pubkey");
+        match values {
+            [RuntimeValue::I32(message_hash_ptr), RuntimeValue::I32(signature_ptr), RuntimeValue::I32(recovery_param)] =>
+            {
+                let message_hash = passthrough_out::<
+                    WasmiVM<T>,
+                    ConstantReadLimit<{ constants::MAX_LENGTH_MESSAGE_HASH }>,
+                >(vm, *message_hash_ptr as u32)?;
+                let signature = passthrough_out::<
+                    WasmiVM<T>,
+                    ConstantReadLimit<{ constants::EDCSA_SIGNATURE_LENGTH }>,
+                >(vm, *signature_ptr as u32)?;
 
-    fn env_secp256k1_recove_pubkey<T>(
-        _: &mut WasmiVM<T>,
-        _: &[RuntimeValue],
-    ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
-    where
-        T: WasmiBaseVM,
-    {
-        log::debug!("secp256k1_recove_pubkey");
-        Ok(None)
+                let output =
+                    vm.secp256k1_recover_pubkey(&message_hash, &signature, *recovery_param as u8)?;
+
+                let Tagged(value_pointer, _) = passthrough_in::<WasmiVM<T>, ()>(vm, &output)?;
+
+                Ok(Some(RuntimeValue::I32(value_pointer as i32)))
+            }
+            _ => Err(WasmiVMError::InvalidHostSignature.into()),
+        }
     }
 
     fn env_ed25519_verify<T>(
-        _: &mut WasmiVM<T>,
-        _: &[RuntimeValue],
+        vm: &mut WasmiVM<T>,
+        values: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
         T: WasmiBaseVM,
     {
         log::debug!("ed25519_verify");
-        Ok(None)
+        match values {
+            [RuntimeValue::I32(message_ptr), RuntimeValue::I32(signature_ptr), RuntimeValue::I32(public_key_ptr)] =>
+            {
+                let message = passthrough_out::<
+                    WasmiVM<T>,
+                    ConstantReadLimit<{ constants::MAX_LENGTH_ED25519_MESSAGE }>,
+                >(vm, *message_ptr as u32)?;
+                let signature = passthrough_out::<
+                    WasmiVM<T>,
+                    ConstantReadLimit<{ constants::MAX_LENGTH_ED25519_SIGNATURE }>,
+                >(vm, *signature_ptr as u32)?;
+                let public_key = passthrough_out::<
+                    WasmiVM<T>,
+                    ConstantReadLimit<{ constants::EDDSA_PUBKEY_LENGTH }>,
+                >(vm, *public_key_ptr as u32)?;
+
+                let result = vm.ed25519_verify(&message, &signature, &public_key)?;
+                Ok(Some(RuntimeValue::I32(result as i32)))
+            }
+            _ => Err(WasmiVMError::InvalidHostSignature.into()),
+        }
     }
 
+    // TODO(aeryz): check if &[&[u8]] needs reading data one by one
     fn env_ed25519_batch_verify<T>(
         _: &mut WasmiVM<T>,
         _: &[RuntimeValue],
