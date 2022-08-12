@@ -760,6 +760,29 @@ pub fn encode_sections(sections: &[Vec<u8>]) -> Result<Vec<u8>, ()> {
     Ok(out_data)
 }
 
+/// Decodes sections of data into multiple slices.
+///
+/// Each encoded section is suffixed by a section length, encoded as big endian uint32.
+///
+/// See also: `encode_section`.
+#[allow(dead_code)]
+pub fn decode_sections(data: &[u8]) -> Vec<&[u8]> {
+    let mut result: Vec<&[u8]> = vec![];
+    let mut remaining_len = data.len();
+    while remaining_len >= 4 {
+        let tail_len = u32::from_be_bytes([
+            data[remaining_len - 4],
+            data[remaining_len - 3],
+            data[remaining_len - 2],
+            data[remaining_len - 1],
+        ]) as usize;
+        result.push(&data[remaining_len - 4 - tail_len..remaining_len - 4]);
+        remaining_len -= 4 + tail_len;
+    }
+    result.reverse();
+    result
+}
+
 #[allow(dead_code)]
 pub mod host_functions {
     use super::*;
@@ -1174,7 +1197,9 @@ pub mod host_functions {
                 >(vm, *public_key_ptr as u32)?;
 
                 let result = vm.secp256k1_verify(&message_hash, &signature, &public_key)?;
-                Ok(Some(RuntimeValue::I32(result as i32)))
+
+                // TODO(aeryz): return err code as Ok(err_code)
+                Ok(Some(RuntimeValue::I32(!result as i32)))
             }
             _ => Err(WasmiVMError::InvalidHostSignature.into()),
         }
@@ -1200,12 +1225,18 @@ pub mod host_functions {
                     ConstantReadLimit<{ constants::EDCSA_SIGNATURE_LENGTH }>,
                 >(vm, *signature_ptr as u32)?;
 
-                let output =
-                    vm.secp256k1_recover_pubkey(&message_hash, &signature, *recovery_param as u8)?;
-
-                let Tagged(value_pointer, _) = passthrough_in::<WasmiVM<T>, ()>(vm, &output)?;
-
-                Ok(Some(RuntimeValue::I32(value_pointer as i32)))
+                match vm.secp256k1_recover_pubkey(&message_hash, &signature, *recovery_param as u8)
+                {
+                    Ok(pubkey) => {
+                        let Tagged(value_pointer, _) =
+                            passthrough_in::<WasmiVM<T>, ()>(vm, &pubkey)?;
+                        Ok(Some(RuntimeValue::I64(value_pointer as i64)))
+                    }
+                    Err(_) => {
+                        // TODO(aeryz): catch errors and write err.code
+                        Ok(Some(RuntimeValue::I64(1_i64 << 32)))
+                    }
+                }
             }
             _ => Err(WasmiVMError::InvalidHostSignature.into()),
         }
@@ -1235,8 +1266,13 @@ pub mod host_functions {
                     ConstantReadLimit<{ constants::EDDSA_PUBKEY_LENGTH }>,
                 >(vm, *public_key_ptr as u32)?;
 
-                let result = vm.ed25519_verify(&message, &signature, &public_key)?;
-                Ok(Some(RuntimeValue::I32(result as i32)))
+                match vm.ed25519_verify(&message, &signature, &public_key) {
+                    Ok(result) => Ok(Some(RuntimeValue::I32(!result as i32))),
+                    Err(_) => {
+                        // TODO(aeryz): error code
+                        Ok(Some(RuntimeValue::I32(0)))
+                    }
+                }
             }
             _ => Err(WasmiVMError::InvalidHostSignature.into()),
         }
@@ -1244,14 +1280,59 @@ pub mod host_functions {
 
     // TODO(aeryz): check if &[&[u8]] needs reading data one by one
     fn env_ed25519_batch_verify<T>(
-        _: &mut WasmiVM<T>,
-        _: &[RuntimeValue],
+        vm: &mut WasmiVM<T>,
+        values: &[RuntimeValue],
     ) -> Result<Option<RuntimeValue>, VmErrorOf<T>>
     where
         T: WasmiBaseVM,
     {
-        log::debug!("ed25519_batch_verify");
-        Ok(None)
+        match values {
+            [RuntimeValue::I32(messages_pointer), RuntimeValue::I32(signatures_pointer), RuntimeValue::I32(public_keys_pointer)] =>
+            {
+                let messages = passthrough_out::<
+                    WasmiVM<T>,
+                    ConstantReadLimit<
+                        {
+                            (constants::MAX_LENGTH_ED25519_MESSAGE + 4)
+                                * constants::MAX_COUNT_ED25519_BATCH
+                        },
+                    >,
+                >(&vm, *messages_pointer as u32)?;
+                let signatures = passthrough_out::<
+                    WasmiVM<T>,
+                    ConstantReadLimit<
+                        {
+                            (constants::MAX_LENGTH_ED25519_SIGNATURE + 4)
+                                * constants::MAX_COUNT_ED25519_BATCH
+                        },
+                    >,
+                >(&vm, *signatures_pointer as u32)?;
+                let public_keys = passthrough_out::<
+                    WasmiVM<T>,
+                    ConstantReadLimit<
+                        {
+                            (constants::EDDSA_PUBKEY_LENGTH + 4)
+                                * constants::MAX_COUNT_ED25519_BATCH
+                        },
+                    >,
+                >(vm, *public_keys_pointer as u32)?;
+
+                let (messages, signatures, public_keys) = (
+                    decode_sections(&messages),
+                    decode_sections(&signatures),
+                    decode_sections(&public_keys),
+                );
+
+                match vm.ed25519_batch_verify(&messages, &signatures, &public_keys) {
+                    Ok(result) => Ok(Some(RuntimeValue::I32(!result as i32))),
+                    Err(_) => {
+                        // TODO(aeryz): error code
+                        Ok(Some(RuntimeValue::I32(0)))
+                    }
+                }
+            }
+            _ => Err(WasmiVMError::InvalidHostSignature.into()),
+        }
     }
 
     fn env_debug<T>(
