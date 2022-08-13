@@ -1297,7 +1297,7 @@ pub mod host_functions {
                                 * constants::MAX_COUNT_ED25519_BATCH
                         },
                     >,
-                >(&vm, *messages_pointer as u32)?;
+                >(vm, *messages_pointer as u32)?;
                 let signatures = passthrough_out::<
                     WasmiVM<T>,
                     ConstantReadLimit<
@@ -1306,7 +1306,7 @@ pub mod host_functions {
                                 * constants::MAX_COUNT_ED25519_BATCH
                         },
                     >,
-                >(&vm, *signatures_pointer as u32)?;
+                >(vm, *signatures_pointer as u32)?;
                 let public_keys = passthrough_out::<
                     WasmiVM<T>,
                     ConstantReadLimit<
