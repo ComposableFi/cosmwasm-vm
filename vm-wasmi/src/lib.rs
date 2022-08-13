@@ -765,7 +765,6 @@ pub fn encode_sections(sections: &[Vec<u8>]) -> Result<Vec<u8>, ()> {
 /// Each encoded section is suffixed by a section length, encoded as big endian uint32.
 ///
 /// See also: `encode_section`.
-#[allow(dead_code)]
 pub fn decode_sections(data: &[u8]) -> Vec<&[u8]> {
     let mut result: Vec<&[u8]> = vec![];
     let mut remaining_len = data.len();
@@ -1227,6 +1226,9 @@ pub mod host_functions {
 
                 match vm.secp256k1_recover_pubkey(&message_hash, &signature, *recovery_param as u8)
                 {
+                    // Note that if the call is success, the pointer is written to the lower
+                    // 4-bytes. On failure, the error code is written to the upper 4-bytes, and
+                    // we don't return an error.
                     Ok(pubkey) => {
                         let Tagged(value_pointer, _) =
                             passthrough_in::<WasmiVM<T>, ()>(vm, &pubkey)?;
@@ -1270,7 +1272,7 @@ pub mod host_functions {
                     Ok(result) => Ok(Some(RuntimeValue::I32(!result as i32))),
                     Err(_) => {
                         // TODO(aeryz): error code
-                        Ok(Some(RuntimeValue::I32(0)))
+                        Ok(Some(RuntimeValue::I32(1)))
                     }
                 }
             }
@@ -1278,7 +1280,6 @@ pub mod host_functions {
         }
     }
 
-    // TODO(aeryz): check if &[&[u8]] needs reading data one by one
     fn env_ed25519_batch_verify<T>(
         vm: &mut WasmiVM<T>,
         values: &[RuntimeValue],
@@ -1289,6 +1290,9 @@ pub mod host_functions {
         match values {
             [RuntimeValue::I32(messages_pointer), RuntimeValue::I32(signatures_pointer), RuntimeValue::I32(public_keys_pointer)] =>
             {
+                // &[&[u8]]'s are written to the memory in an flattened encoded way. That's why we
+                // read a flat memory, not iterate through pointers and read arbitrary memory
+                // locations.
                 let messages = passthrough_out::<
                     WasmiVM<T>,
                     ConstantReadLimit<
@@ -1327,7 +1331,7 @@ pub mod host_functions {
                     Ok(result) => Ok(Some(RuntimeValue::I32(!result as i32))),
                     Err(_) => {
                         // TODO(aeryz): error code
-                        Ok(Some(RuntimeValue::I32(0)))
+                        Ok(Some(RuntimeValue::I32(1)))
                     }
                 }
             }
