@@ -328,13 +328,14 @@ pub trait VMBase {
     /// Recovers a public key from a message hash and a signature.
     ///
     /// Returns the recovered pubkey in compressed form, which can be used
-    /// in secp256k1_verify directly.
+    /// in secp256k1_verify directly. Any errors related to recovering the
+    /// public key should result in `Ok(Err(()))`
     fn secp256k1_recover_pubkey(
         &mut self,
         message_hash: &[u8],
         signature: &[u8],
         recovery_param: u8,
-    ) -> Result<Vec<u8>, Self::Error>;
+    ) -> Result<Result<Vec<u8>, ()>, Self::Error>;
 
     /// Verify `message` against a `signature`, with the `public_key` of the signer, using
     /// the ed25519 elliptic curve digital signature parametrization / algorithm.

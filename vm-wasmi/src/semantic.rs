@@ -502,9 +502,11 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         message_hash: &[u8],
         signature: &[u8],
         recovery_param: u8,
-    ) -> Result<Vec<u8>, Self::Error> {
-        cosmwasm_crypto::secp256k1_recover_pubkey(message_hash, signature, recovery_param)
-            .map_err(|e| SimpleVMError::Custom(Box::new(e)))
+    ) -> Result<Result<Vec<u8>, ()>, Self::Error> {
+        Ok(
+            cosmwasm_crypto::secp256k1_recover_pubkey(message_hash, signature, recovery_param)
+                .map_err(|_| ()),
+        )
     }
 
     fn ed25519_verify(

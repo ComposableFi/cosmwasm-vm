@@ -587,7 +587,7 @@ where
         message_hash: &[u8],
         signature: &[u8],
         recovery_param: u8,
-    ) -> Result<Vec<u8>, Self::Error> {
+    ) -> Result<Result<Vec<u8>, ()>, Self::Error> {
         self.0.charge(VmGas::Secp256k1RecoverPubkey)?;
         self.0
             .secp256k1_recover_pubkey(message_hash, signature, recovery_param)
@@ -1108,11 +1108,9 @@ pub mod host_functions {
 
                 let address = match String::from_utf8(address) {
                     Ok(address) => address,
-                    Err(_) => {
-                        let Tagged(value_pointer, _) = passthrough_in::<WasmiVM<T>, ()>(
-                            vm,
-                            b"address is not a valid UTF-8 string",
-                        )?;
+                    Err(e) => {
+                        let Tagged(value_pointer, _) =
+                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{}", e).as_bytes())?;
                         return Ok(Some(RuntimeValue::I32(value_pointer as i32)));
                     }
                 };
@@ -1197,7 +1195,6 @@ pub mod host_functions {
 
                 let result = vm.secp256k1_verify(&message_hash, &signature, &public_key)?;
 
-                // TODO(aeryz): return err code as Ok(err_code)
                 Ok(Some(RuntimeValue::I32(!result as i32)))
             }
             _ => Err(WasmiVMError::InvalidHostSignature.into()),
@@ -1224,8 +1221,11 @@ pub mod host_functions {
                     ConstantReadLimit<{ constants::EDCSA_SIGNATURE_LENGTH }>,
                 >(vm, *signature_ptr as u32)?;
 
-                match vm.secp256k1_recover_pubkey(&message_hash, &signature, *recovery_param as u8)
-                {
+                match vm.secp256k1_recover_pubkey(
+                    &message_hash,
+                    &signature,
+                    *recovery_param as u8,
+                )? {
                     // Note that if the call is success, the pointer is written to the lower
                     // 4-bytes. On failure, the error code is written to the upper 4-bytes, and
                     // we don't return an error.
@@ -1235,7 +1235,7 @@ pub mod host_functions {
                         Ok(Some(RuntimeValue::I64(value_pointer as i64)))
                     }
                     Err(_) => {
-                        // TODO(aeryz): catch errors and write err.code
+                        const GENERIC_ERROR_CODE: i64 = 10;
                         Ok(Some(RuntimeValue::I64(1_i64 << 32)))
                     }
                 }
@@ -1268,13 +1268,8 @@ pub mod host_functions {
                     ConstantReadLimit<{ constants::EDDSA_PUBKEY_LENGTH }>,
                 >(vm, *public_key_ptr as u32)?;
 
-                match vm.ed25519_verify(&message, &signature, &public_key) {
-                    Ok(result) => Ok(Some(RuntimeValue::I32(!result as i32))),
-                    Err(_) => {
-                        // TODO(aeryz): error code
-                        Ok(Some(RuntimeValue::I32(1)))
-                    }
-                }
+                vm.ed25519_verify(&message, &signature, &public_key)
+                    .map(|result| Some(RuntimeValue::I32(!result as i32)))
             }
             _ => Err(WasmiVMError::InvalidHostSignature.into()),
         }
@@ -1327,13 +1322,8 @@ pub mod host_functions {
                     decode_sections(&public_keys),
                 );
 
-                match vm.ed25519_batch_verify(&messages, &signatures, &public_keys) {
-                    Ok(result) => Ok(Some(RuntimeValue::I32(!result as i32))),
-                    Err(_) => {
-                        // TODO(aeryz): error code
-                        Ok(Some(RuntimeValue::I32(1)))
-                    }
-                }
+                vm.ed25519_batch_verify(&messages, &signatures, &public_keys)
+                    .map(|result| Some(RuntimeValue::I32(!result as i32)))
             }
             _ => Err(WasmiVMError::InvalidHostSignature.into()),
         }
