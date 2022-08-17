@@ -251,6 +251,28 @@ impl<'a> SimpleWasmiVM<'a> {
     }
 }
 
+#[derive(Debug, Clone)]
+struct CanonicalAddress(pub CanonicalAddr);
+
+impl TryFrom<Vec<u8>> for CanonicalAddress {
+    type Error = SimpleVMError;
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Ok(CanonicalAddress(CanonicalAddr(Binary::from(value))))
+    }
+}
+
+impl Into<Vec<u8>> for CanonicalAddress {
+    fn into(self) -> Vec<u8> {
+        self.0.into()
+    }
+}
+
+impl Into<CanonicalAddr> for CanonicalAddress {
+    fn into(self) -> CanonicalAddr {
+        self.0
+    }
+}
+
 impl<'a> VMBase for SimpleWasmiVM<'a> {
     type Input<'x> = WasmiInput<'x, WasmiVM<Self>>;
     type Output<'x> = WasmiOutput<'x, WasmiVM<Self>>;
@@ -258,7 +280,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
     type MessageCustom = Empty;
     type ContractMeta = CosmwasmContractMeta<BankAccount>;
     type Address = BankAccount;
-    type CanonicalAddress = CanonicalAddr;
+    type CanonicalAddress = CanonicalAddress;
     type StorageKey = Vec<u8>;
     type StorageValue = Vec<u8>;
     type Error = SimpleVMError;
@@ -571,14 +593,14 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         for _ in 0..SHUFFLES_ENCODE {
             out = riffle_shuffle(&out);
         }
-        Ok(Ok(out.into()))
+        Ok(Ok(out.try_into()?))
     }
 
     fn addr_humanize(
         &mut self,
         addr: &Self::CanonicalAddress,
     ) -> Result<Result<Self::Address, Self::Error>, Self::Error> {
-        if addr.len() != CANONICAL_LENGTH {
+        if addr.0.len() != CANONICAL_LENGTH {
             return Ok(Err(SimpleVMError::InvalidAddress));
         }
 
