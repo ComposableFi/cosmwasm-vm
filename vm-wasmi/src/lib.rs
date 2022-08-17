@@ -135,7 +135,8 @@ pub trait WasmiBaseVM = WasmiModuleExecutor
     + Has<MessageInfo>
 where
     VmAddressOf<Self>: Clone + TryFrom<String, Error = VmErrorOf<Self>> + Into<Addr>,
-    VmCanonicalAddressOf<Self>: Clone + From<Vec<u8>> + Into<CanonicalAddr>,
+    VmCanonicalAddressOf<Self>:
+        Clone + TryFrom<Vec<u8>, Error = VmErrorOf<Self>> + Into<CanonicalAddr>,
     VmErrorOf<Self>: From<wasmi::Error>
         + From<WasmiVMError>
         + From<MemoryReadError>
@@ -1150,7 +1151,7 @@ pub mod host_functions {
                     ConstantReadLimit<{ constants::MAX_LENGTH_CANONICAL_ADDRESS }>,
                 >(vm, *address_pointer as u32)?;
 
-                match vm.addr_humanize(&address.into())? {
+                match vm.addr_humanize(&address.try_into()?)? {
                     Ok(address) => {
                         passthrough_in_to::<WasmiVM<T>>(
                             vm,
