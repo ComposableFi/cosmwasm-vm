@@ -261,15 +261,15 @@ impl TryFrom<Vec<u8>> for CanonicalAddress {
     }
 }
 
-impl Into<Vec<u8>> for CanonicalAddress {
-    fn into(self) -> Vec<u8> {
-        self.0.into()
+impl From<CanonicalAddress> for Vec<u8> {
+    fn from(addr: CanonicalAddress) -> Self {
+        addr.0.into()
     }
 }
 
-impl Into<CanonicalAddr> for CanonicalAddress {
-    fn into(self) -> CanonicalAddr {
-        self.0
+impl From<CanonicalAddress> for CanonicalAddr {
+    fn from(addr: CanonicalAddress) -> Self {
+        addr.0
     }
 }
 

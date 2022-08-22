@@ -296,7 +296,7 @@ where
 {
     log::trace!("PassthroughIn");
     let pointer = allocate::<_, _, usize>(vm, data.len())?;
-    RawIntoRegion::try_from(Write(vm, pointer, data))?;
+    passthrough_in_to(vm, pointer, data)?;
     Ok(Tagged::new(pointer))
 }
 
