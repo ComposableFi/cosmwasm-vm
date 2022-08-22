@@ -96,6 +96,20 @@ pub enum VmGas {
     DbNext,
     /// Cost of `debug`
     Debug,
+    /// Cost of `secp256k1_verify`
+    Secp256k1Verify,
+    /// Cost of `secp256k1_recover_pubkey`
+    Secp256k1RecoverPubkey,
+    /// Cost of `ed25519_verify`
+    Ed25519Verify,
+    /// Cost of `ed25519_batch_verify`
+    Ed25519BatchVerify,
+    /// Cost of `addr_validate`
+    AddrValidate,
+    /// Cost of `addr_canonicalize`
+    AddrCanonicalize,
+    /// Cost of `addr_humanize`
+    AddrHumanize,
 }
 
 pub type VmInputOf<'a, T> = <T as VMBase>::Input<'a>;
@@ -104,6 +118,7 @@ pub type VmErrorOf<T> = <T as VMBase>::Error;
 pub type VmQueryCustomOf<T> = <T as VMBase>::QueryCustom;
 pub type VmMessageCustomOf<T> = <T as VMBase>::MessageCustom;
 pub type VmAddressOf<T> = <T as VMBase>::Address;
+pub type VmCanonicalAddressOf<T> = <T as VMBase>::CanonicalAddress;
 pub type VmStorageKeyOf<T> = <T as VMBase>::StorageKey;
 pub type VmStorageValueOf<T> = <T as VMBase>::StorageValue;
 pub type VmContracMetaOf<T> = <T as VMBase>::ContractMeta;
@@ -140,6 +155,8 @@ pub trait VMBase {
     type ContractMeta;
     /// Unique identifier for contract instances and users under the system.
     type Address;
+    /// Binary representation of `Address`.
+    type CanonicalAddress;
     /// Type of key used by the underlying DB.
     type StorageKey;
     /// Type of value used by the underlying DB.
@@ -151,6 +168,8 @@ pub trait VMBase {
     fn running_contract_meta(&mut self) -> Result<Self::ContractMeta, Self::Error>;
 
     #[cfg(feature = "iterator")]
+    /// Allows iteration over a set of key/value pairs, either forwards or backwards.
+    /// Returns an iterator ID that is unique within the Storage instance.
     fn db_scan(
         &mut self,
         start: Option<Self::StorageKey>,
@@ -159,6 +178,7 @@ pub trait VMBase {
     ) -> Result<u32, Self::Error>;
 
     #[cfg(feature = "iterator")]
+    /// Returns the next element of the iterator with the given ID.
     fn db_next(
         &mut self,
         iterator_id: u32,
@@ -235,7 +255,6 @@ pub trait VMBase {
 
     /// Burn the `funds` from the current contract.
     fn burn(&mut self, funds: &[Coin]) -> Result<(), Self::Error>;
-
     /// Query the balance of `denom` tokens.
     fn balance(&mut self, account: &Self::Address, denom: String) -> Result<Coin, Self::Error>;
 
@@ -262,6 +281,26 @@ pub trait VMBase {
     /// Remove an entry from the current contract db.
     fn db_remove(&mut self, key: Self::StorageKey) -> Result<(), Self::Error>;
 
+    /// Validates a human readable address.
+    /// NOTE: The return type is `Result<Result<(), Self::Error>, Self::Error>` but not
+    /// `Result<(), Self::Error>`, this is because errors that are related to address
+    /// validation are treated differently in wasmi vm. Any errors that are related to
+    /// address validation should be returned in the inner result like `Ok(Err(..))`.
+    fn addr_validate(&mut self, input: &str) -> Result<Result<(), Self::Error>, Self::Error>;
+
+    /// Returns a canonical address from a human readable address.
+    /// see: [`Self::addr_validate`]
+    fn addr_canonicalize(
+        &mut self,
+        input: &str,
+    ) -> Result<Result<Self::CanonicalAddress, Self::Error>, Self::Error>;
+
+    /// Returns a human readable address from a canonical address.
+    fn addr_humanize(
+        &mut self,
+        addr: &Self::CanonicalAddress,
+    ) -> Result<Result<Self::Address, Self::Error>, Self::Error>;
+
     /// Abort execution, called when the contract panic.
     fn abort(&mut self, message: String) -> Result<(), Self::Error>;
 
@@ -276,4 +315,42 @@ pub trait VMBase {
 
     /// Ensure that some gas is available.
     fn gas_ensure_available(&mut self) -> Result<(), Self::Error>;
+
+    /// Verifies `message_hash` against a `signature` with a `public_key`, using the
+    /// secp256k1 ECDSA parametrization.
+    fn secp256k1_verify(
+        &mut self,
+        message_hash: &[u8],
+        signature: &[u8],
+        public_key: &[u8],
+    ) -> Result<bool, Self::Error>;
+
+    /// Recovers a public key from a message hash and a signature.
+    ///
+    /// Returns the recovered pubkey in compressed form, which can be used
+    /// in secp256k1_verify directly. Any errors related to recovering the
+    /// public key should result in `Ok(Err(()))`
+    fn secp256k1_recover_pubkey(
+        &mut self,
+        message_hash: &[u8],
+        signature: &[u8],
+        recovery_param: u8,
+    ) -> Result<Result<Vec<u8>, ()>, Self::Error>;
+
+    /// Verify `message` against a `signature`, with the `public_key` of the signer, using
+    /// the ed25519 elliptic curve digital signature parametrization / algorithm.
+    fn ed25519_verify(
+        &mut self,
+        message: &[u8],
+        signature: &[u8],
+        public_key: &[u8],
+    ) -> Result<bool, Self::Error>;
+
+    /// Performs batch Ed25519 signature verification.
+    fn ed25519_batch_verify(
+        &mut self,
+        messages: &[&[u8]],
+        signatures: &[&[u8]],
+        public_keys: &[&[u8]],
+    ) -> Result<bool, Self::Error>;
 }

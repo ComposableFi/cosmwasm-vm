@@ -1,7 +1,7 @@
 extern crate std;
 
 use super::*;
-use alloc::string::ToString;
+use alloc::{boxed::Box, string::ToString};
 use core::{assert_matches::assert_matches, num::NonZeroU32, str::FromStr};
 #[cfg(feature = "iterator")]
 use cosmwasm_minimal_std::Order;
@@ -15,7 +15,12 @@ use cosmwasm_vm::{
         cosmwasm_system_entrypoint, cosmwasm_system_run, CosmwasmCodeId, CosmwasmContractMeta,
     },
 };
+use std::error::Error;
 use wasm_instrument::gas_metering::Rules;
+
+const CANONICAL_LENGTH: usize = 54;
+const SHUFFLES_ENCODE: usize = 18;
+const SHUFFLES_DECODE: usize = 2;
 
 pub fn initialize() {
     use std::sync::Once;
@@ -31,6 +36,7 @@ enum SimpleVMError {
     VMError(WasmiVMError),
     CodeNotFound(CosmwasmCodeId),
     ContractNotFound(BankAccount),
+    InvalidAddress,
     InvalidAccountFormat,
     NoCustomQuery,
     NoCustomMessage,
@@ -38,6 +44,7 @@ enum SimpleVMError {
     OutOfGas,
     #[cfg(feature = "iterator")]
     IteratorDoesNotExist,
+    Custom(Box<dyn Error>),
 }
 impl From<wasmi::Error> for SimpleVMError {
     fn from(e: wasmi::Error) -> Self {
@@ -244,6 +251,28 @@ impl<'a> SimpleWasmiVM<'a> {
     }
 }
 
+#[derive(Debug, Clone)]
+struct CanonicalAddress(pub CanonicalAddr);
+
+impl TryFrom<Vec<u8>> for CanonicalAddress {
+    type Error = SimpleVMError;
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Ok(CanonicalAddress(CanonicalAddr(Binary::from(value))))
+    }
+}
+
+impl From<CanonicalAddress> for Vec<u8> {
+    fn from(addr: CanonicalAddress) -> Self {
+        addr.0.into()
+    }
+}
+
+impl From<CanonicalAddress> for CanonicalAddr {
+    fn from(addr: CanonicalAddress) -> Self {
+        addr.0
+    }
+}
+
 impl<'a> VMBase for SimpleWasmiVM<'a> {
     type Input<'x> = WasmiInput<'x, WasmiVM<Self>>;
     type Output<'x> = WasmiOutput<'x, WasmiVM<Self>>;
@@ -251,6 +280,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
     type MessageCustom = Empty;
     type ContractMeta = CosmwasmContractMeta<BankAccount>;
     type Address = BankAccount;
+    type CanonicalAddress = CanonicalAddress;
     type StorageKey = Vec<u8>;
     type StorageValue = Vec<u8>;
     type Error = SimpleVMError;
@@ -479,6 +509,122 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         }
     }
 
+    fn secp256k1_verify(
+        &mut self,
+        message_hash: &[u8],
+        signature: &[u8],
+        public_key: &[u8],
+    ) -> Result<bool, Self::Error> {
+        cosmwasm_crypto::secp256k1_verify(message_hash, signature, public_key)
+            .map_err(|e| SimpleVMError::Custom(Box::new(e)))
+    }
+
+    fn secp256k1_recover_pubkey(
+        &mut self,
+        message_hash: &[u8],
+        signature: &[u8],
+        recovery_param: u8,
+    ) -> Result<Result<Vec<u8>, ()>, Self::Error> {
+        Ok(
+            cosmwasm_crypto::secp256k1_recover_pubkey(message_hash, signature, recovery_param)
+                .map_err(|_| ()),
+        )
+    }
+
+    fn ed25519_verify(
+        &mut self,
+        message: &[u8],
+        signature: &[u8],
+        public_key: &[u8],
+    ) -> Result<bool, Self::Error> {
+        cosmwasm_crypto::ed25519_verify(message, signature, public_key)
+            .map_err(|e| SimpleVMError::Custom(Box::new(e)))
+    }
+
+    fn ed25519_batch_verify(
+        &mut self,
+        messages: &[&[u8]],
+        signatures: &[&[u8]],
+        public_keys: &[&[u8]],
+    ) -> Result<bool, Self::Error> {
+        cosmwasm_crypto::ed25519_batch_verify(messages, signatures, public_keys)
+            .map_err(|e| SimpleVMError::Custom(Box::new(e)))
+    }
+
+    fn addr_validate(&mut self, input: &str) -> Result<Result<(), Self::Error>, Self::Error> {
+        let canonical = match self.addr_canonicalize(input)? {
+            Ok(canonical) => canonical,
+            Err(e) => return Ok(Err(e)),
+        };
+        let normalized = match self.addr_humanize(&canonical)? {
+            Ok(canonical) => canonical,
+            Err(e) => return Ok(Err(e)),
+        };
+        let account = BankAccount::try_from(input.to_string())?;
+        if account != normalized {
+            Ok(Err(SimpleVMError::InvalidAddress))
+        } else {
+            Ok(Ok(()))
+        }
+    }
+
+    fn addr_canonicalize(
+        &mut self,
+        input: &str,
+    ) -> Result<Result<Self::CanonicalAddress, Self::Error>, Self::Error> {
+        // mimicks formats like hex or bech32 where different casings are valid for one address
+        let normalized = input.to_lowercase();
+
+        // Dummy input validation. This is more sophisticated for formats like bech32, where format and checksum are validated.
+        if normalized.len() < 3 {
+            return Ok(Err(SimpleVMError::InvalidAddress));
+        }
+
+        if normalized.len() > CANONICAL_LENGTH {
+            return Ok(Err(SimpleVMError::InvalidAddress));
+        }
+
+        let mut out = Vec::from(normalized);
+        // pad to canonical length with NULL bytes
+        out.resize(CANONICAL_LENGTH, 0x00);
+        // content-dependent rotate followed by shuffle to destroy
+        let rotate_by = digit_sum(&out) % CANONICAL_LENGTH;
+        out.rotate_left(rotate_by);
+        for _ in 0..SHUFFLES_ENCODE {
+            out = riffle_shuffle(&out);
+        }
+        Ok(Ok(out.try_into()?))
+    }
+
+    fn addr_humanize(
+        &mut self,
+        addr: &Self::CanonicalAddress,
+    ) -> Result<Result<Self::Address, Self::Error>, Self::Error> {
+        if addr.0.len() != CANONICAL_LENGTH {
+            return Ok(Err(SimpleVMError::InvalidAddress));
+        }
+
+        let mut tmp: Vec<u8> = addr.clone().into();
+        // Shuffle two more times which restored the original value (24 elements are back to original after 20 rounds)
+        for _ in 0..SHUFFLES_DECODE {
+            tmp = riffle_shuffle(&tmp);
+        }
+        // Rotate back
+        let rotate_by = digit_sum(&tmp) % CANONICAL_LENGTH;
+        tmp.rotate_right(rotate_by);
+        // Remove NULL bytes (i.e. the padding)
+        let trimmed = tmp.into_iter().filter(|&x| x != 0x00).collect();
+        // decode UTF-8 bytes into string
+        let human = match String::from_utf8(trimmed) {
+            Ok(trimmed) => trimmed,
+            Err(_) => return Ok(Err(SimpleVMError::InvalidAddress)),
+        };
+        Ok(
+            BankAccount::try_from(Addr::unchecked(human))
+                .map_err(|_| SimpleVMError::InvalidAddress),
+        )
+    }
+
     fn db_read(
         &mut self,
         key: Self::StorageKey,
@@ -688,7 +834,7 @@ fn create_simple_vm<'a>(
 #[test]
 fn test_bare() {
     let code = instrument_contract(include_bytes!("../../fixtures/cw20_base.wasm"));
-    let sender = BankAccount(0);
+    let sender = BankAccount(100);
     let address = BankAccount(10_000);
     let funds = vec![];
     let mut extension = SimpleWasmiVMExtension {
@@ -737,10 +883,29 @@ fn test_bare() {
     );
 }
 
+pub fn digit_sum(input: &[u8]) -> usize {
+    input.iter().fold(0, |sum, val| sum + (*val as usize))
+}
+
+pub fn riffle_shuffle<T: Clone>(input: &[T]) -> Vec<T> {
+    assert!(
+        input.len() % 2 == 0,
+        "Method only defined for even number of elements"
+    );
+    let mid = input.len() / 2;
+    let (left, right) = input.split_at(mid);
+    let mut out = Vec::<T>::with_capacity(input.len());
+    for i in 0..mid {
+        out.push(right[i].clone());
+        out.push(left[i].clone());
+    }
+    out
+}
+
 #[test]
 fn test_orchestration_base() {
     let code = instrument_contract(include_bytes!("../../fixtures/cw20_base.wasm"));
-    let sender = BankAccount(0);
+    let sender = BankAccount(100);
     let address = BankAccount(10_000);
     let funds = vec![];
     let mut extension = SimpleWasmiVMExtension {
@@ -783,7 +948,7 @@ fn test_orchestration_base() {
         &mut vm,
         r#"{
               "mint": {
-                "recipient": "0xCAFEBABE",
+                "recipient": "10001",
                 "amount": "5555"
               }
             }"#
@@ -797,7 +962,7 @@ fn test_orchestration_base() {
         },
         Attribute {
             key: "to".into(),
-            value: "0xCAFEBABE".into(),
+            value: "10001".into(),
         },
         Attribute {
             key: "amount".into(),
@@ -813,7 +978,7 @@ fn test_orchestration_base() {
 #[test]
 fn test_orchestration_advanced() {
     let code = instrument_contract(include_bytes!("../../fixtures/hackatom.wasm"));
-    let sender = BankAccount(0);
+    let sender = BankAccount(100);
     let address = BankAccount(10_000);
     let funds = vec![];
     let mut extension = SimpleWasmiVMExtension {
@@ -850,7 +1015,7 @@ fn test_orchestration_advanced() {
 fn test_reply() {
     let code = instrument_contract(include_bytes!("../../fixtures/reflect.wasm"));
     let code_hackatom = instrument_contract(include_bytes!("../../fixtures/hackatom.wasm"));
-    let sender = BankAccount(0);
+    let sender = BankAccount(100);
     let address = BankAccount(10_000);
     let hackatom_address = BankAccount(10_001);
     let funds = vec![];
