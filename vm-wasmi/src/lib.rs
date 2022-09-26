@@ -34,6 +34,8 @@
 extern crate alloc;
 
 #[cfg(test)]
+mod code_gen;
+#[cfg(test)]
 mod semantic;
 
 use alloc::{borrow::ToOwned, collections::BTreeMap, format, string::String, vec, vec::Vec};
@@ -385,6 +387,7 @@ where
     where
         O: for<'x> TryFrom<Self::Output<'x>, Error = VmErrorOf<Self>>,
     {
+        log::trace!("Function name: {}", function_name);
         self.0.charge(VmGas::RawCall)?;
         let WasmiModule { module, memory } = self.0.executing_module();
         let value = module.invoke_export(&function_name, &function_args, self)?;

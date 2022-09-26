@@ -372,7 +372,15 @@ where
         TryFrom::<usize>::try_from(T::read_limit())
             .map_err(|_| ExecutorError::CallReadLimitWouldOverflow)?,
     ))?;
-    Ok(serde_json::from_slice(&output).map_err(|_| ExecutorError::FailedToDeserialize)?)
+    Ok(serde_json::from_slice(&output).map_err(|e| {
+        log::error!(
+            "Deserialie: {:?} {} {:?}",
+            alloc::string::String::from_utf8(output.to_vec()).unwrap(),
+            e,
+            pointer,
+        );
+        ExecutorError::FailedToDeserialize
+    })?)
 }
 
 /// Execute a generic contract export (`instantiate`, `execute`, `migrate` etc...), providing the custom raw `message` input.
@@ -397,7 +405,9 @@ where
     VmErrorOf<V>:
         From<ReadableMemoryErrorOf<V>> + From<WritableMemoryErrorOf<V>> + From<ExecutorError>,
 {
-    log::trace!("Call");
+    use alloc::string::String;
+
+    log::trace!("Call {}", String::from_utf8(message.to_vec()).unwrap());
     let env = vm.get();
     let pointer = if I::HAS_INFO {
         let info = vm.get();

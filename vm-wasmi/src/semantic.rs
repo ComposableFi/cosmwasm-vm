@@ -883,6 +883,39 @@ fn test_bare() {
     );
 }
 
+#[test]
+fn test_code_gen() {
+    let code = code_gen::generate();
+    let sender = BankAccount(100);
+    let address = BankAccount(10_000);
+    let funds = vec![];
+    let mut extension = SimpleWasmiVMExtension {
+        storage: Default::default(),
+        codes: BTreeMap::from([(0x1337, code.clone())]),
+        contracts: BTreeMap::from([(
+            address,
+            CosmwasmContractMeta {
+                code_id: 0x1337,
+                admin: None,
+                label: "".into(),
+            },
+        )]),
+        next_account_id: BankAccount(10_001),
+        transaction_depth: 0,
+        gas: Gas::new(100_000_000),
+    };
+    let mut vm = create_simple_vm(sender, address, funds, &code, &mut extension);
+    let result =
+        cosmwasm_call::<InstantiateInput, WasmiVM<SimpleWasmiVM>>(&mut vm, r#"{}"#.as_bytes())
+            .unwrap();
+    assert_matches!(result, InstantiateResult(CosmwasmExecutionResult::Ok(_)));
+
+    let result =
+        cosmwasm_call::<ExecuteInput, WasmiVM<SimpleWasmiVM>>(&mut vm, r#"{}"#.as_bytes()).unwrap();
+
+    log::info!("result: {:?}", result);
+}
+
 pub fn digit_sum(input: &[u8]) -> usize {
     input.iter().fold(0, |sum, val| sum + (*val as usize))
 }
