@@ -50,6 +50,7 @@ use cosmwasm_minimal_std::{
     SubMsgResult, SystemResult, WasmMsg, WasmQuery,
 };
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 
 // WasmModuleEventType is stored with any contract TX that returns non empty EventAttributes
 const WASM_MODULE_EVENT_TYPE: &str = "wasm";
@@ -231,7 +232,7 @@ enum SubCallContinuation<E> {
 pub type CosmwasmCodeId = u64;
 
 /// Minimum metadata associated to contracts.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct CosmwasmContractMeta<Account> {
     pub code_id: CosmwasmCodeId,
     pub admin: Option<Account>,
