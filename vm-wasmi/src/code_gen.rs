@@ -1,3 +1,5 @@
+extern crate std;
+
 use alloc::{vec, vec::Vec};
 use cosmwasm_minimal_std::{ContractResult, Empty, Response};
 use wasm_instrument::parity_wasm::{
