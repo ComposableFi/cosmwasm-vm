@@ -33,8 +33,7 @@
 
 extern crate alloc;
 
-#[cfg(test)]
-mod code_gen;
+pub mod code_gen;
 #[cfg(test)]
 mod semantic;
 
