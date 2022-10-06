@@ -22,7 +22,7 @@ const CANONICAL_LENGTH: usize = 54;
 const SHUFFLES_ENCODE: usize = 18;
 const SHUFFLES_DECODE: usize = 2;
 
-pub fn initialize() {
+fn initialize() {
     use std::sync::Once;
     static INIT: Once = Once::new();
     INIT.call_once(|| {
@@ -885,13 +885,13 @@ fn test_bare() {
 
 #[test]
 fn test_code_gen() {
-    let code = code_gen::generate();
+    let code: code_gen::WasmModule = code_gen::ModuleDefinition::new(10).unwrap().into();
     let sender = BankAccount(100);
     let address = BankAccount(10_000);
     let funds = vec![];
     let mut extension = SimpleWasmiVMExtension {
         storage: Default::default(),
-        codes: BTreeMap::from([(0x1337, code.clone())]),
+        codes: BTreeMap::from([(0x1337, code.code.clone())]),
         contracts: BTreeMap::from([(
             address,
             CosmwasmContractMeta {
@@ -904,7 +904,7 @@ fn test_code_gen() {
         transaction_depth: 0,
         gas: Gas::new(100_000_000),
     };
-    let mut vm = create_simple_vm(sender, address, funds, &code, &mut extension);
+    let mut vm = create_simple_vm(sender, address, funds, &code.code, &mut extension);
     let result =
         cosmwasm_call::<InstantiateInput, WasmiVM<SimpleWasmiVM>>(&mut vm, r#"{}"#.as_bytes())
             .unwrap();

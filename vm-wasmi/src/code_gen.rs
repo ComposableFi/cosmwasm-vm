@@ -4,24 +4,15 @@ use alloc::{vec, vec::Vec};
 use cosmwasm_minimal_std::{ContractResult, Empty, Response};
 use wasm_instrument::parity_wasm::{
     builder,
-    elements::{FuncBody, Instruction, Instructions, ValueType},
+    elements::{FuncBody, Instruction, Instructions, Local, ValueType},
 };
 
-/// Pass to `create_code` in order to create a compiled `WasmModule`.
-///
-/// This exists to have a more declarative way to describe a wasm module than to use
-/// parity-wasm directly. It is tailored to fit the structure of contracts that are
-/// needed for benchmarking.
+/// Definition for the wasm code
 #[derive(Debug)]
 pub struct ModuleDefinition {
     instantiate_call: InstantiateCall,
     execute_call: ExecuteCall,
-}
-
-#[derive(Clone)]
-pub struct ImportedMemory {
-    pub min_pages: u32,
-    pub max_pages: u32,
+    additional_binary_size: usize,
 }
 
 /// A wasm module ready to be put on chain.
@@ -30,18 +21,26 @@ pub struct WasmModule {
     pub code: Vec<u8>,
 }
 
-use wasm_instrument::parity_wasm::elements::Local;
+impl ModuleDefinition {
+    pub fn new(additional_binary_size: usize) -> Result<Self, ()> {
+        Ok(Self {
+            instantiate_call: InstantiateCall::new()?,
+            execute_call: ExecuteCall::new()?,
+            additional_binary_size,
+        })
+    }
+}
 
 trait EntrypointCall {
     fn plain() -> Result<FuncBody, ()> {
-        let execute_result =
-            serde_json::to_string(&ContractResult::<Response<Empty>>::Ok(Response::default()))
-                .map_err(|_| ())?;
+        let response = Response::<Empty>::default();
+        let result = serde_json::to_string(&ContractResult::<Response<Empty>>::Ok(response))
+            .map_err(|_| ())?;
 
         let instructions = vec![
             vec![
                 // Allocate space for instantiate_msg
-                Instruction::I32Const(execute_result.len() as i32),
+                Instruction::I32Const(result.len() as i32),
                 Instruction::Call(0),
                 // we save the ptr to local_var_4
                 Instruction::SetLocal(4),
@@ -49,7 +48,7 @@ trait EntrypointCall {
                 // now we should set the length to instantiate_result.len()
                 Instruction::I32Const(8),
                 Instruction::I32Add,
-                Instruction::I32Const(execute_result.len() as i32),
+                Instruction::I32Const(result.len() as i32),
                 Instruction::I32Store(0, 0),
                 Instruction::GetLocal(4),
                 // returned ptr to { offset: i32, capacity: i32, length: i32 }
@@ -60,7 +59,7 @@ trait EntrypointCall {
             ],
             {
                 let mut instructions = Vec::new();
-                for c in execute_result.chars() {
+                for c in result.chars() {
                     instructions.extend(vec![
                         Instruction::GetLocal(3),
                         Instruction::I32Const(c as i32),
@@ -104,61 +103,11 @@ impl ExecuteCall {
 #[derive(Debug)]
 struct InstantiateCall(FuncBody);
 
+impl EntrypointCall for InstantiateCall {}
+
 impl InstantiateCall {
     pub fn new() -> Result<Self, ()> {
-        let instantiate_result =
-            serde_json::to_string(&ContractResult::<Response<Empty>>::Ok(Response::default()))
-                .map_err(|_| ())?;
-
-        let instructions = vec![
-            vec![
-                // Allocate space for instantiate_msg
-                Instruction::I32Const(instantiate_result.len() as i32),
-                Instruction::Call(0),
-                // we save the ptr to local_var_4
-                Instruction::SetLocal(4),
-                Instruction::GetLocal(4),
-                // now we should set the length to instantiate_result.len()
-                Instruction::I32Const(8),
-                Instruction::I32Add,
-                Instruction::I32Const(instantiate_result.len() as i32),
-                Instruction::I32Store(0, 0),
-                Instruction::GetLocal(4),
-                // returned ptr to { offset: i32, capacity: i32, length: i32 }
-                Instruction::I32Load(0, 0),
-                // now we load offset and save it to local_var_3
-                Instruction::SetLocal(3),
-                Instruction::GetLocal(3),
-            ],
-            {
-                let mut instructions = Vec::new();
-                for c in instantiate_result.chars() {
-                    instructions.extend(vec![
-                        Instruction::GetLocal(3),
-                        Instruction::I32Const(c as i32),
-                        Instruction::I32Store(0, 0),
-                        Instruction::GetLocal(3),
-                        Instruction::I32Const(1),
-                        Instruction::I32Add,
-                        Instruction::SetLocal(3),
-                    ]);
-                }
-                instructions
-            },
-            vec![
-                Instruction::GetLocal(4),
-                Instruction::Return,
-                Instruction::End,
-            ],
-        ]
-        .into_iter()
-        .flatten()
-        .collect::<Vec<Instruction>>();
-
-        Ok(Self(FuncBody::new(
-            vec![Local::new(2, ValueType::I32)],
-            Instructions::new(instructions),
-        )))
+        Ok(InstantiateCall(Self::plain()?))
     }
 }
 
@@ -243,6 +192,19 @@ impl From<ModuleDefinition> for WasmModule {
             .build()
             .with_body(FuncBody::new(Vec::new(), Instructions::empty()))
             .build()
+            // dummy function (5)
+            .function()
+            .signature()
+            .build()
+            .with_body(FuncBody::new(
+                Vec::new(),
+                Instructions::new({
+                    let mut nops = vec![Instruction::Nop; def.additional_binary_size];
+                    nops.push(Instruction::End);
+                    nops
+                }),
+            ))
+            .build()
             .export()
             .field("allocate")
             .internal()
@@ -264,6 +226,11 @@ impl From<ModuleDefinition> for WasmModule {
             .func(func_offset + 3)
             .build()
             .export()
+            .field("dummy_fn")
+            .internal()
+            .func(func_offset + 4)
+            .build()
+            .export()
             .field("memory")
             .internal()
             .memory(0)
@@ -274,18 +241,4 @@ impl From<ModuleDefinition> for WasmModule {
         let code = code.into_bytes().unwrap();
         Self { code }
     }
-}
-
-pub fn dummy() -> Result<WasmModule, ()> {
-    Ok(ModuleDefinition {
-        instantiate_call: InstantiateCall::new()?,
-        execute_call: ExecuteCall::new()?,
-    }
-    .into())
-}
-
-pub fn generate() -> Vec<u8> {
-    //    initialize();
-    let module = dummy().unwrap();
-    module.code
 }
