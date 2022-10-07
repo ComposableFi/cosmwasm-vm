@@ -15,6 +15,7 @@ wasmi = { git = "https://github.com/ComposableFi/wasmi", rev = "cd8c0c775a1d197a
 wasm-instrument = { version = "0.2", default-features = false }
 cosmwasm-minimal-std =  { path = "../std", default-features = false }
 cosmwasm-vm = { path = "../vm", default-features = false }
+wasmi-validation = { git = "https://github.com/ComposableFi/wasmi", rev = "cd8c0c775a1d197a35ff3d5c7d6cded3d476411b", default-features = false }
 
 [dev-dependencies]
 wat = "1.0"
