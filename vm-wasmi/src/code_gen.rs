@@ -264,6 +264,7 @@ impl<'a> CodeValidation<'a> {
 pub struct ModuleDefinition {
     instantiate_call: InstantiateCall,
     execute_call: ExecuteCall,
+    migrate_call: MigrateCall,
     additional_binary_size: usize,
 }
 
@@ -278,13 +279,14 @@ impl ModuleDefinition {
         Ok(Self {
             instantiate_call: InstantiateCall::new()?,
             execute_call: ExecuteCall::new()?,
+            migrate_call: MigrateCall::new()?,
             additional_binary_size,
         })
     }
 }
 
 trait EntrypointCall {
-    fn plain() -> Result<FuncBody, ()> {
+    fn plain(msg_ptr_index: u32) -> Result<FuncBody, ()> {
         let response = Response::<Empty>::default();
         let result = serde_json::to_string(&ContractResult::<Response<Empty>>::Ok(response))
             .map_err(|_| ())?;
@@ -295,37 +297,37 @@ trait EntrypointCall {
                 Instruction::I32Const(result.len() as i32),
                 Instruction::Call(0),
                 // we save the ptr to local_var_4
-                Instruction::SetLocal(4),
-                Instruction::GetLocal(4),
+                Instruction::SetLocal(msg_ptr_index + 1),
+                Instruction::GetLocal(msg_ptr_index + 1),
                 // now we should set the length to instantiate_result.len()
                 Instruction::I32Const(8),
                 Instruction::I32Add,
                 Instruction::I32Const(result.len() as i32),
                 Instruction::I32Store(0, 0),
-                Instruction::GetLocal(4),
+                Instruction::GetLocal(msg_ptr_index + 1),
                 // returned ptr to { offset: i32, capacity: i32, length: i32 }
                 Instruction::I32Load(0, 0),
                 // now we load offset and save it to local_var_3
-                Instruction::SetLocal(3),
-                Instruction::GetLocal(3),
+                Instruction::SetLocal(msg_ptr_index),
+                Instruction::GetLocal(msg_ptr_index),
             ],
             {
                 let mut instructions = Vec::new();
                 for c in result.chars() {
                     instructions.extend(vec![
-                        Instruction::GetLocal(3),
+                        Instruction::GetLocal(msg_ptr_index),
                         Instruction::I32Const(c as i32),
                         Instruction::I32Store(0, 0),
-                        Instruction::GetLocal(3),
+                        Instruction::GetLocal(msg_ptr_index),
                         Instruction::I32Const(1),
                         Instruction::I32Add,
-                        Instruction::SetLocal(3),
+                        Instruction::SetLocal(msg_ptr_index),
                     ]);
                 }
                 instructions
             },
             vec![
-                Instruction::GetLocal(4),
+                Instruction::GetLocal(msg_ptr_index + 1),
                 Instruction::Return,
                 Instruction::End,
             ],
@@ -348,7 +350,7 @@ impl EntrypointCall for ExecuteCall {}
 
 impl ExecuteCall {
     pub fn new() -> Result<Self, ()> {
-        Ok(ExecuteCall(Self::plain()?))
+        Ok(ExecuteCall(Self::plain(3)?))
     }
 }
 
@@ -359,7 +361,18 @@ impl EntrypointCall for InstantiateCall {}
 
 impl InstantiateCall {
     pub fn new() -> Result<Self, ()> {
-        Ok(InstantiateCall(Self::plain()?))
+        Ok(InstantiateCall(Self::plain(3)?))
+    }
+}
+
+#[derive(Debug)]
+struct MigrateCall(FuncBody);
+
+impl EntrypointCall for MigrateCall {}
+
+impl MigrateCall {
+    pub fn new() -> Result<Self, ()> {
+        Ok(MigrateCall(Self::plain(2)?))
     }
 }
 
@@ -437,14 +450,22 @@ impl From<ModuleDefinition> for WasmModule {
             .build()
             .with_body(def.execute_call.0)
             .build()
-            // deallocate function (4) (i32)
+            // migrate function (4) (i32, i32) -> i32
+            .function()
+            .signature()
+            .with_params(vec![ValueType::I32, ValueType::I32])
+            .with_result(ValueType::I32)
+            .build()
+            .with_body(def.migrate_call.0)
+            .build()
+            // deallocate function (5) (i32)
             .function()
             .signature()
             .with_param(ValueType::I32)
             .build()
             .with_body(FuncBody::new(Vec::new(), Instructions::empty()))
             .build()
-            // dummy function (5)
+            // dummy function (6)
             .function()
             .signature()
             .build()
@@ -457,7 +478,7 @@ impl From<ModuleDefinition> for WasmModule {
                 }),
             ))
             .build()
-            // query function (6)
+            // query function (7)
             .function()
             .signature()
             .with_params(vec![ValueType::I32, ValueType::I32])
@@ -494,14 +515,19 @@ impl From<ModuleDefinition> for WasmModule {
             .func(func_offset + 2)
             .build()
             .export()
-            .field("deallocate")
+            .field("migrate")
             .internal()
             .func(func_offset + 3)
             .build()
             .export()
-            .field("dummy_fn")
+            .field("deallocate")
             .internal()
             .func(func_offset + 4)
+            .build()
+            .export()
+            .field("dummy_fn")
+            .internal()
+            .func(func_offset + 5)
             .build()
             .export()
             .field("memory")
@@ -511,12 +537,12 @@ impl From<ModuleDefinition> for WasmModule {
             .export()
             .field("interface_version_8")
             .internal()
-            .func(func_offset + 6)
+            .func(func_offset + 7)
             .build()
             .export()
             .field("query")
             .internal()
-            .func(func_offset + 5)
+            .func(func_offset + 6)
             .build();
 
         let code = contract.build();
