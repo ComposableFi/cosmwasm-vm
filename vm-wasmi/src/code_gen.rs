@@ -395,8 +395,9 @@ impl EntrypointCall for QueryCall {}
 
 impl QueryCall {
     pub fn new() -> Result<Self, ()> {
+        let encoded_result = hex::encode("{}");
         Ok(QueryCall(Self::plain(
-            ContractResult::<Empty>::Ok(Empty {}),
+            ContractResult::<alloc::string::String>::Ok(encoded_result),
             2,
         )?))
     }
