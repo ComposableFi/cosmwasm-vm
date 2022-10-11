@@ -265,6 +265,7 @@ pub struct ModuleDefinition {
     instantiate_call: InstantiateCall,
     execute_call: ExecuteCall,
     migrate_call: MigrateCall,
+    query_call: QueryCall,
     additional_binary_size: usize,
 }
 
@@ -280,16 +281,15 @@ impl ModuleDefinition {
             instantiate_call: InstantiateCall::new()?,
             execute_call: ExecuteCall::new()?,
             migrate_call: MigrateCall::new()?,
+            query_call: QueryCall::new()?,
             additional_binary_size,
         })
     }
 }
 
 trait EntrypointCall {
-    fn plain(msg_ptr_index: u32) -> Result<FuncBody, ()> {
-        let response = Response::<Empty>::default();
-        let result = serde_json::to_string(&ContractResult::<Response<Empty>>::Ok(response))
-            .map_err(|_| ())?;
+    fn plain<T: serde::Serialize>(response: T, msg_ptr_index: u32) -> Result<FuncBody, ()> {
+        let result = serde_json::to_string(&response).map_err(|_| ())?;
 
         let instructions = vec![
             vec![
@@ -350,7 +350,11 @@ impl EntrypointCall for ExecuteCall {}
 
 impl ExecuteCall {
     pub fn new() -> Result<Self, ()> {
-        Ok(ExecuteCall(Self::plain(3)?))
+        let response = Response::<Empty>::default();
+        Ok(ExecuteCall(Self::plain(
+            ContractResult::<Response<Empty>>::Ok(response),
+            3,
+        )?))
     }
 }
 
@@ -361,7 +365,11 @@ impl EntrypointCall for InstantiateCall {}
 
 impl InstantiateCall {
     pub fn new() -> Result<Self, ()> {
-        Ok(InstantiateCall(Self::plain(3)?))
+        let response = Response::<Empty>::default();
+        Ok(InstantiateCall(Self::plain(
+            ContractResult::<Response<Empty>>::Ok(response),
+            3,
+        )?))
     }
 }
 
@@ -372,7 +380,25 @@ impl EntrypointCall for MigrateCall {}
 
 impl MigrateCall {
     pub fn new() -> Result<Self, ()> {
-        Ok(MigrateCall(Self::plain(2)?))
+        let response = Response::<Empty>::default();
+        Ok(MigrateCall(Self::plain(
+            ContractResult::<Response<Empty>>::Ok(response),
+            2,
+        )?))
+    }
+}
+
+#[derive(Debug)]
+struct QueryCall(FuncBody);
+
+impl EntrypointCall for QueryCall {}
+
+impl QueryCall {
+    pub fn new() -> Result<Self, ()> {
+        Ok(QueryCall(Self::plain(
+            ContractResult::<Empty>::Ok(Empty {}),
+            2,
+        )?))
     }
 }
 
@@ -484,14 +510,7 @@ impl From<ModuleDefinition> for WasmModule {
             .with_params(vec![ValueType::I32, ValueType::I32])
             .with_result(ValueType::I32)
             .build()
-            .with_body(FuncBody::new(
-                Vec::new(),
-                Instructions::new(vec![
-                    Instruction::I32Const(0),
-                    Instruction::Return,
-                    Instruction::End,
-                ]),
-            ))
+            .with_body(def.query_call.0)
             .build()
             // dummy interface
             .function()
