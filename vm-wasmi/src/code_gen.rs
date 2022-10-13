@@ -21,13 +21,18 @@ pub struct WasmModule {
     pub code: Vec<u8>,
 }
 
+#[derive(Debug)]
+pub enum Error {
+    Internal,
+}
+
 impl ModuleDefinition {
-    pub fn new(additional_binary_size: usize) -> Result<Self, ()> {
+    pub fn new(additional_binary_size: usize) -> Result<Self, Error> {
         Ok(Self {
-            instantiate_call: InstantiateCall::new()?,
-            execute_call: ExecuteCall::new()?,
-            migrate_call: MigrateCall::new()?,
-            query_call: QueryCall::new()?,
+            instantiate_call: InstantiateCall::new().map_err(|_| Error::Internal)?,
+            execute_call: ExecuteCall::new().map_err(|_| Error::Internal)?,
+            migrate_call: MigrateCall::new().map_err(|_| Error::Internal)?,
+            query_call: QueryCall::new().map_err(|_| Error::Internal)?,
             additional_binary_size,
         })
     }
@@ -37,8 +42,11 @@ trait EntrypointCall {
     /// Plain entrypoint which just returns the response as is
     /// `msg_ptr_index` is the index of the `msg_ptr` parameter in cosmwasm api
     /// this index is 2 in `query` but 3 in `execute`
-    fn plain<T: serde::Serialize>(response: T, msg_ptr_index: u32) -> Result<FuncBody, ()> {
-        let result = serde_json::to_string(&response).map_err(|_| ())?;
+    fn plain<T: serde::Serialize>(
+        response: T,
+        msg_ptr_index: u32,
+    ) -> Result<FuncBody, serde_json::Error> {
+        let result = serde_json::to_string(&response)?;
 
         let instructions = vec![
             vec![
@@ -98,7 +106,7 @@ struct ExecuteCall(FuncBody);
 impl EntrypointCall for ExecuteCall {}
 
 impl ExecuteCall {
-    pub fn new() -> Result<Self, ()> {
+    pub fn new() -> Result<Self, serde_json::Error> {
         let response = Response::<Empty>::default();
         Ok(ExecuteCall(Self::plain(
             ContractResult::<Response<Empty>>::Ok(response),
@@ -113,7 +121,7 @@ struct InstantiateCall(FuncBody);
 impl EntrypointCall for InstantiateCall {}
 
 impl InstantiateCall {
-    pub fn new() -> Result<Self, ()> {
+    pub fn new() -> Result<Self, serde_json::Error> {
         let response = Response::<Empty>::default();
         Ok(InstantiateCall(Self::plain(
             ContractResult::<Response<Empty>>::Ok(response),
@@ -128,7 +136,7 @@ struct MigrateCall(FuncBody);
 impl EntrypointCall for MigrateCall {}
 
 impl MigrateCall {
-    pub fn new() -> Result<Self, ()> {
+    pub fn new() -> Result<Self, serde_json::Error> {
         let response = Response::<Empty>::default();
         Ok(MigrateCall(Self::plain(
             ContractResult::<Response<Empty>>::Ok(response),
@@ -143,7 +151,7 @@ struct QueryCall(FuncBody);
 impl EntrypointCall for QueryCall {}
 
 impl QueryCall {
-    pub fn new() -> Result<Self, ()> {
+    pub fn new() -> Result<Self, serde_json::Error> {
         let encoded_result = hex::encode("{}");
         Ok(QueryCall(Self::plain(
             ContractResult::<alloc::string::String>::Ok(encoded_result),
