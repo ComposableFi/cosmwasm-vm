@@ -93,6 +93,7 @@ pub enum WasmiVMError {
     ExpectedUnit,
     InvalidHostSignature,
     InvalidValue,
+    MaxLimitExceeded,
 }
 impl From<ExecutorError> for WasmiVMError {
     fn from(e: ExecutorError) -> Self {
@@ -387,7 +388,6 @@ where
         O: for<'x> TryFrom<Self::Output<'x>, Error = VmErrorOf<Self>>,
     {
         log::trace!("Function name: {}", function_name);
-        self.0.charge(VmGas::RawCall)?;
         let WasmiModule { module, memory } = self.0.executing_module();
         let value = module.invoke_export(&function_name, &function_args, self)?;
         O::try_from(WasmiOutput(
@@ -450,7 +450,9 @@ where
         message: &[u8],
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error> {
-        self.charge(VmGas::ContinueExecute)?;
+        self.charge(VmGas::ContinueExecute {
+            nb_of_coins: u32::try_from(funds.len()).map_err(|_| WasmiVMError::MaxLimitExceeded)?,
+        })?;
         self.0
             .continue_execute(address, funds, message, event_handler)
     }
@@ -462,7 +464,9 @@ where
         message: &[u8],
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<(Self::Address, Option<Binary>), Self::Error> {
-        self.charge(VmGas::ContinueInstantiate)?;
+        self.charge(VmGas::ContinueInstantiate {
+            nb_of_coins: u32::try_from(funds.len()).map_err(|_| WasmiVMError::MaxLimitExceeded)?,
+        })?;
         self.0
             .continue_instantiate(contract_meta, funds, message, event_handler)
     }
@@ -504,7 +508,9 @@ where
     }
 
     fn transfer(&mut self, to: &Self::Address, funds: &[Coin]) -> Result<(), Self::Error> {
-        self.charge(VmGas::Transfer)?;
+        self.charge(VmGas::Transfer {
+            nb_of_coins: u32::try_from(funds.len()).map_err(|_| WasmiVMError::MaxLimitExceeded)?,
+        })?;
         self.0.transfer(to, funds)
     }
 
@@ -1363,7 +1369,6 @@ pub mod host_functions {
         log::debug!("query_chain");
         match values {
             [RuntimeValue::I32(query_pointer)] => {
-                vm.charge(VmGas::QueryChain)?;
                 let request = marshall_out::<WasmiVM<T>, QueryRequest<VmQueryCustomOf<T>>>(
                     vm,
                     *query_pointer as u32,

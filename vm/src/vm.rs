@@ -50,8 +50,6 @@ pub enum VmGasCheckpoint {
 pub enum VmGas {
     /// Instrumentation gas raised by the injected code.
     Instrumentation { metered: u32 },
-    /// Cost of calling `raw_call`.
-    RawCall,
     /// Cost of `set_contract_meta`.
     SetContractMeta,
     /// Cost of `contract_meta`.
@@ -59,9 +57,9 @@ pub enum VmGas {
     /// Cost of `query_continuation`.
     QueryContinuation,
     /// Cost of `continue_execute`.
-    ContinueExecute,
+    ContinueExecute { nb_of_coins: u32 },
     /// Cost of `continue_instantiate`.
-    ContinueInstantiate,
+    ContinueInstantiate { nb_of_coins: u32 },
     /// Cost of `continue_migrate`.
     ContinueMigrate,
     /// Cost of `query_custom`.
@@ -71,7 +69,7 @@ pub enum VmGas {
     /// Cost of `query_raw`.
     QueryRaw,
     /// Cost of `transfer`.
-    Transfer,
+    Transfer { nb_of_coins: u32 },
     /// Cost of `burn`.
     Burn,
     /// Cost of `balance`.
@@ -80,8 +78,6 @@ pub enum VmGas {
     AllBalance,
     /// Cost of `query_info`.
     QueryInfo,
-    /// Cost of `query_chain`.
-    QueryChain,
     /// Cost of `db_read`.
     DbRead,
     /// Cost of `db_write`.
