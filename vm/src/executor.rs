@@ -397,7 +397,7 @@ where
     VmErrorOf<V>:
         From<ReadableMemoryErrorOf<V>> + From<WritableMemoryErrorOf<V>> + From<ExecutorError>,
 {
-    log::trace!("Call");
+    log::trace!("Call {}", alloc::string::String::from_utf8_lossy(message));
     let env = vm.get();
     let pointer = if I::HAS_INFO {
         let info = vm.get();

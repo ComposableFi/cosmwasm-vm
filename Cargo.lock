@@ -117,6 +117,7 @@ dependencies = [
  "cosmwasm-vm",
  "either",
  "env_logger",
+ "hex",
  "log",
  "serde",
  "serde_json",

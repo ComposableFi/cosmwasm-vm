@@ -7,7 +7,8 @@ use core::{assert_matches::assert_matches, num::NonZeroU32, str::FromStr};
 use cosmwasm_minimal_std::Order;
 use cosmwasm_minimal_std::{
     Addr, Attribute, Binary, BlockInfo, Coin, ContractInfo, CosmwasmExecutionResult,
-    CosmwasmQueryResult, Empty, Env, Event, InstantiateResult, MessageInfo, QueryResult, Timestamp,
+    CosmwasmQueryResult, Empty, Env, Event, ExecuteResult, InstantiateResult, MessageInfo,
+    QueryResult, Timestamp,
 };
 use cosmwasm_vm::{
     executor::{cosmwasm_call, ExecuteInput, InstantiateInput, MigrateInput, QueryInput},
@@ -22,7 +23,7 @@ const CANONICAL_LENGTH: usize = 54;
 const SHUFFLES_ENCODE: usize = 18;
 const SHUFFLES_DECODE: usize = 2;
 
-pub fn initialize() {
+fn initialize() {
     use std::sync::Once;
     static INIT: Once = Once::new();
     INIT.call_once(|| {
@@ -881,6 +882,37 @@ fn test_bare() {
                 .to_vec()
         )))
     );
+}
+
+#[test]
+fn test_code_gen() {
+    let code: code_gen::WasmModule = code_gen::ModuleDefinition::new(10).unwrap().into();
+    let sender = BankAccount(100);
+    let address = BankAccount(10_000);
+    let funds = vec![];
+    let mut extension = SimpleWasmiVMExtension {
+        storage: Default::default(),
+        codes: BTreeMap::from([(0x1337, code.code.clone())]),
+        contracts: BTreeMap::from([(
+            address,
+            CosmwasmContractMeta {
+                code_id: 0x1337,
+                admin: None,
+                label: "".into(),
+            },
+        )]),
+        next_account_id: BankAccount(10_001),
+        transaction_depth: 0,
+        gas: Gas::new(100_000_000),
+    };
+    let mut vm = create_simple_vm(sender, address, funds, &code.code, &mut extension);
+    let result =
+        cosmwasm_call::<InstantiateInput, WasmiVM<SimpleWasmiVM>>(&mut vm, r#"{}"#.as_bytes())
+            .unwrap();
+    assert_matches!(result, InstantiateResult(CosmwasmExecutionResult::Ok(_)));
+    let result =
+        cosmwasm_call::<ExecuteInput, WasmiVM<SimpleWasmiVM>>(&mut vm, r#"{}"#.as_bytes()).unwrap();
+    assert_matches!(result, ExecuteResult(CosmwasmExecutionResult::Ok(_)));
 }
 
 pub fn digit_sum(input: &[u8]) -> usize {

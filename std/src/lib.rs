@@ -247,7 +247,7 @@ impl ContractInfoResponse {
 /// This is used for cases when we use ReplyOn::Never and the id doesn't matter
 pub const UNUSED_MSG_ID: u64 = 0;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Response<T = Empty> {
     /// Optional list of messages to pass. These will be executed in order.
     /// If the ReplyOn variant matches the result (Always, Success on Ok, Error on Err),
@@ -509,7 +509,7 @@ impl PartialEq<&Attribute> for Attribute {
 /// It is designed to be expressable in correct JSON and JSON Schema but
 /// contains no meaningful data. Previously we used enums without cases,
 /// but those cannot represented as valid JSON Schema (https://github.com/CosmWasm/cosmwasm/issues/451)
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Empty {}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

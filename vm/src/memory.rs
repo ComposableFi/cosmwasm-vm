@@ -140,7 +140,7 @@ where
     fn try_from(
         LimitedRead(memory, pointer, limit): LimitedRead<'a, M>,
     ) -> Result<Self, Self::Error> {
-        log::trace!("RawFromRegion");
+        log::trace!("RawFromRegion: {:?}", pointer);
         let FromMemory(region) = FromMemory::<Region<M::Pointer>>::try_from(Read(memory, pointer))?;
         if region.length > limit {
             Err(MemoryReadError::OverflowLimit.into())
