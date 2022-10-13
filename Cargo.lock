@@ -123,7 +123,6 @@ dependencies = [
  "serde_json",
  "wasm-instrument",
  "wasmi",
- "wasmi-validation",
  "wat",
 ]
 
