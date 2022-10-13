@@ -7,7 +7,8 @@ use core::{assert_matches::assert_matches, num::NonZeroU32, str::FromStr};
 use cosmwasm_minimal_std::Order;
 use cosmwasm_minimal_std::{
     Addr, Attribute, Binary, BlockInfo, Coin, ContractInfo, CosmwasmExecutionResult,
-    CosmwasmQueryResult, Empty, Env, Event, InstantiateResult, MessageInfo, QueryResult, Timestamp,
+    CosmwasmQueryResult, Empty, Env, Event, ExecuteResult, InstantiateResult, MessageInfo,
+    QueryResult, Timestamp,
 };
 use cosmwasm_vm::{
     executor::{cosmwasm_call, ExecuteInput, InstantiateInput, MigrateInput, QueryInput},
@@ -909,11 +910,9 @@ fn test_code_gen() {
         cosmwasm_call::<InstantiateInput, WasmiVM<SimpleWasmiVM>>(&mut vm, r#"{}"#.as_bytes())
             .unwrap();
     assert_matches!(result, InstantiateResult(CosmwasmExecutionResult::Ok(_)));
-
     let result =
         cosmwasm_call::<ExecuteInput, WasmiVM<SimpleWasmiVM>>(&mut vm, r#"{}"#.as_bytes()).unwrap();
-
-    log::info!("result: {:?}", result);
+    assert_matches!(result, ExecuteResult(CosmwasmExecutionResult::Ok(_)));
 }
 
 pub fn digit_sum(input: &[u8]) -> usize {
