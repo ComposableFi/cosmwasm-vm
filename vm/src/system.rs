@@ -321,6 +321,68 @@ where
     }
 }
 
+/// Clears the admin on the given contract, so no more migration possible.
+///
+/// Fails if the caller is not currently admin of the target contract.
+pub fn clear_admin<V: CosmwasmBaseVM>(
+    vm: &mut V,
+    sender: &Addr,
+    contract_addr: VmAddressOf<V>,
+) -> Result<Option<Binary>, VmErrorOf<V>> {
+    let CosmwasmContractMeta {
+        code_id,
+        admin,
+        label,
+    } = vm.contract_meta(contract_addr.clone())?;
+    ensure_admin::<V>(sender, admin)?;
+    vm.set_contract_meta(
+        contract_addr,
+        CosmwasmContractMeta {
+            code_id,
+            admin: None,
+            label,
+        },
+    )?;
+    Ok(None)
+}
+
+/// Set `new_admin` as the new admin of the contract `contract_addr`
+///
+/// Fails if the caller is not currently admin of the target contract.
+pub fn update_admin<V: CosmwasmBaseVM>(
+    vm: &mut V,
+    sender: &Addr,
+    contract_addr: VmAddressOf<V>,
+    new_admin: VmAddressOf<V>,
+) -> Result<Option<Binary>, VmErrorOf<V>> {
+    let CosmwasmContractMeta {
+        code_id,
+        admin,
+        label,
+    } = vm.contract_meta(contract_addr.clone())?;
+    ensure_admin::<V>(sender, admin)?;
+    vm.set_contract_meta(
+        contract_addr,
+        CosmwasmContractMeta {
+            code_id,
+            admin: Some(new_admin),
+            label,
+        },
+    )?;
+    Ok(None)
+}
+
+fn ensure_admin<V: CosmwasmBaseVM>(
+    sender: &Addr,
+    contract_admin: Option<VmAddressOf<V>>,
+) -> Result<(), VmErrorOf<V>> {
+    match contract_admin.map(Into::<Addr>::into) {
+        None => Err(SystemError::ImmutableCantMigrate.into()),
+        Some(admin) if admin == *sender => Ok(()),
+        _ => Err(SystemError::MustBeAdmin.into()),
+    }
+}
+
 fn sanitize_custom_attributes(
     attributes: &mut Vec<Attribute>,
     contract_address: String,
@@ -368,13 +430,6 @@ where
     log::debug!("SystemRun");
     let info: MessageInfo = vm.get();
     let env: Env = vm.get();
-    let ensure_admin = move |contract_admin: Option<VmAddressOf<V>>| -> Result<(), VmErrorOf<V>> {
-        match contract_admin.map(Into::<Addr>::into) {
-            None => Err(SystemError::ImmutableCantMigrate.into()),
-            Some(admin) if admin == info.sender => Ok(()),
-            _ => Err(SystemError::MustBeAdmin.into()),
-        }
-    };
     let output = cosmwasm_call::<I, V>(vm, message).map(Into::into);
 
     log::debug!("Output: {:?}", output);
@@ -488,7 +543,7 @@ where
                                 let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
                                 let CosmwasmContractMeta { admin, label, .. } =
                                     vm.contract_meta(vm_contract_addr.clone())?;
-                                ensure_admin(admin.clone())?;
+                                ensure_admin::<V>(&info.sender, admin.clone())?;
                                 vm.set_contract_meta(
                                     vm_contract_addr.clone(),
                                     CosmwasmContractMeta {
@@ -505,39 +560,11 @@ where
                             } => {
                                 let new_admin = new_admin.try_into()?;
                                 let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
-                                let CosmwasmContractMeta {
-                                    code_id,
-                                    admin,
-                                    label,
-                                } = vm.contract_meta(vm_contract_addr.clone())?;
-                                ensure_admin(admin)?;
-                                vm.set_contract_meta(
-                                    vm_contract_addr,
-                                    CosmwasmContractMeta {
-                                        code_id,
-                                        admin: Some(new_admin),
-                                        label,
-                                    },
-                                )?;
-                                Ok(None)
+                                update_admin::<V>(vm, &info.sender, vm_contract_addr, new_admin)
                             }
                             WasmMsg::ClearAdmin { contract_addr } => {
                                 let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
-                                let CosmwasmContractMeta {
-                                    code_id,
-                                    admin,
-                                    label,
-                                } = vm.contract_meta(vm_contract_addr.clone())?;
-                                ensure_admin(admin)?;
-                                vm.set_contract_meta(
-                                    vm_contract_addr,
-                                    CosmwasmContractMeta {
-                                        code_id,
-                                        admin: None,
-                                        label,
-                                    },
-                                )?;
-                                Ok(None)
+                                clear_admin::<V>(vm, &info.sender, vm_contract_addr)
                             }
                         },
                         CosmosMsg::Bank(bank_message) => match bank_message {
