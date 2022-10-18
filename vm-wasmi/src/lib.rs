@@ -759,7 +759,7 @@ pub fn encode_sections(sections: &[Vec<u8>]) -> Result<Vec<u8>, ()> {
     let mut out_data = Vec::with_capacity(out_len);
     for section in sections {
         let section_len = TryInto::<u32>::try_into(section.len())
-            .unwrap()
+            .map_err(|_| ())?
             .to_be_bytes();
         out_data.extend(section);
         out_data.extend_from_slice(&section_len);
@@ -1051,7 +1051,8 @@ pub mod host_functions {
                 let next = vm.db_next(*iterator_id as u32);
                 match next {
                     Ok((key, value)) => {
-                        let out_data = encode_sections(&[key, value]).unwrap();
+                        let out_data = encode_sections(&[key, value])
+                            .map_err(|_| WasmiVMError::InvalidValue)?;
                         let Tagged(value_pointer, _) =
                             passthrough_in::<WasmiVM<T>, ()>(vm, &out_data)?;
                         Ok(Some(RuntimeValue::I32(value_pointer as i32)))

@@ -321,31 +321,6 @@ where
     }
 }
 
-/// Clears the admin on the given contract, so no more migration possible.
-///
-/// Fails if the caller is not currently admin of the target contract.
-pub fn clear_admin<V: CosmwasmBaseVM>(
-    vm: &mut V,
-    sender: &Addr,
-    contract_addr: VmAddressOf<V>,
-) -> Result<Option<Binary>, VmErrorOf<V>> {
-    let CosmwasmContractMeta {
-        code_id,
-        admin,
-        label,
-    } = vm.contract_meta(contract_addr.clone())?;
-    ensure_admin::<V>(sender, admin)?;
-    vm.set_contract_meta(
-        contract_addr,
-        CosmwasmContractMeta {
-            code_id,
-            admin: None,
-            label,
-        },
-    )?;
-    Ok(None)
-}
-
 /// Set `new_admin` as the new admin of the contract `contract_addr`
 ///
 /// Fails if the caller is not currently admin of the target contract.
@@ -353,8 +328,8 @@ pub fn update_admin<V: CosmwasmBaseVM>(
     vm: &mut V,
     sender: &Addr,
     contract_addr: VmAddressOf<V>,
-    new_admin: VmAddressOf<V>,
-) -> Result<Option<Binary>, VmErrorOf<V>> {
+    new_admin: Option<VmAddressOf<V>>,
+) -> Result<(), VmErrorOf<V>> {
     let CosmwasmContractMeta {
         code_id,
         admin,
@@ -365,11 +340,11 @@ pub fn update_admin<V: CosmwasmBaseVM>(
         contract_addr,
         CosmwasmContractMeta {
             code_id,
-            admin: Some(new_admin),
+            admin: new_admin,
             label,
         },
     )?;
-    Ok(None)
+    Ok(())
 }
 
 fn ensure_admin<V: CosmwasmBaseVM>(
@@ -560,11 +535,18 @@ where
                             } => {
                                 let new_admin = new_admin.try_into()?;
                                 let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
-                                update_admin::<V>(vm, &info.sender, vm_contract_addr, new_admin)
+                                update_admin::<V>(
+                                    vm,
+                                    &info.sender,
+                                    vm_contract_addr,
+                                    Some(new_admin),
+                                )
+                                .map(|_| None)
                             }
                             WasmMsg::ClearAdmin { contract_addr } => {
                                 let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
-                                clear_admin::<V>(vm, &info.sender, vm_contract_addr)
+                                update_admin::<V>(vm, &info.sender, vm_contract_addr, None)
+                                    .map(|_| None)
                             }
                         },
                         CosmosMsg::Bank(bank_message) => match bank_message {
