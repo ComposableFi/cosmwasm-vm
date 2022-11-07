@@ -46,12 +46,11 @@ use core::{
 #[cfg(feature = "iterator")]
 use cosmwasm_minimal_std::Order;
 use cosmwasm_minimal_std::{
-    Addr, Binary, CanonicalAddr, Coin, ContractInfoResponse, CosmwasmQueryResult, Env, Event,
-    MessageInfo, SystemResult,
+    Addr, Binary, CanonicalAddr, Coin, ContractInfoResponse, Env, Event, MessageInfo, SystemResult,
 };
 use cosmwasm_vm::executor::{
     AllocateInput, AsFunctionName, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
-    DeallocateInput, ExecutorError, Unit,
+    CosmwasmQueryResult, DeallocateInput, ExecutorError, Unit, QueryResult,
 };
 use cosmwasm_vm::has::Has;
 use cosmwasm_vm::memory::{
@@ -458,7 +457,7 @@ where
         &mut self,
         address: Self::Address,
         message: &[u8],
-    ) -> Result<cosmwasm_minimal_std::QueryResult, Self::Error> {
+    ) -> Result<QueryResult, Self::Error> {
         self.charge(VmGas::QueryContinuation)?;
         self.0.query_continuation(address, message)
     }

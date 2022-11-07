@@ -39,10 +39,213 @@ use crate::{
 use alloc::vec::Vec;
 use core::{fmt::Debug, marker::PhantomData};
 use cosmwasm_minimal_std::{
-    DeserializeLimit, Empty, Env, ExecuteResult, InstantiateResult, MessageInfo, MigrateResult,
-    QueryResult, ReadLimit, ReplyResult,
+    deserialization_limits, read_limits, Binary, ContractResult, DeserializeLimit, Empty, Env,
+    MessageInfo, ReadLimit, Response,
 };
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+
+pub type CosmwasmExecutionResult<T> = ContractResult<Response<T>>;
+pub type CosmwasmQueryResult = ContractResult<QueryResponse>;
+pub type CosmwasmReplyResult<T> = ContractResult<Response<T>>;
+pub type CosmwasmMigrateResult<T> = ContractResult<Response<T>>;
+
+pub type QueryResponse = Binary;
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ReplyResult<T>(pub CosmwasmExecutionResult<T>);
+impl<T> DeserializeLimit for ReplyResult<T> {
+    fn deserialize_limit() -> usize {
+        deserialization_limits::RESULT_REPLY
+    }
+}
+impl<T> ReadLimit for ReplyResult<T> {
+    fn read_limit() -> usize {
+        read_limits::RESULT_REPLY
+    }
+}
+impl<T> From<ReplyResult<T>> for ContractResult<Response<T>> {
+    fn from(ReplyResult(result): ReplyResult<T>) -> Self {
+        result
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct QueryResult(pub CosmwasmQueryResult);
+impl DeserializeLimit for QueryResult {
+    fn deserialize_limit() -> usize {
+        deserialization_limits::RESULT_QUERY
+    }
+}
+impl ReadLimit for QueryResult {
+    fn read_limit() -> usize {
+        read_limits::RESULT_QUERY
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ExecuteResult<T>(pub CosmwasmExecutionResult<T>);
+impl<T> DeserializeLimit for ExecuteResult<T> {
+    fn deserialize_limit() -> usize {
+        deserialization_limits::RESULT_EXECUTE
+    }
+}
+impl<T> ReadLimit for ExecuteResult<T> {
+    fn read_limit() -> usize {
+        read_limits::RESULT_EXECUTE
+    }
+}
+impl<T> From<ExecuteResult<T>> for ContractResult<Response<T>> {
+    fn from(ExecuteResult(result): ExecuteResult<T>) -> Self {
+        result
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct InstantiateResult<T>(pub CosmwasmExecutionResult<T>);
+impl<T> DeserializeLimit for InstantiateResult<T> {
+    fn deserialize_limit() -> usize {
+        deserialization_limits::RESULT_INSTANTIATE
+    }
+}
+impl<T> ReadLimit for InstantiateResult<T> {
+    fn read_limit() -> usize {
+        read_limits::RESULT_INSTANTIATE
+    }
+}
+impl<T> From<InstantiateResult<T>> for ContractResult<Response<T>> {
+    fn from(InstantiateResult(result): InstantiateResult<T>) -> Self {
+        result
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct MigrateResult<T>(pub CosmwasmExecutionResult<T>);
+impl<T> DeserializeLimit for MigrateResult<T> {
+    fn deserialize_limit() -> usize {
+        deserialization_limits::RESULT_MIGRATE
+    }
+}
+impl<T> ReadLimit for MigrateResult<T> {
+    fn read_limit() -> usize {
+        read_limits::RESULT_MIGRATE
+    }
+}
+impl<T> From<MigrateResult<T>> for ContractResult<Response<T>> {
+    fn from(MigrateResult(result): MigrateResult<T>) -> Self {
+        result
+    }
+}
+
+pub mod ibc {
+    #![cfg(feature = "stargate")]
+
+    use super::*;
+    use cosmwasm_minimal_std::ibc::{
+        Ibc3ChannelOpenResponse, IbcBasicResponse, IbcReceiveResponse,
+    };
+
+    pub struct IbcChannelOpenResult(pub ContractResult<Option<Ibc3ChannelOpenResponse>>);
+    impl DeserializeLimit for IbcChannelOpenResult {
+        fn deserialize_limit() -> usize {
+            deserialization_limits::RESULT_IBC_CHANNEL_OPEN
+        }
+    }
+    impl ReadLimit for IbcChannelOpenResult {
+        fn read_limit() -> usize {
+            read_limits::RESULT_IBC_CHANNEL_OPEN
+        }
+    }
+    impl From<IbcChannelOpenResult> for ContractResult<Option<Ibc3ChannelOpenResponse>> {
+        fn from(IbcChannelOpenResult(result): IbcChannelOpenResult) -> Self {
+            result
+        }
+    }
+
+    pub struct IbcChannelConnectResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
+    impl<T> DeserializeLimit for IbcChannelConnectResult<T> {
+        fn deserialize_limit() -> usize {
+            deserialization_limits::RESULT_IBC_CHANNEL_CONNECT
+        }
+    }
+    impl<T> ReadLimit for IbcChannelConnectResult<T> {
+        fn read_limit() -> usize {
+            read_limits::RESULT_IBC_CHANNEL_CONNECT
+        }
+    }
+    impl<T> From<IbcChannelConnectResult<T>> for ContractResult<IbcBasicResponse<T>> {
+        fn from(IbcChannelConnectResult(result): IbcChannelConnectResult<T>) -> Self {
+            result
+        }
+    }
+
+    pub struct IbcChannelCloseResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
+    impl<T> DeserializeLimit for IbcChannelCloseResult<T> {
+        fn deserialize_limit() -> usize {
+            deserialization_limits::RESULT_IBC_CHANNEL_CLOSE
+        }
+    }
+    impl<T> ReadLimit for IbcChannelCloseResult<T> {
+        fn read_limit() -> usize {
+            read_limits::RESULT_IBC_CHANNEL_CLOSE
+        }
+    }
+    impl<T> From<IbcChannelCloseResult<T>> for ContractResult<IbcBasicResponse<T>> {
+        fn from(IbcChannelCloseResult(result): IbcChannelCloseResult<T>) -> Self {
+            result
+        }
+    }
+
+    pub struct IbcPacketReceiveResult<T = Empty>(pub ContractResult<IbcReceiveResponse<T>>);
+    impl<T> DeserializeLimit for IbcPacketReceiveResult<T> {
+        fn deserialize_limit() -> usize {
+            deserialization_limits::RESULT_IBC_PACKET_RECEIVE
+        }
+    }
+    impl<T> ReadLimit for IbcPacketReceiveResult<T> {
+        fn read_limit() -> usize {
+            read_limits::RESULT_IBC_PACKET_RECEIVE
+        }
+    }
+    impl<T> From<IbcPacketReceiveResult<T>> for ContractResult<IbcReceiveResponse<T>> {
+        fn from(IbcPacketReceiveResult(result): IbcPacketReceiveResult<T>) -> Self {
+            result
+        }
+    }
+
+    pub struct IbcPacketAckResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
+    impl<T> DeserializeLimit for IbcPacketAckResult<T> {
+        fn deserialize_limit() -> usize {
+            deserialization_limits::RESULT_IBC_PACKET_ACK
+        }
+    }
+    impl<T> ReadLimit for IbcPacketAckResult<T> {
+        fn read_limit() -> usize {
+            read_limits::RESULT_IBC_PACKET_ACK
+        }
+    }
+    impl<T> From<IbcPacketAckResult<T>> for ContractResult<IbcBasicResponse<T>> {
+        fn from(IbcPacketAckResult(result): IbcPacketAckResult<T>) -> Self {
+            result
+        }
+    }
+
+    pub struct IbcPacketTimeoutResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
+    impl<T> DeserializeLimit for IbcPacketTimeoutResult<T> {
+        fn deserialize_limit() -> usize {
+            deserialization_limits::RESULT_IBC_PACKET_ACK
+        }
+    }
+    impl<T> ReadLimit for IbcPacketTimeoutResult<T> {
+        fn read_limit() -> usize {
+            read_limits::RESULT_IBC_PACKET_ACK
+        }
+    }
+    impl<T> From<IbcPacketTimeoutResult<T>> for ContractResult<IbcBasicResponse<T>> {
+        fn from(IbcPacketTimeoutResult(result): IbcPacketTimeoutResult<T>) -> Self {
+            result
+        }
+    }
+}
 
 /// The type representing a call to a contract `allocate` export.
 pub struct AllocateInput<Pointer>(pub Pointer);

@@ -23,6 +23,24 @@ pub mod read_limits {
     pub const RESULT_QUERY: usize = 64 * MI;
     /// Max length (in bytes) of the query data from a query_chain call.
     pub const REQUEST_QUERY: usize = 64 * MI;
+    /// Max length (in bytes) of the result data from a ibc_channel_open call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_CHANNEL_OPEN: usize = 64 * MI;
+    /// Max length (in bytes) of the result data from a ibc_channel_connect call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_CHANNEL_CONNECT: usize = 64 * MI;
+    /// Max length (in bytes) of the result data from a ibc_channel_close call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_CHANNEL_CLOSE: usize = 64 * MI;
+    /// Max length (in bytes) of the result data from a ibc_packet_receive call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_PACKET_RECEIVE: usize = 64 * MI;
+    /// Max length (in bytes) of the result data from a ibc_packet_ack call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_PACKET_ACK: usize = 64 * MI;
+    /// Max length (in bytes) of the result data from a ibc_packet_timeout call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_PACKET_TIMEOUT: usize = 64 * MI;
 }
 
 /// The limits for the JSON deserialization.
@@ -46,14 +64,25 @@ pub mod deserialization_limits {
     pub const RESULT_QUERY: usize = 256 * KI;
     /// Max length (in bytes) of the query data from a query_chain call.
     pub const REQUEST_QUERY: usize = 256 * KI;
+    /// Max length (in bytes) of the result data from a ibc_channel_open call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_CHANNEL_OPEN: usize = 256 * KI;
+    /// Max length (in bytes) of the result data from a ibc_channel_connect call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_CHANNEL_CONNECT: usize = 256 * KI;
+    /// Max length (in bytes) of the result data from a ibc_channel_close call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_CHANNEL_CLOSE: usize = 256 * KI;
+    /// Max length (in bytes) of the result data from a ibc_packet_receive call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_PACKET_RECEIVE: usize = 256 * KI;
+    /// Max length (in bytes) of the result data from a ibc_packet_ack call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_PACKET_ACK: usize = 256 * KI;
+    /// Max length (in bytes) of the result data from a ibc_packet_timeout call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_PACKET_TIMEOUT: usize = 256 * KI;
 }
-
-pub type CosmwasmExecutionResult<T> = ContractResult<Response<T>>;
-pub type CosmwasmQueryResult = ContractResult<QueryResponse>;
-pub type CosmwasmReplyResult<T> = ContractResult<Response<T>>;
-pub type CosmwasmMigrateResult<T> = ContractResult<Response<T>>;
-
-pub type QueryResponse = Binary;
 
 pub trait DeserializeLimit {
     fn deserialize_limit() -> usize;
@@ -61,91 +90,6 @@ pub trait DeserializeLimit {
 
 pub trait ReadLimit {
     fn read_limit() -> usize;
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ReplyResult<T>(pub CosmwasmExecutionResult<T>);
-impl<T> DeserializeLimit for ReplyResult<T> {
-    fn deserialize_limit() -> usize {
-        deserialization_limits::RESULT_REPLY
-    }
-}
-impl<T> ReadLimit for ReplyResult<T> {
-    fn read_limit() -> usize {
-        read_limits::RESULT_REPLY
-    }
-}
-impl<T> From<ReplyResult<T>> for ContractResult<Response<T>> {
-    fn from(ReplyResult(result): ReplyResult<T>) -> Self {
-        result
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct QueryResult(pub CosmwasmQueryResult);
-impl DeserializeLimit for QueryResult {
-    fn deserialize_limit() -> usize {
-        deserialization_limits::RESULT_QUERY
-    }
-}
-impl ReadLimit for QueryResult {
-    fn read_limit() -> usize {
-        read_limits::RESULT_QUERY
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ExecuteResult<T>(pub CosmwasmExecutionResult<T>);
-impl<T> DeserializeLimit for ExecuteResult<T> {
-    fn deserialize_limit() -> usize {
-        deserialization_limits::RESULT_EXECUTE
-    }
-}
-impl<T> ReadLimit for ExecuteResult<T> {
-    fn read_limit() -> usize {
-        read_limits::RESULT_EXECUTE
-    }
-}
-impl<T> From<ExecuteResult<T>> for ContractResult<Response<T>> {
-    fn from(ExecuteResult(result): ExecuteResult<T>) -> Self {
-        result
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct InstantiateResult<T>(pub CosmwasmExecutionResult<T>);
-impl<T> DeserializeLimit for InstantiateResult<T> {
-    fn deserialize_limit() -> usize {
-        deserialization_limits::RESULT_INSTANTIATE
-    }
-}
-impl<T> ReadLimit for InstantiateResult<T> {
-    fn read_limit() -> usize {
-        read_limits::RESULT_INSTANTIATE
-    }
-}
-impl<T> From<InstantiateResult<T>> for ContractResult<Response<T>> {
-    fn from(InstantiateResult(result): InstantiateResult<T>) -> Self {
-        result
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct MigrateResult<T>(pub CosmwasmExecutionResult<T>);
-impl<T> DeserializeLimit for MigrateResult<T> {
-    fn deserialize_limit() -> usize {
-        deserialization_limits::RESULT_MIGRATE
-    }
-}
-impl<T> ReadLimit for MigrateResult<T> {
-    fn read_limit() -> usize {
-        read_limits::RESULT_MIGRATE
-    }
-}
-impl<T> From<MigrateResult<T>> for ContractResult<Response<T>> {
-    fn from(MigrateResult(result): MigrateResult<T>) -> Self {
-        result
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

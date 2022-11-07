@@ -26,14 +26,16 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::input::Input;
+use crate::{
+    executor::{CosmwasmQueryResult, QueryResult},
+    input::Input,
+};
 use alloc::{string::String, vec::Vec};
 use core::fmt::Debug;
 #[cfg(feature = "iterator")]
 use cosmwasm_minimal_std::Order;
 use cosmwasm_minimal_std::{
-    ibc::IbcTimeout, Binary, Coin, ContractInfoResponse, CosmwasmQueryResult, Event, QueryResult,
-    SystemResult,
+    ibc::IbcTimeout, Binary, Coin, ContractInfoResponse, Event, SystemResult,
 };
 
 use serde::de::DeserializeOwned;

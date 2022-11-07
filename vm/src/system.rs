@@ -29,8 +29,8 @@
 use crate::{
     executor::{
         cosmwasm_call, AllocateInput, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
-        DeallocateInput, ExecuteInput, ExecutorError, HasInfo, InstantiateInput, MigrateInput,
-        ReplyInput, Unit,
+        CosmwasmQueryResult, DeallocateInput, ExecuteInput, ExecutorError, HasInfo,
+        InstantiateInput, MigrateInput, QueryResult, ReplyInput, Unit,
     },
     has::Has,
     input::{Input, OutputOf},
@@ -45,9 +45,9 @@ use alloc::{fmt::Display, format, string::String, vec, vec::Vec};
 use core::fmt::Debug;
 use cosmwasm_minimal_std::{
     ibc::IbcMsg, Addr, AllBalanceResponse, Attribute, BalanceResponse, BankMsg, BankQuery, Binary,
-    ContractResult, CosmosMsg, CosmwasmQueryResult, DeserializeLimit, Env, Event, MessageInfo,
-    QueryRequest, QueryResult, ReadLimit, Reply, ReplyOn, Response, SubMsg, SubMsgResponse,
-    SubMsgResult, SystemResult, WasmMsg, WasmQuery,
+    ContractResult, CosmosMsg, DeserializeLimit, Env, Event, MessageInfo, QueryRequest, ReadLimit,
+    Reply, ReplyOn, Response, SubMsg, SubMsgResponse, SubMsgResult, SystemResult, WasmMsg,
+    WasmQuery,
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};

@@ -6,12 +6,11 @@ use core::{assert_matches::assert_matches, num::NonZeroU32, str::FromStr};
 #[cfg(feature = "iterator")]
 use cosmwasm_minimal_std::Order;
 use cosmwasm_minimal_std::{
-    Addr, Attribute, Binary, BlockInfo, Coin, ContractInfo, CosmwasmExecutionResult,
-    CosmwasmQueryResult, Empty, Env, Event, ExecuteResult, InstantiateResult, MessageInfo,
-    QueryResult, Timestamp, ibc::IbcTimeout,
+    ibc::IbcTimeout, Addr, Attribute, Binary, BlockInfo, Coin, ContractInfo, Empty, Env, Event,
+    MessageInfo, Timestamp,
 };
 use cosmwasm_vm::{
-    executor::{cosmwasm_call, ExecuteInput, InstantiateInput, MigrateInput, QueryInput},
+    executor::{cosmwasm_call, ExecuteInput, InstantiateInput, MigrateInput, QueryInput, InstantiateResult, CosmwasmExecutionResult, ExecuteResult},
     system::{
         cosmwasm_system_entrypoint, cosmwasm_system_run, CosmwasmCodeId, CosmwasmContractMeta,
     },
@@ -721,7 +720,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         amount: Coin,
         timeout: IbcTimeout,
     ) -> Result<(), Self::Error> {
-      todo!()
+        todo!()
     }
 
     #[cfg(feature = "stargate")]
@@ -731,12 +730,12 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         data: Binary,
         timeout: IbcTimeout,
     ) -> Result<(), Self::Error> {
-      todo!()
+        todo!()
     }
 
     #[cfg(feature = "stargate")]
     fn ibc_close_channel(&mut self, channel_id: String) -> Result<(), Self::Error> {
-      todo!()
+        todo!()
     }
 }
 
