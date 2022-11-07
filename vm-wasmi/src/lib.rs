@@ -781,20 +781,22 @@ impl<T> ReadWriteMemory for WasmiVM<T> where T: WasmiBaseVM {}
 /// ```ignore
 /// section1 || section1_len || section2 || section2_len || section3 || section3_len || …
 /// ```
-pub fn encode_sections(sections: &[Vec<u8>]) -> Result<Vec<u8>, ()> {
-    let mut out_len: usize = sections.iter().map(|section| section.len()).sum();
-    out_len += 4 * sections.len();
-    let mut out_data = Vec::with_capacity(out_len);
-    for section in sections {
-        let section_len = TryInto::<u32>::try_into(section.len())
-            .map_err(|_| ())?
-            .to_be_bytes();
-        out_data.extend(section);
-        out_data.extend_from_slice(&section_len);
-    }
-    debug_assert_eq!(out_data.len(), out_len);
-    debug_assert_eq!(out_data.capacity(), out_len);
-    Ok(out_data)
+pub fn encode_sections(sections: &[Vec<u8>]) -> Option<Vec<u8>> {
+    let out_len: usize =
+        sections.iter().map(|section| section.len()).sum::<usize>() + 4 * sections.len();
+    sections
+        .iter()
+        .fold(Some(Vec::with_capacity(out_len)), |acc, section| {
+            acc.and_then(|mut acc| {
+                TryInto::<u32>::try_into(section.len())
+                    .map(|section_len| {
+                        acc.extend(section);
+                        acc.extend_from_slice(&section_len.to_be_bytes());
+                        acc
+                    })
+                    .ok()
+            })
+        })
 }
 
 /// Decodes sections of data into multiple slices.
@@ -1079,8 +1081,8 @@ pub mod host_functions {
                 let next = vm.db_next(*iterator_id as u32);
                 match next {
                     Ok((key, value)) => {
-                        let out_data = encode_sections(&[key, value])
-                            .map_err(|_| WasmiVMError::InvalidValue)?;
+                        let out_data =
+                            encode_sections(&[key, value]).ok_or(WasmiVMError::InvalidValue)?;
                         let Tagged(value_pointer, _) =
                             passthrough_in::<WasmiVM<T>, ()>(vm, &out_data)?;
                         Ok(Some(RuntimeValue::I32(value_pointer as i32)))
