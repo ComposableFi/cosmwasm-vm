@@ -32,7 +32,8 @@ use core::fmt::Debug;
 #[cfg(feature = "iterator")]
 use cosmwasm_minimal_std::Order;
 use cosmwasm_minimal_std::{
-    Binary, Coin, ContractInfoResponse, CosmwasmQueryResult, Event, QueryResult, SystemResult,
+    ibc::IbcTimeout, Binary, Coin, ContractInfoResponse, CosmwasmQueryResult, Event, QueryResult,
+    SystemResult,
 };
 
 use serde::de::DeserializeOwned;
@@ -106,6 +107,15 @@ pub enum VmGas {
     AddrCanonicalize,
     /// Cost of `addr_humanize`
     AddrHumanize,
+    #[cfg(feature = "stargate")]
+    /// Cost of `ibc_transfer`.
+    IbcTransfer,
+    #[cfg(feature = "stargate")]
+    /// Cost of `ibc_send_packet`.
+    IbcSendPacket,
+    #[cfg(feature = "stargate")]
+    /// Cost of `ibc_close_channel`.
+    IbcCloseChannel,
 }
 
 pub type VmInputOf<'a, T> = <T as VMBase>::Input<'a>;
@@ -160,7 +170,7 @@ pub trait VMBase {
     /// Possible errors raised by this VM.
     type Error;
 
-    // Get the contract metadata of the currently running contract.
+    /// Get the contract metadata of the currently running contract.
     fn running_contract_meta(&mut self) -> Result<Self::ContractMeta, Self::Error>;
 
     #[cfg(feature = "iterator")]
@@ -349,4 +359,27 @@ pub trait VMBase {
         signatures: &[&[u8]],
         public_keys: &[&[u8]],
     ) -> Result<bool, Self::Error>;
+
+    #[cfg(feature = "stargate")]
+    /// Transfer tokens over IBC.
+    fn ibc_transfer(
+        &mut self,
+        channel_id: String,
+        to_address: String,
+        amount: Coin,
+        timeout: IbcTimeout,
+    ) -> Result<(), Self::Error>;
+
+    #[cfg(feature = "stargate")]
+    /// Send a packet over IBC.
+    fn ibc_send_packet(
+        &mut self,
+        channel_id: String,
+        data: Binary,
+        timeout: IbcTimeout,
+    ) -> Result<(), Self::Error>;
+
+    #[cfg(feature = "stargate")]
+    /// Close an IBC channel.
+    fn ibc_close_channel(&mut self, channel_id: String) -> Result<(), Self::Error>;
 }

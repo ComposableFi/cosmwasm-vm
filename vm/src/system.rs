@@ -44,7 +44,7 @@ use crate::{
 use alloc::{fmt::Display, format, string::String, vec, vec::Vec};
 use core::fmt::Debug;
 use cosmwasm_minimal_std::{
-    Addr, AllBalanceResponse, Attribute, BalanceResponse, BankMsg, BankQuery, Binary,
+    ibc::IbcMsg, Addr, AllBalanceResponse, Attribute, BalanceResponse, BankMsg, BankQuery, Binary,
     ContractResult, CosmosMsg, CosmwasmQueryResult, DeserializeLimit, Env, Event, MessageInfo,
     QueryRequest, QueryResult, ReadLimit, Reply, ReplyOn, Response, SubMsg, SubMsgResponse,
     SubMsgResult, SystemResult, WasmMsg, WasmQuery,
@@ -556,6 +556,29 @@ where
                             }
                             BankMsg::Burn { amount } => {
                                 vm.burn(&amount)?;
+                                Ok(None)
+                            }
+                        },
+                        CosmosMsg::Ibc(ibc_message) => match ibc_message {
+                            IbcMsg::Transfer {
+                                channel_id,
+                                to_address,
+                                amount,
+                                timeout,
+                            } => {
+                                vm.ibc_transfer(channel_id, to_address, amount, timeout)?;
+                                Ok(None)
+                            }
+                            IbcMsg::SendPacket {
+                                channel_id,
+                                data,
+                                timeout,
+                            } => {
+                                vm.ibc_send_packet(channel_id, data, timeout)?;
+                                Ok(None)
+                            }
+                            IbcMsg::CloseChannel { channel_id } => {
+                                vm.ibc_close_channel(channel_id)?;
                                 Ok(None)
                             }
                         },
