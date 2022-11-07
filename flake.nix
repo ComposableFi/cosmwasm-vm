@@ -56,7 +56,7 @@
 
       in rec {
         packages.cosmwasm-vm = crane-nightly.buildPackage (common-cached-args // {
-          cargoTestCommand = "cargo test --features iterator";
+          cargoTestCommand = "cargo test";
         });
         packages.default = packages.cosmwasm-vm;
         checks = {
