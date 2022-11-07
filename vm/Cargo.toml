@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-iterator = []
+default = [ "iterator", "stargate" ]
+iterator = [ "cosmwasm-minimal-std/iterator" ]
+stargate = [ "cosmwasm-minimal-std/stargate" ]
+ibc3 = [ "cosmwasm-minimal-std/ibc3" ]
 
 [dependencies]
 serde = { version = "1", default-features = false, features = ["derive"] }
@@ -12,7 +15,7 @@ serde_json = { version = "1", default-features = false, features = ["alloc"] }
 either = { version = "1.6", default-features = false }
 log = { version = "0.4", default-features = false }
 
-cosmwasm-minimal-std =  { path = "../std", default-features = false}
+cosmwasm-minimal-std =  { path = "../std", default-features = false }
 
 [dev-dependencies]
 wat = "1.0"

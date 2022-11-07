@@ -46,12 +46,11 @@ use core::{
 #[cfg(feature = "iterator")]
 use cosmwasm_minimal_std::Order;
 use cosmwasm_minimal_std::{
-    Addr, Binary, CanonicalAddr, Coin, ContractInfoResponse, CosmwasmQueryResult, Env, Event,
-    MessageInfo, SystemResult,
+    Addr, Binary, CanonicalAddr, Coin, ContractInfoResponse, Env, Event, MessageInfo, SystemResult,
 };
 use cosmwasm_vm::executor::{
     AllocateInput, AsFunctionName, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
-    DeallocateInput, ExecutorError, Unit,
+    CosmwasmQueryResult, DeallocateInput, ExecutorError, QueryResult, Unit,
 };
 use cosmwasm_vm::has::Has;
 use cosmwasm_vm::memory::{
@@ -420,6 +419,26 @@ where
         self.0.running_contract_meta()
     }
 
+    #[cfg(feature = "iterator")]
+    fn db_scan(
+        &mut self,
+        start: Option<Self::StorageKey>,
+        end: Option<Self::StorageKey>,
+        order: Order,
+    ) -> Result<u32, Self::Error> {
+        self.charge(VmGas::DbScan)?;
+        self.0.db_scan(start, end, order)
+    }
+
+    #[cfg(feature = "iterator")]
+    fn db_next(
+        &mut self,
+        iterator_id: u32,
+    ) -> Result<(Self::StorageKey, Self::StorageValue), Self::Error> {
+        self.charge(VmGas::DbNext)?;
+        self.0.db_next(iterator_id)
+    }
+
     fn set_contract_meta(
         &mut self,
         address: Self::Address,
@@ -438,7 +457,7 @@ where
         &mut self,
         address: Self::Address,
         message: &[u8],
-    ) -> Result<cosmwasm_minimal_std::QueryResult, Self::Error> {
+    ) -> Result<QueryResult, Self::Error> {
         self.charge(VmGas::QueryContinuation)?;
         self.0.query_continuation(address, message)
     }
@@ -539,26 +558,6 @@ where
         self.0.debug(message)
     }
 
-    #[cfg(feature = "iterator")]
-    fn db_scan(
-        &mut self,
-        start: Option<Self::StorageKey>,
-        end: Option<Self::StorageKey>,
-        order: Order,
-    ) -> Result<u32, Self::Error> {
-        self.charge(VmGas::DbScan)?;
-        self.0.db_scan(start, end, order)
-    }
-
-    #[cfg(feature = "iterator")]
-    fn db_next(
-        &mut self,
-        iterator_id: u32,
-    ) -> Result<(Self::StorageKey, Self::StorageValue), Self::Error> {
-        self.charge(VmGas::DbNext)?;
-        self.0.db_next(iterator_id)
-    }
-
     fn db_read(
         &mut self,
         key: Self::StorageKey,
@@ -579,6 +578,47 @@ where
     fn db_remove(&mut self, key: Self::StorageKey) -> Result<(), Self::Error> {
         self.0.charge(VmGas::DbRemove)?;
         self.0.db_remove(key)
+    }
+
+    fn addr_validate(&mut self, input: &str) -> Result<Result<(), Self::Error>, Self::Error> {
+        self.0.charge(VmGas::AddrValidate)?;
+        self.0.addr_validate(input)
+    }
+
+    fn addr_canonicalize(
+        &mut self,
+        input: &str,
+    ) -> Result<Result<Self::CanonicalAddress, Self::Error>, Self::Error> {
+        self.0.charge(VmGas::AddrCanonicalize)?;
+        self.0.addr_canonicalize(input)
+    }
+
+    fn addr_humanize(
+        &mut self,
+        addr: &Self::CanonicalAddress,
+    ) -> Result<Result<Self::Address, Self::Error>, Self::Error> {
+        self.0.charge(VmGas::AddrHumanize)?;
+        self.0.addr_humanize(addr)
+    }
+
+    fn abort(&mut self, message: String) -> Result<(), Self::Error> {
+        self.0.abort(message)
+    }
+
+    fn charge(&mut self, value: VmGas) -> Result<(), Self::Error> {
+        self.0.charge(value)
+    }
+
+    fn gas_checkpoint_push(&mut self, checkpoint: VmGasCheckpoint) -> Result<(), Self::Error> {
+        self.0.gas_checkpoint_push(checkpoint)
+    }
+
+    fn gas_checkpoint_pop(&mut self) -> Result<(), Self::Error> {
+        self.0.gas_checkpoint_pop()
+    }
+
+    fn gas_ensure_available(&mut self) -> Result<(), Self::Error> {
+        self.0.gas_ensure_available()
     }
 
     fn secp256k1_verify(
@@ -623,45 +663,33 @@ where
             .ed25519_batch_verify(messages, signatures, public_keys)
     }
 
-    fn addr_validate(&mut self, input: &str) -> Result<Result<(), Self::Error>, Self::Error> {
-        self.0.charge(VmGas::AddrValidate)?;
-        self.0.addr_validate(input)
-    }
-
-    fn addr_canonicalize(
+    #[cfg(feature = "stargate")]
+    fn ibc_transfer(
         &mut self,
-        input: &str,
-    ) -> Result<Result<Self::CanonicalAddress, Self::Error>, Self::Error> {
-        self.0.charge(VmGas::AddrCanonicalize)?;
-        self.0.addr_canonicalize(input)
+        channel_id: String,
+        to_address: String,
+        amount: Coin,
+        timeout: cosmwasm_minimal_std::ibc::IbcTimeout,
+    ) -> Result<(), Self::Error> {
+        self.0.charge(VmGas::IbcTransfer)?;
+        self.0.ibc_transfer(channel_id, to_address, amount, timeout)
     }
 
-    fn addr_humanize(
+    #[cfg(feature = "stargate")]
+    fn ibc_send_packet(
         &mut self,
-        addr: &Self::CanonicalAddress,
-    ) -> Result<Result<Self::Address, Self::Error>, Self::Error> {
-        self.0.charge(VmGas::AddrHumanize)?;
-        self.0.addr_humanize(addr)
+        channel_id: String,
+        data: Binary,
+        timeout: cosmwasm_minimal_std::ibc::IbcTimeout,
+    ) -> Result<(), Self::Error> {
+        self.0.charge(VmGas::IbcSendPacket)?;
+        self.0.ibc_send_packet(channel_id, data, timeout)
     }
 
-    fn abort(&mut self, message: String) -> Result<(), Self::Error> {
-        self.0.abort(message)
-    }
-
-    fn charge(&mut self, value: VmGas) -> Result<(), Self::Error> {
-        self.0.charge(value)
-    }
-
-    fn gas_checkpoint_push(&mut self, checkpoint: VmGasCheckpoint) -> Result<(), Self::Error> {
-        self.0.gas_checkpoint_push(checkpoint)
-    }
-
-    fn gas_checkpoint_pop(&mut self) -> Result<(), Self::Error> {
-        self.0.gas_checkpoint_pop()
-    }
-
-    fn gas_ensure_available(&mut self) -> Result<(), Self::Error> {
-        self.0.gas_ensure_available()
+    #[cfg(feature = "stargate")]
+    fn ibc_close_channel(&mut self, channel_id: String) -> Result<(), Self::Error> {
+        self.0.charge(VmGas::IbcCloseChannel)?;
+        self.0.ibc_close_channel(channel_id)
     }
 }
 
@@ -753,20 +781,22 @@ impl<T> ReadWriteMemory for WasmiVM<T> where T: WasmiBaseVM {}
 /// ```ignore
 /// section1 || section1_len || section2 || section2_len || section3 || section3_len || …
 /// ```
-pub fn encode_sections(sections: &[Vec<u8>]) -> Result<Vec<u8>, ()> {
-    let mut out_len: usize = sections.iter().map(|section| section.len()).sum();
-    out_len += 4 * sections.len();
-    let mut out_data = Vec::with_capacity(out_len);
-    for section in sections {
-        let section_len = TryInto::<u32>::try_into(section.len())
-            .map_err(|_| ())?
-            .to_be_bytes();
-        out_data.extend(section);
-        out_data.extend_from_slice(&section_len);
-    }
-    debug_assert_eq!(out_data.len(), out_len);
-    debug_assert_eq!(out_data.capacity(), out_len);
-    Ok(out_data)
+pub fn encode_sections(sections: &[Vec<u8>]) -> Option<Vec<u8>> {
+    let out_len: usize =
+        sections.iter().map(|section| section.len()).sum::<usize>() + 4 * sections.len();
+    sections
+        .iter()
+        .fold(Some(Vec::with_capacity(out_len)), |acc, section| {
+            acc.and_then(|mut acc| {
+                TryInto::<u32>::try_into(section.len())
+                    .map(|section_len| {
+                        acc.extend(section);
+                        acc.extend_from_slice(&section_len.to_be_bytes());
+                        acc
+                    })
+                    .ok()
+            })
+        })
 }
 
 /// Decodes sections of data into multiple slices.
@@ -1051,8 +1081,8 @@ pub mod host_functions {
                 let next = vm.db_next(*iterator_id as u32);
                 match next {
                     Ok((key, value)) => {
-                        let out_data = encode_sections(&[key, value])
-                            .map_err(|_| WasmiVMError::InvalidValue)?;
+                        let out_data =
+                            encode_sections(&[key, value]).ok_or(WasmiVMError::InvalidValue)?;
                         let Tagged(value_pointer, _) =
                             passthrough_in::<WasmiVM<T>, ()>(vm, &out_data)?;
                         Ok(Some(RuntimeValue::I32(value_pointer as i32)))
