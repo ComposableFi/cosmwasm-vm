@@ -13,6 +13,7 @@
     crane = {
       url = "github:ipetkov/crane";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
     };
   };
   outputs = { self, nixpkgs, crane, flake-utils, rust-overlay }:
