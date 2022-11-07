@@ -886,7 +886,7 @@ fn test_bare() {
 
 #[test]
 fn test_code_gen() {
-    let code: code_gen::WasmModule = code_gen::ModuleDefinition::new(10).unwrap().into();
+    let code: code_gen::WasmModule = code_gen::ModuleDefinition::new(vec![], 10).unwrap().into();
     let sender = BankAccount(100);
     let address = BankAccount(10_000);
     let funds = vec![];
