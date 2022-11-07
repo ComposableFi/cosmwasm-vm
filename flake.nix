@@ -22,10 +22,10 @@
           inherit system;
           overlays = [ rust-overlay.overlays.default ];
         };
-      in with pkgs;
+      in
       let
         # Nightly rust used for wasm runtime compilation
-        rust-nightly = rust-bin.nightly.latest.default;
+        rust-nightly = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 
         # Crane lib instantiated with current nixpkgs
         crane-lib = crane.mkLib pkgs;
@@ -36,10 +36,10 @@
         # Default args to crane
         common-args = {
           pname = "cosmwasm-vm";
-          src = lib.cleanSourceWith {
-            filter = lib.cleanSourceFilter;
-            src = lib.cleanSourceWith {
-              filter = nix-gitignore.gitignoreFilterPure (name: type: true)
+          src = pkgs.lib.cleanSourceWith {
+            filter = pkgs.lib.cleanSourceFilter;
+            src = pkgs.lib.cleanSourceWith {
+              filter = pkgs.nix-gitignore.gitignoreFilterPure (name: type: true)
                 [ ./.gitignore ] ./.;
               src = ./.;
             };
@@ -65,7 +65,7 @@
           });
           fmt = crane-nightly.cargoFmt common-args;
         };
-        devShell = mkShell {
+        devShell = pkgs.mkShell {
           buildInputs = [ rust-nightly ];
         };
       });
