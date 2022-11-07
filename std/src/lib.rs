@@ -1,4 +1,5 @@
 #![no_std]
+
 extern crate alloc;
 
 use alloc::string::String;
@@ -356,6 +357,8 @@ pub enum CosmosMsg<T = Empty> {
     // to call into more app-specific code (whatever they define)
     Custom(T),
     Wasm(WasmMsg),
+    #[cfg(feature = "stargate")]
+    Ibc(ibc::IbcMsg),
 }
 
 /// The message types of the bank module.
@@ -1071,5 +1074,279 @@ impl TryFrom<i32> for Order {
 impl From<Order> for i32 {
     fn from(original: Order) -> i32 {
         original as _
+    }
+}
+
+pub mod ibc {
+    #![cfg(feature = "stargate")]
+
+    use super::*;
+    use alloc::string::String;
+    use core::cmp::{Ord, Ordering, PartialOrd};
+    use serde::{Deserialize, Serialize};
+
+    /// These are messages in the IBC lifecycle. Only usable by IBC-enabled contracts
+    /// (contracts that directly speak the IBC protocol via 6 entry points)
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    #[serde(rename_all = "snake_case")]
+    pub enum IbcMsg {
+        /// Sends bank tokens owned by the contract to the given address on another chain.
+        /// The channel must already be established between the ibctransfer module on this chain
+        /// and a matching module on the remote chain.
+        /// We cannot select the port_id, this is whatever the local chain has bound the ibctransfer
+        /// module to.
+        Transfer {
+            /// exisiting channel to send the tokens over
+            channel_id: String,
+            /// address on the remote chain to receive these tokens
+            to_address: String,
+            /// packet data only supports one coin
+            /// https://github.com/cosmos/cosmos-sdk/blob/v0.40.0/proto/ibc/applications/transfer/v1/transfer.proto#L11-L20
+            amount: Coin,
+            /// when packet times out, measured on remote chain
+            timeout: IbcTimeout,
+        },
+        /// Sends an IBC packet with given data over the existing channel.
+        /// Data should be encoded in a format defined by the channel version,
+        /// and the module on the other side should know how to parse this.
+        SendPacket {
+            channel_id: String,
+            data: Binary,
+            /// when packet times out, measured on remote chain
+            timeout: IbcTimeout,
+        },
+        /// This will close an existing channel that is owned by this contract.
+        /// Port is auto-assigned to the contract's IBC port
+        CloseChannel { channel_id: String },
+    }
+
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    pub struct IbcEndpoint {
+        pub port_id: String,
+        pub channel_id: String,
+    }
+
+    /// In IBC each package must set at least one type of timeout:
+    /// the timestamp or the block height. Using this rather complex enum instead of
+    /// two timeout fields we ensure that at least one timeout is set.
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    #[serde(rename_all = "snake_case")]
+    pub struct IbcTimeout {
+        // use private fields to enforce the use of constructors, which ensure that at least one is set
+        block: Option<IbcTimeoutBlock>,
+        timestamp: Option<Timestamp>,
+    }
+
+    /// IbcChannel defines all information on a channel.
+    /// This is generally used in the hand-shake process, but can be queried directly.
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    pub struct IbcChannel {
+        pub endpoint: IbcEndpoint,
+        pub counterparty_endpoint: IbcEndpoint,
+        pub order: IbcOrder,
+        /// Note: in ibcv3 this may be "", in the IbcOpenChannel handshake messages
+        pub version: String,
+        /// The connection upon which this channel was created. If this is a multi-hop
+        /// channel, we only expose the first hop.
+        pub connection_id: String,
+    }
+
+    /// IbcOrder defines if a channel is ORDERED or UNORDERED
+    /// Values come from https://github.com/cosmos/cosmos-sdk/blob/v0.40.0/proto/ibc/core/channel/v1/channel.proto#L69-L80
+    /// Naming comes from the protobuf files and go translations.
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    pub enum IbcOrder {
+        #[serde(rename = "ORDER_UNORDERED")]
+        Unordered,
+        #[serde(rename = "ORDER_ORDERED")]
+        Ordered,
+    }
+
+    /// IBCTimeoutHeight Height is a monotonically increasing data type
+    /// that can be compared against another Height for the purposes of updating and
+    /// freezing clients.
+    /// Ordering is (revision_number, timeout_height)
+    #[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq)]
+    pub struct IbcTimeoutBlock {
+        /// the version that the client is currently on
+        /// (eg. after reseting the chain this could increment 1 as height drops to 0)
+        pub revision: u64,
+        /// block height after which the packet times out.
+        /// the height within the given revision
+        pub height: u64,
+    }
+
+    impl IbcTimeoutBlock {
+        pub fn is_zero(&self) -> bool {
+            self.revision == 0 && self.height == 0
+        }
+    }
+
+    impl PartialOrd for IbcTimeoutBlock {
+        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+
+    impl Ord for IbcTimeoutBlock {
+        fn cmp(&self, other: &Self) -> Ordering {
+            match self.revision.cmp(&other.revision) {
+                Ordering::Equal => self.height.cmp(&other.height),
+                other => other,
+            }
+        }
+    }
+
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    pub struct IbcPacket {
+        /// The raw data sent from the other side in the packet
+        pub data: Binary,
+        /// identifies the channel and port on the sending chain.
+        pub src: IbcEndpoint,
+        /// identifies the channel and port on the receiving chain.
+        pub dest: IbcEndpoint,
+        /// The sequence number of the packet on the given channel
+        pub sequence: u64,
+        pub timeout: IbcTimeout,
+    }
+
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    pub struct IbcAcknowledgement {
+        pub data: Binary,
+        // we may add more info here in the future (meta-data from the acknowledgement)
+        // there have been proposals to extend this type in core ibc for future versions
+    }
+
+    /// The message that is passed into `ibc_channel_open`
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    #[serde(rename_all = "snake_case")]
+    pub enum IbcChannelOpenMsg {
+        /// The ChanOpenInit step from https://github.com/cosmos/ibc/tree/master/spec/core/ics-004-channel-and-packet-semantics#channel-lifecycle-management
+        OpenInit { channel: IbcChannel },
+        /// The ChanOpenTry step from https://github.com/cosmos/ibc/tree/master/spec/core/ics-004-channel-and-packet-semantics#channel-lifecycle-management
+        OpenTry {
+            channel: IbcChannel,
+            counterparty_version: String,
+        },
+    }
+
+    /// Note that this serializes as "null".
+    #[cfg(not(feature = "ibc3"))]
+    pub type IbcChannelOpenResponse = ();
+    /// This serializes either as "null" or a JSON object.
+    #[cfg(feature = "ibc3")]
+    pub type IbcChannelOpenResponse = Option<Ibc3ChannelOpenResponse>;
+
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    pub struct Ibc3ChannelOpenResponse {
+        /// We can set the channel version to a different one than we were called with
+        pub version: String,
+    }
+
+    /// The message that is passed into `ibc_channel_connect`
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    #[serde(rename_all = "snake_case")]
+    pub enum IbcChannelConnectMsg {
+        /// The ChanOpenAck step from https://github.com/cosmos/ibc/tree/master/spec/core/ics-004-channel-and-packet-semantics#channel-lifecycle-management
+        OpenAck {
+            channel: IbcChannel,
+            counterparty_version: String,
+        },
+        /// The ChanOpenConfirm step from https://github.com/cosmos/ibc/tree/master/spec/core/ics-004-channel-and-packet-semantics#channel-lifecycle-management
+        OpenConfirm { channel: IbcChannel },
+    }
+
+    /// The message that is passed into `ibc_channel_close`
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    #[serde(rename_all = "snake_case")]
+    pub enum IbcChannelCloseMsg {
+        /// The ChanCloseInit step from https://github.com/cosmos/ibc/tree/master/spec/core/ics-004-channel-and-packet-semantics#channel-lifecycle-management
+        CloseInit { channel: IbcChannel },
+        /// The ChanCloseConfirm step from https://github.com/cosmos/ibc/tree/master/spec/core/ics-004-channel-and-packet-semantics#channel-lifecycle-management
+        CloseConfirm { channel: IbcChannel }, // pub channel: IbcChannel,
+    }
+
+    /// The message that is passed into `ibc_packet_receive`
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    pub struct IbcPacketReceiveMsg {
+        pub packet: IbcPacket,
+        #[cfg(feature = "ibc3")]
+        pub relayer: Addr,
+    }
+
+    /// The message that is passed into `ibc_packet_ack`
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    pub struct IbcPacketAckMsg {
+        pub acknowledgement: IbcAcknowledgement,
+        pub original_packet: IbcPacket,
+        #[cfg(feature = "ibc3")]
+        pub relayer: Addr,
+    }
+
+    /// The message that is passed into `ibc_packet_timeout`
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    pub struct IbcPacketTimeoutMsg {
+        pub packet: IbcPacket,
+        #[cfg(feature = "ibc3")]
+        pub relayer: Addr,
+    }
+
+    /// This is the return value for the majority of the ibc handlers.
+    /// That are able to dispatch messages / events on their own,
+    /// but have no meaningful return value to the calling code.
+    ///
+    /// Callbacks that have return values (like receive_packet)
+    /// or that cannot redispatch messages (like the handshake callbacks)
+    /// will use other Response types
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    pub struct IbcBasicResponse<T = Empty> {
+        /// Optional list of messages to pass. These will be executed in order.
+        /// If the ReplyOn member is set, they will invoke this contract's `reply` entry point
+        /// after execution. Otherwise, they act like "fire and forget".
+        /// Use `SubMsg::new` to create messages with the older "fire and forget" semantics.
+        pub messages: Vec<SubMsg<T>>,
+        /// The attributes that will be emitted as part of a `wasm` event.
+        ///
+        /// More info about events (and their attributes) can be found in [*Cosmos SDK* docs].
+        ///
+        /// [*Cosmos SDK* docs]: https://docs.cosmos.network/v0.42/core/events.html
+        pub attributes: Vec<Attribute>,
+        /// Extra, custom events separate from the main `wasm` one. These will have
+        /// `wasm-` prepended to the type.
+        ///
+        /// More info about events can be found in [*Cosmos SDK* docs].
+        ///
+        /// [*Cosmos SDK* docs]: https://docs.cosmos.network/v0.42/core/events.html
+        pub events: Vec<Event>,
+    }
+
+    // This defines the return value on packet response processing.
+    // This "success" case should be returned even in application-level errors,
+    // Where the acknowledgement bytes contain an encoded error message to be returned to
+    // the calling chain. (Returning ContractResult::Err will abort processing of this packet
+    // and not inform the calling chain).
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    pub struct IbcReceiveResponse<T = Empty> {
+        /// The bytes we return to the contract that sent the packet.
+        /// This may represent a success or error of exection
+        pub acknowledgement: Binary,
+        /// Optional list of messages to pass. These will be executed in order.
+        /// If the ReplyOn member is set, they will invoke this contract's `reply` entry point
+        /// after execution. Otherwise, they act like "fire and forget".
+        /// Use `call` or `msg.into()` to create messages with the older "fire and forget" semantics.
+        pub messages: Vec<SubMsg<T>>,
+        /// The attributes that will be emitted as part of a "wasm" event.
+        ///
+        /// More info about events (and their attributes) can be found in [*Cosmos SDK* docs].
+        ///
+        /// [*Cosmos SDK* docs]: https://docs.cosmos.network/v0.42/core/events.html
+        pub attributes: Vec<Attribute>,
+        /// Extra, custom events separate from the main `wasm` one. These will have
+        /// `wasm-` prepended to the type.
+        ///
+        /// More info about events can be found in [*Cosmos SDK* docs].
+        ///
+        /// [*Cosmos SDK* docs]: https://docs.cosmos.network/v0.42/core/events.html
+        pub events: Vec<Event>,
     }
 }
