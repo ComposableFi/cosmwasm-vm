@@ -50,7 +50,7 @@ use cosmwasm_minimal_std::{
 };
 use cosmwasm_vm::executor::{
     AllocateInput, AsFunctionName, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
-    CosmwasmQueryResult, DeallocateInput, ExecutorError, Unit, QueryResult,
+    CosmwasmQueryResult, DeallocateInput, ExecutorError, QueryResult, Unit,
 };
 use cosmwasm_vm::has::Has;
 use cosmwasm_vm::memory::{

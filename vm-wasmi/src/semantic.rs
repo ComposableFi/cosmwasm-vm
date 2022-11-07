@@ -10,7 +10,10 @@ use cosmwasm_minimal_std::{
     MessageInfo, Timestamp,
 };
 use cosmwasm_vm::{
-    executor::{cosmwasm_call, ExecuteInput, InstantiateInput, MigrateInput, QueryInput, InstantiateResult, CosmwasmExecutionResult, ExecuteResult},
+    executor::{
+        cosmwasm_call, CosmwasmExecutionResult, ExecuteInput, ExecuteResult, InstantiateInput,
+        InstantiateResult, MigrateInput, QueryInput,
+    },
     system::{
         cosmwasm_system_entrypoint, cosmwasm_system_run, CosmwasmCodeId, CosmwasmContractMeta,
     },
