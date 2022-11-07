@@ -8,7 +8,7 @@ use cosmwasm_minimal_std::Order;
 use cosmwasm_minimal_std::{
     Addr, Attribute, Binary, BlockInfo, Coin, ContractInfo, CosmwasmExecutionResult,
     CosmwasmQueryResult, Empty, Env, Event, ExecuteResult, InstantiateResult, MessageInfo,
-    QueryResult, Timestamp,
+    QueryResult, Timestamp, ibc::IbcTimeout,
 };
 use cosmwasm_vm::{
     executor::{cosmwasm_call, ExecuteInput, InstantiateInput, MigrateInput, QueryInput},
@@ -711,6 +711,32 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         } else {
             Err(SimpleVMError::OutOfGas)
         }
+    }
+
+    #[cfg(feature = "stargate")]
+    fn ibc_transfer(
+        &mut self,
+        channel_id: String,
+        to_address: String,
+        amount: Coin,
+        timeout: IbcTimeout,
+    ) -> Result<(), Self::Error> {
+      todo!()
+    }
+
+    #[cfg(feature = "stargate")]
+    fn ibc_send_packet(
+        &mut self,
+        channel_id: String,
+        data: Binary,
+        timeout: IbcTimeout,
+    ) -> Result<(), Self::Error> {
+      todo!()
+    }
+
+    #[cfg(feature = "stargate")]
+    fn ibc_close_channel(&mut self, channel_id: String) -> Result<(), Self::Error> {
+      todo!()
     }
 }
 

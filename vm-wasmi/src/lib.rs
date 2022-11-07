@@ -420,6 +420,26 @@ where
         self.0.running_contract_meta()
     }
 
+    #[cfg(feature = "iterator")]
+    fn db_scan(
+        &mut self,
+        start: Option<Self::StorageKey>,
+        end: Option<Self::StorageKey>,
+        order: Order,
+    ) -> Result<u32, Self::Error> {
+        self.charge(VmGas::DbScan)?;
+        self.0.db_scan(start, end, order)
+    }
+
+    #[cfg(feature = "iterator")]
+    fn db_next(
+        &mut self,
+        iterator_id: u32,
+    ) -> Result<(Self::StorageKey, Self::StorageValue), Self::Error> {
+        self.charge(VmGas::DbNext)?;
+        self.0.db_next(iterator_id)
+    }
+
     fn set_contract_meta(
         &mut self,
         address: Self::Address,
@@ -539,26 +559,6 @@ where
         self.0.debug(message)
     }
 
-    #[cfg(feature = "iterator")]
-    fn db_scan(
-        &mut self,
-        start: Option<Self::StorageKey>,
-        end: Option<Self::StorageKey>,
-        order: Order,
-    ) -> Result<u32, Self::Error> {
-        self.charge(VmGas::DbScan)?;
-        self.0.db_scan(start, end, order)
-    }
-
-    #[cfg(feature = "iterator")]
-    fn db_next(
-        &mut self,
-        iterator_id: u32,
-    ) -> Result<(Self::StorageKey, Self::StorageValue), Self::Error> {
-        self.charge(VmGas::DbNext)?;
-        self.0.db_next(iterator_id)
-    }
-
     fn db_read(
         &mut self,
         key: Self::StorageKey,
@@ -579,6 +579,47 @@ where
     fn db_remove(&mut self, key: Self::StorageKey) -> Result<(), Self::Error> {
         self.0.charge(VmGas::DbRemove)?;
         self.0.db_remove(key)
+    }
+
+    fn addr_validate(&mut self, input: &str) -> Result<Result<(), Self::Error>, Self::Error> {
+        self.0.charge(VmGas::AddrValidate)?;
+        self.0.addr_validate(input)
+    }
+
+    fn addr_canonicalize(
+        &mut self,
+        input: &str,
+    ) -> Result<Result<Self::CanonicalAddress, Self::Error>, Self::Error> {
+        self.0.charge(VmGas::AddrCanonicalize)?;
+        self.0.addr_canonicalize(input)
+    }
+
+    fn addr_humanize(
+        &mut self,
+        addr: &Self::CanonicalAddress,
+    ) -> Result<Result<Self::Address, Self::Error>, Self::Error> {
+        self.0.charge(VmGas::AddrHumanize)?;
+        self.0.addr_humanize(addr)
+    }
+
+    fn abort(&mut self, message: String) -> Result<(), Self::Error> {
+        self.0.abort(message)
+    }
+
+    fn charge(&mut self, value: VmGas) -> Result<(), Self::Error> {
+        self.0.charge(value)
+    }
+
+    fn gas_checkpoint_push(&mut self, checkpoint: VmGasCheckpoint) -> Result<(), Self::Error> {
+        self.0.gas_checkpoint_push(checkpoint)
+    }
+
+    fn gas_checkpoint_pop(&mut self) -> Result<(), Self::Error> {
+        self.0.gas_checkpoint_pop()
+    }
+
+    fn gas_ensure_available(&mut self) -> Result<(), Self::Error> {
+        self.0.gas_ensure_available()
     }
 
     fn secp256k1_verify(
@@ -623,45 +664,33 @@ where
             .ed25519_batch_verify(messages, signatures, public_keys)
     }
 
-    fn addr_validate(&mut self, input: &str) -> Result<Result<(), Self::Error>, Self::Error> {
-        self.0.charge(VmGas::AddrValidate)?;
-        self.0.addr_validate(input)
-    }
-
-    fn addr_canonicalize(
+    #[cfg(feature = "stargate")]
+    fn ibc_transfer(
         &mut self,
-        input: &str,
-    ) -> Result<Result<Self::CanonicalAddress, Self::Error>, Self::Error> {
-        self.0.charge(VmGas::AddrCanonicalize)?;
-        self.0.addr_canonicalize(input)
+        channel_id: String,
+        to_address: String,
+        amount: Coin,
+        timeout: cosmwasm_minimal_std::ibc::IbcTimeout,
+    ) -> Result<(), Self::Error> {
+        self.0.charge(VmGas::IbcTransfer)?;
+        self.0.ibc_transfer(channel_id, to_address, amount, timeout)
     }
 
-    fn addr_humanize(
+    #[cfg(feature = "stargate")]
+    fn ibc_send_packet(
         &mut self,
-        addr: &Self::CanonicalAddress,
-    ) -> Result<Result<Self::Address, Self::Error>, Self::Error> {
-        self.0.charge(VmGas::AddrHumanize)?;
-        self.0.addr_humanize(addr)
+        channel_id: String,
+        data: Binary,
+        timeout: cosmwasm_minimal_std::ibc::IbcTimeout,
+    ) -> Result<(), Self::Error> {
+        self.0.charge(VmGas::IbcSendPacket)?;
+        self.0.ibc_send_packet(channel_id, data, timeout)
     }
 
-    fn abort(&mut self, message: String) -> Result<(), Self::Error> {
-        self.0.abort(message)
-    }
-
-    fn charge(&mut self, value: VmGas) -> Result<(), Self::Error> {
-        self.0.charge(value)
-    }
-
-    fn gas_checkpoint_push(&mut self, checkpoint: VmGasCheckpoint) -> Result<(), Self::Error> {
-        self.0.gas_checkpoint_push(checkpoint)
-    }
-
-    fn gas_checkpoint_pop(&mut self) -> Result<(), Self::Error> {
-        self.0.gas_checkpoint_pop()
-    }
-
-    fn gas_ensure_available(&mut self) -> Result<(), Self::Error> {
-        self.0.gas_ensure_available()
+    #[cfg(feature = "stargate")]
+    fn ibc_close_channel(&mut self, channel_id: String) -> Result<(), Self::Error> {
+        self.0.charge(VmGas::IbcCloseChannel)?;
+        self.0.ibc_close_channel(channel_id)
     }
 }
 
