@@ -165,6 +165,7 @@ pub mod ibc {
     };
 
     /// Response to the low level `ibc_channel_open` call.
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
     pub struct IbcChannelOpenResult(pub ContractResult<Option<Ibc3ChannelOpenResponse>>);
     impl DeserializeLimit for IbcChannelOpenResult {
         fn deserialize_limit() -> usize {
@@ -183,6 +184,7 @@ pub mod ibc {
     }
 
     /// Response to the low level `ibc_channel_connect` call.
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
     pub struct IbcChannelConnectResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
     impl<T> DeserializeLimit for IbcChannelConnectResult<T> {
         fn deserialize_limit() -> usize {
@@ -201,6 +203,7 @@ pub mod ibc {
     }
 
     /// Response to the low level `ibc_channel_close` call.
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
     pub struct IbcChannelCloseResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
     impl<T> DeserializeLimit for IbcChannelCloseResult<T> {
         fn deserialize_limit() -> usize {
@@ -219,6 +222,7 @@ pub mod ibc {
     }
 
     /// Response to the low level `ibc_packet_receive` call.
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
     pub struct IbcPacketReceiveResult<T = Empty>(pub ContractResult<IbcReceiveResponse<T>>);
     impl<T> DeserializeLimit for IbcPacketReceiveResult<T> {
         fn deserialize_limit() -> usize {
@@ -237,6 +241,7 @@ pub mod ibc {
     }
 
     /// Response to the low level `ibc_packet_ack` call.
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
     pub struct IbcPacketAckResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
     impl<T> DeserializeLimit for IbcPacketAckResult<T> {
         fn deserialize_limit() -> usize {
@@ -255,6 +260,7 @@ pub mod ibc {
     }
 
     /// Response to the low level `ibc_packet_timeout` call.
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
     pub struct IbcPacketTimeoutResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
     impl<T> DeserializeLimit for IbcPacketTimeoutResult<T> {
         fn deserialize_limit() -> usize {
