@@ -388,6 +388,21 @@ where
 #[cfg(not(feature = "stargate"))]
 pub trait StargateCosmwasmCallVM =;
 
+/// Extra helper to dispatch a typed message, serializing on the go.
+pub fn cosmwasm_system_entrypoint_serialize<I, V, M>(
+    vm: &mut V,
+    message: &M,
+) -> Result<(Option<Binary>, Vec<Event>), VmErrorOf<V>>
+where
+    V: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
+    M: Serialize,
+{
+    cosmwasm_system_entrypoint(
+        vm,
+        &serde_json::to_vec(message).map_err(|_| SystemError::FailedToSerialize)?,
+    )
+}
+
 /// High level dispatch for a CosmWasm VM.
 /// This call will manage and handle subcall as well as the transactions etc...
 /// The implementation must be semantically valid w.r.t https://github.com/CosmWasm/cosmwasm/blob/main/SEMANTICS.md

@@ -778,3 +778,32 @@ where
     deallocate(vm, pointer)?;
     Ok(result)
 }
+
+/// Execute a generic contract export (`instantiate`, `execute`, `migrate` etc...), providing the high level message.
+///
+/// # Arguments
+///
+/// * `vm` - the virtual machine.
+/// * `message` - the contract message passed to the export, usually specific to the contract (InstantiateMsg, ExecuteMsg etc...).
+///
+/// Returns either the associated `I::Output` or a `VmErrorOf<V>`.
+pub fn cosmwasm_call_serialize<I, V, M>(vm: &mut V, message: &M) -> Result<I::Output, VmErrorOf<V>>
+where
+    M: Serialize,
+    V: VM + ReadWriteMemory + Has<Env> + Has<MessageInfo>,
+    I: Input + HasInfo,
+    I::Output: DeserializeOwned + ReadLimit + DeserializeLimit,
+    V::Pointer: for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
+    for<'x> Unit: TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
+    for<'x> VmInputOf<'x, V>: TryFrom<AllocateInput<V::Pointer>, Error = VmErrorOf<V>>
+        + TryFrom<DeallocateInput<V::Pointer>, Error = VmErrorOf<V>>
+        + TryFrom<CosmwasmCallInput<'x, V::Pointer, I>, Error = VmErrorOf<V>>
+        + TryFrom<CosmwasmCallWithoutInfoInput<'x, V::Pointer, I>, Error = VmErrorOf<V>>,
+    VmErrorOf<V>:
+        From<ReadableMemoryErrorOf<V>> + From<WritableMemoryErrorOf<V>> + From<ExecutorError>,
+{
+    cosmwasm_call(
+        vm,
+        &serde_json::to_vec(message).map_err(|_| ExecutorError::FailedToSerialize)?,
+    )
+}
