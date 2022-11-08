@@ -84,32 +84,12 @@ pub mod deserialization_limits {
     pub const RESULT_IBC_PACKET_TIMEOUT: usize = 256 * KI;
 }
 
-pub trait DeserializeLimit {
-    fn deserialize_limit() -> usize;
-}
-
-pub trait ReadLimit {
-    fn read_limit() -> usize;
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryRequest<C = Empty> {
     Custom(C),
     Bank(BankQuery),
     Wasm(WasmQuery),
-}
-
-impl<C> DeserializeLimit for QueryRequest<C> {
-    fn deserialize_limit() -> usize {
-        deserialization_limits::REQUEST_QUERY
-    }
-}
-
-impl<C> ReadLimit for QueryRequest<C> {
-    fn read_limit() -> usize {
-        read_limits::REQUEST_QUERY
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -476,6 +456,12 @@ impl<S> ContractResult<S> {
     /// to access the full Result API.
     pub fn into_result(self) -> Result<S, String> {
         Result::<S, String>::from(self)
+    }
+    pub fn map<T>(self, f: impl FnOnce(S) -> T) -> ContractResult<T> {
+        match self {
+            ContractResult::Ok(x) => ContractResult::Ok(f(x)),
+            ContractResult::Err(e) => ContractResult::Err(e),
+        }
     }
 }
 

@@ -39,8 +39,8 @@ use crate::{
 use alloc::vec::Vec;
 use core::{fmt::Debug, marker::PhantomData};
 use cosmwasm_minimal_std::{
-    deserialization_limits, read_limits, Binary, ContractResult, DeserializeLimit, Empty, Env,
-    MessageInfo, ReadLimit, Response,
+    deserialization_limits, read_limits, Binary, ContractResult, Empty, Env, MessageInfo,
+    QueryRequest, Response,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
@@ -50,6 +50,26 @@ pub type CosmwasmReplyResult<T> = ContractResult<Response<T>>;
 pub type CosmwasmMigrateResult<T> = ContractResult<Response<T>>;
 
 pub type QueryResponse = Binary;
+
+pub trait DeserializeLimit {
+    fn deserialize_limit() -> usize;
+}
+
+pub trait ReadLimit {
+    fn read_limit() -> usize;
+}
+
+impl<C> DeserializeLimit for QueryRequest<C> {
+    fn deserialize_limit() -> usize {
+        deserialization_limits::REQUEST_QUERY
+    }
+}
+
+impl<C> ReadLimit for QueryRequest<C> {
+    fn read_limit() -> usize {
+        read_limits::REQUEST_QUERY
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ReplyResult<T>(pub CosmwasmExecutionResult<T>);
