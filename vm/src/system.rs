@@ -26,11 +26,15 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+#[cfg(feature = "stargate")]
+use crate::executor::ibc::{
+    IbcChannelClose, IbcChannelConnect, IbcPacketAck, IbcPacketReceive, IbcPacketTimeout,
+};
 use crate::{
     executor::{
         cosmwasm_call, AllocateInput, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
-        CosmwasmQueryResult, DeallocateInput, ExecuteInput, ExecutorError, HasInfo,
-        InstantiateInput, MigrateInput, QueryResult, ReplyInput, Unit,
+        CosmwasmQueryResult, DeallocateInput, DeserializeLimit, ExecuteInput, ExecutorError,
+        HasInfo, InstantiateInput, MigrateInput, QueryResult, ReadLimit, ReplyInput, Unit,
     },
     has::Has,
     input::{Input, OutputOf},
@@ -43,11 +47,12 @@ use crate::{
 };
 use alloc::{fmt::Display, format, string::String, vec, vec::Vec};
 use core::fmt::Debug;
+#[cfg(feature = "stargate")]
+use cosmwasm_minimal_std::ibc::IbcMsg;
 use cosmwasm_minimal_std::{
-    ibc::IbcMsg, Addr, AllBalanceResponse, Attribute, BalanceResponse, BankMsg, BankQuery, Binary,
-    ContractResult, CosmosMsg, DeserializeLimit, Env, Event, MessageInfo, QueryRequest, ReadLimit,
-    Reply, ReplyOn, Response, SubMsg, SubMsgResponse, SubMsgResult, SystemResult, WasmMsg,
-    WasmQuery,
+    Addr, AllBalanceResponse, Attribute, BalanceResponse, BankMsg, BankQuery, Binary,
+    ContractResult, CosmosMsg, Env, Event, MessageInfo, QueryRequest, Reply, ReplyOn, Response,
+    SubMsg, SubMsgResponse, SubMsgResult, SystemResult, WasmMsg, WasmQuery,
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -73,7 +78,16 @@ pub enum SystemEventType {
     UnpinCode,
     Sudo,
     Reply,
-    GovContractResult,
+    #[cfg(feature = "stargate")]
+    IbcChannelConnect,
+    #[cfg(feature = "stargate")]
+    IbcChannelClose,
+    #[cfg(feature = "stargate")]
+    IbcPacketReceive,
+    #[cfg(feature = "stargate")]
+    IbcPacketAck,
+    #[cfg(feature = "stargate")]
+    IbcPacketTimeout,
 }
 
 pub enum SystemAttributeKey {
@@ -120,7 +134,16 @@ impl Display for SystemEventType {
             SystemEventType::UnpinCode => "unpin_code",
             SystemEventType::Sudo => "sudo",
             SystemEventType::Reply => "reply",
-            SystemEventType::GovContractResult => "gov_contract_result",
+            #[cfg(feature = "stargate")]
+            SystemEventType::IbcChannelConnect => "ibc_channel_connect",
+            #[cfg(feature = "stargate")]
+            SystemEventType::IbcChannelClose => "ibc_channel_close",
+            #[cfg(feature = "stargate")]
+            SystemEventType::IbcPacketReceive => "ibc_packet_receive",
+            #[cfg(feature = "stargate")]
+            SystemEventType::IbcPacketAck => "ibc_packet_ack",
+            #[cfg(feature = "stargate")]
+            SystemEventType::IbcPacketTimeout => "ibc_packet_timeout",
         };
 
         write!(f, "{}", event_str)
@@ -156,6 +179,31 @@ impl<T> EventHasCodeId for ReplyInput<T> {
     const HAS_CODE_ID: bool = false;
 }
 
+#[cfg(feature = "stargate")]
+impl<T> EventHasCodeId for IbcChannelConnect<T> {
+    const HAS_CODE_ID: bool = false;
+}
+
+#[cfg(feature = "stargate")]
+impl<T> EventHasCodeId for IbcChannelClose<T> {
+    const HAS_CODE_ID: bool = false;
+}
+
+#[cfg(feature = "stargate")]
+impl<T> EventHasCodeId for IbcPacketReceive<T> {
+    const HAS_CODE_ID: bool = false;
+}
+
+#[cfg(feature = "stargate")]
+impl<T> EventHasCodeId for IbcPacketAck<T> {
+    const HAS_CODE_ID: bool = false;
+}
+
+#[cfg(feature = "stargate")]
+impl<T> EventHasCodeId for IbcPacketTimeout<T> {
+    const HAS_CODE_ID: bool = false;
+}
+
 pub trait EventIsTyped {
     const TYPE: SystemEventType;
 }
@@ -174,6 +222,31 @@ impl<T> EventIsTyped for MigrateInput<T> {
 
 impl<T> EventIsTyped for ReplyInput<T> {
     const TYPE: SystemEventType = SystemEventType::Reply;
+}
+
+#[cfg(feature = "stargate")]
+impl<T> EventIsTyped for IbcChannelConnect<T> {
+    const TYPE: SystemEventType = SystemEventType::IbcChannelConnect;
+}
+
+#[cfg(feature = "stargate")]
+impl<T> EventIsTyped for IbcChannelClose<T> {
+    const TYPE: SystemEventType = SystemEventType::IbcChannelClose;
+}
+
+#[cfg(feature = "stargate")]
+impl<T> EventIsTyped for IbcPacketReceive<T> {
+    const TYPE: SystemEventType = SystemEventType::IbcPacketReceive;
+}
+
+#[cfg(feature = "stargate")]
+impl<T> EventIsTyped for IbcPacketAck<T> {
+    const TYPE: SystemEventType = SystemEventType::IbcPacketAck;
+}
+
+#[cfg(feature = "stargate")]
+impl<T> EventIsTyped for IbcPacketTimeout<T> {
+    const TYPE: SystemEventType = SystemEventType::IbcPacketTimeout;
 }
 
 pub trait HasEvent {
@@ -291,6 +364,45 @@ where
         + DeserializeLimit
         + Into<ContractResult<Response<VmMessageCustomOf<Self>>>>;
 
+#[cfg(feature = "stargate")]
+/// Extra constraints required by stargate enabled CosmWasm VM (a.k.a. IBC capable).
+pub trait StargateCosmwasmCallVM = CosmwasmBaseVM
+where
+    for<'x> VmInputOf<'x, Self>: TryFrom<
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcChannelConnect<VmMessageCustomOf<Self>>>,
+            Error = VmErrorOf<Self>,
+        > + TryFrom<
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcChannelClose<VmMessageCustomOf<Self>>>,
+            Error = VmErrorOf<Self>,
+        > + TryFrom<
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcPacketReceive<VmMessageCustomOf<Self>>>,
+            Error = VmErrorOf<Self>,
+        > + TryFrom<
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcPacketAck<VmMessageCustomOf<Self>>>,
+            Error = VmErrorOf<Self>,
+        > + TryFrom<
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcPacketTimeout<VmMessageCustomOf<Self>>>,
+            Error = VmErrorOf<Self>,
+        >;
+
+#[cfg(not(feature = "stargate"))]
+pub trait StargateCosmwasmCallVM =;
+
+/// Extra helper to dispatch a typed message, serializing on the go.
+pub fn cosmwasm_system_entrypoint_serialize<I, V, M>(
+    vm: &mut V,
+    message: &M,
+) -> Result<(Option<Binary>, Vec<Event>), VmErrorOf<V>>
+where
+    V: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
+    M: Serialize,
+{
+    cosmwasm_system_entrypoint(
+        vm,
+        &serde_json::to_vec(message).map_err(|_| SystemError::FailedToSerialize)?,
+    )
+}
+
 /// High level dispatch for a CosmWasm VM.
 /// This call will manage and handle subcall as well as the transactions etc...
 /// The implementation must be semantically valid w.r.t https://github.com/CosmWasm/cosmwasm/blob/main/SEMANTICS.md
@@ -301,7 +413,7 @@ pub fn cosmwasm_system_entrypoint<I, V>(
     message: &[u8],
 ) -> Result<(Option<Binary>, Vec<Event>), VmErrorOf<V>>
 where
-    V: CosmwasmCallVM<I>,
+    V: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
 {
     log::debug!("SystemEntrypoint");
     let mut events = Vec::<Event>::new();
@@ -400,7 +512,7 @@ pub fn cosmwasm_system_run<I, V>(
     mut event_handler: &mut dyn FnMut(Event),
 ) -> Result<Option<Binary>, VmErrorOf<V>>
 where
-    V: CosmwasmCallVM<I>,
+    V: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
 {
     log::debug!("SystemRun");
     let info: MessageInfo = vm.get();
@@ -448,6 +560,9 @@ where
                 ));
             }
 
+            // Fold dispatch over the submessages. If an exception occur and we
+            // didn't expected it (reply on error), the fold is aborted.
+            // Otherwise, it's up to the parent contract to decide in each case.
             messages.into_iter().try_fold(
                 data,
                 |current,
@@ -460,15 +575,25 @@ where
                  -> Result<Option<Binary>, VmErrorOf<V>> {
                     log::debug!("Executing submessages");
                     let mut sub_events = Vec::<Event>::new();
+
+                    // Events dispatched by a submessage are added to both the
+                    // submessage events and it's parent events.
                     let mut sub_event_handler = |event: Event| {
                         event_handler(event.clone());
                         sub_events.push(event);
                     };
+
+                    // For each submessages, we might rollback and reply the
+                    // failure to the parent contract. Hence, a new state tx
+                    // must be created prior to the call.
                     vm.transaction_begin()?;
+
+                    // Gas might be limited for the sub message execution.
                     vm.gas_checkpoint_push(match gas_limit {
                         Some(limit) => VmGasCheckpoint::Limited(limit),
                         None => VmGasCheckpoint::Unlimited,
                     })?;
+
                     let sub_res = match msg {
                         CosmosMsg::Custom(message) => vm
                             .message_custom(message, &mut event_handler)
@@ -559,6 +684,7 @@ where
                                 Ok(None)
                             }
                         },
+                        #[cfg(feature = "stargate")]
                         CosmosMsg::Ibc(ibc_message) => match ibc_message {
                             IbcMsg::Transfer {
                                 channel_id,
@@ -589,11 +715,18 @@ where
                     vm.gas_checkpoint_pop()?;
 
                     let sub_cont = match (sub_res, reply_on) {
+                        // If the submessage suceeded and no reply was asked or
+                        // only on error, the call is considered successful and
+                        // state change is comitted.
                         (Ok(v), ReplyOn::Never | ReplyOn::Error) => {
                             log::debug!("Commit & Continue");
                             vm.transaction_commit()?;
                             SubCallContinuation::Continue(v)
                         }
+                        // Similarly to previous case, if the submessage
+                        // suceeded and we ask for a reply, the call is
+                        // considered successful and we redispatch a reply to
+                        // the parent contract.
                         (Ok(v), ReplyOn::Always | ReplyOn::Success) => {
                             log::debug!("Commit & Reply");
                             vm.transaction_commit()?;
@@ -603,11 +736,17 @@ where
                                 data: v,
                             }))
                         }
+                        // If the submessage failed and a reply is required,
+                        // rollback the state change and dispatch a reply to the
+                        // parent contract. The transaction is not aborted
+                        // unless the reply also fails (cascading).
                         (Err(e), ReplyOn::Always | ReplyOn::Error) => {
                             log::debug!("Rollback & Reply");
                             vm.transaction_rollback()?;
                             SubCallContinuation::Reply(SubMsgResult::Err(format!("{:?}", e)))
                         }
+                        // If an error happen and we did not expected it, abort
+                        // the whole transaction.
                         (Err(e), ReplyOn::Never | ReplyOn::Success) => {
                             log::debug!("Rollback & Abort");
                             vm.transaction_rollback()?;
@@ -618,16 +757,22 @@ where
                     log::debug!("Submessage cont: {:?}", sub_cont);
 
                     match sub_cont {
-                        // Current value might be overwritten.
+                        // If the submessage execution suceeded and we don't
+                        // want to reply, proceed by overwritting the current
+                        // `data` field if a new one has been yield by the
+                        // current call.
                         SubCallContinuation::Continue(v) => Ok(v.or(current)),
-                        // Abort result in no value indeed.
+                        // An exception occured and we did not expected it (no
+                        // reply on error), abort the current execution.
                         SubCallContinuation::Abort(e) => Err(e),
-                        // Might be overwritten again.
+                        // The parent contract is expected to get a reply, try
+                        // to execute the reply and optionally overwrite the
+                        // current data with with the one yield by the reply.
                         SubCallContinuation::Reply(response) => {
                             log::debug!("Replying");
                             let raw_response = serde_json::to_vec(&Reply {
                                 id,
-                                result: response,
+                                result: response.clone(),
                             })
                             .map_err(|_| SystemError::FailedToSerialize)?;
                             cosmwasm_system_run::<ReplyInput<VmMessageCustomOf<V>>, V>(
@@ -635,7 +780,13 @@ where
                                 &raw_response,
                                 &mut event_handler,
                             )
-                            .map(|v| v.or(current))
+                            .map(|v| {
+                                // Tricky situation, either the reply provide a
+                                // new value that we use, or we use the
+                                // submessage value or we keep the current one.
+                                v.or_else(|| Result::from(response).ok().and_then(|x| x.data))
+                                    .or(current)
+                            })
                         }
                     }
                 },

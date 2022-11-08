@@ -39,8 +39,8 @@ use crate::{
 use alloc::vec::Vec;
 use core::{fmt::Debug, marker::PhantomData};
 use cosmwasm_minimal_std::{
-    deserialization_limits, read_limits, Binary, ContractResult, DeserializeLimit, Empty, Env,
-    MessageInfo, ReadLimit, Response,
+    deserialization_limits, read_limits, Binary, ContractResult, Empty, Env, MessageInfo,
+    QueryRequest, Response,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
@@ -50,6 +50,26 @@ pub type CosmwasmReplyResult<T> = ContractResult<Response<T>>;
 pub type CosmwasmMigrateResult<T> = ContractResult<Response<T>>;
 
 pub type QueryResponse = Binary;
+
+pub trait DeserializeLimit {
+    fn deserialize_limit() -> usize;
+}
+
+pub trait ReadLimit {
+    fn read_limit() -> usize;
+}
+
+impl<C> DeserializeLimit for QueryRequest<C> {
+    fn deserialize_limit() -> usize {
+        deserialization_limits::REQUEST_QUERY
+    }
+}
+
+impl<C> ReadLimit for QueryRequest<C> {
+    fn read_limit() -> usize {
+        read_limits::REQUEST_QUERY
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ReplyResult<T>(pub CosmwasmExecutionResult<T>);
@@ -144,6 +164,8 @@ pub mod ibc {
         Ibc3ChannelOpenResponse, IbcBasicResponse, IbcReceiveResponse,
     };
 
+    /// Response to the low level `ibc_channel_open` call.
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
     pub struct IbcChannelOpenResult(pub ContractResult<Option<Ibc3ChannelOpenResponse>>);
     impl DeserializeLimit for IbcChannelOpenResult {
         fn deserialize_limit() -> usize {
@@ -155,12 +177,9 @@ pub mod ibc {
             read_limits::RESULT_IBC_CHANNEL_OPEN
         }
     }
-    impl From<IbcChannelOpenResult> for ContractResult<Option<Ibc3ChannelOpenResponse>> {
-        fn from(IbcChannelOpenResult(result): IbcChannelOpenResult) -> Self {
-            result
-        }
-    }
 
+    /// Response to the low level `ibc_channel_connect` call.
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
     pub struct IbcChannelConnectResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
     impl<T> DeserializeLimit for IbcChannelConnectResult<T> {
         fn deserialize_limit() -> usize {
@@ -172,12 +191,25 @@ pub mod ibc {
             read_limits::RESULT_IBC_CHANNEL_CONNECT
         }
     }
-    impl<T> From<IbcChannelConnectResult<T>> for ContractResult<IbcBasicResponse<T>> {
+    impl<T> From<IbcChannelConnectResult<T>> for ContractResult<Response<T>> {
         fn from(IbcChannelConnectResult(result): IbcChannelConnectResult<T>) -> Self {
-            result
+            result.map(
+                |IbcBasicResponse {
+                     messages,
+                     attributes,
+                     events,
+                 }| Response {
+                    messages,
+                    attributes,
+                    events,
+                    data: None,
+                },
+            )
         }
     }
 
+    /// Response to the low level `ibc_channel_close` call.
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
     pub struct IbcChannelCloseResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
     impl<T> DeserializeLimit for IbcChannelCloseResult<T> {
         fn deserialize_limit() -> usize {
@@ -189,12 +221,25 @@ pub mod ibc {
             read_limits::RESULT_IBC_CHANNEL_CLOSE
         }
     }
-    impl<T> From<IbcChannelCloseResult<T>> for ContractResult<IbcBasicResponse<T>> {
+    impl<T> From<IbcChannelCloseResult<T>> for ContractResult<Response<T>> {
         fn from(IbcChannelCloseResult(result): IbcChannelCloseResult<T>) -> Self {
-            result
+            result.map(
+                |IbcBasicResponse {
+                     messages,
+                     attributes,
+                     events,
+                 }| Response {
+                    messages,
+                    attributes,
+                    events,
+                    data: None,
+                },
+            )
         }
     }
 
+    /// Response to the low level `ibc_packet_receive` call.
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
     pub struct IbcPacketReceiveResult<T = Empty>(pub ContractResult<IbcReceiveResponse<T>>);
     impl<T> DeserializeLimit for IbcPacketReceiveResult<T> {
         fn deserialize_limit() -> usize {
@@ -206,12 +251,26 @@ pub mod ibc {
             read_limits::RESULT_IBC_PACKET_RECEIVE
         }
     }
-    impl<T> From<IbcPacketReceiveResult<T>> for ContractResult<IbcReceiveResponse<T>> {
+    impl<T> From<IbcPacketReceiveResult<T>> for ContractResult<Response<T>> {
         fn from(IbcPacketReceiveResult(result): IbcPacketReceiveResult<T>) -> Self {
-            result
+            result.map(
+                |IbcReceiveResponse {
+                     acknowledgement,
+                     messages,
+                     attributes,
+                     events,
+                 }| Response {
+                    messages,
+                    attributes,
+                    events,
+                    data: Some(acknowledgement),
+                },
+            )
         }
     }
 
+    /// Response to the low level `ibc_packet_ack` call.
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
     pub struct IbcPacketAckResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
     impl<T> DeserializeLimit for IbcPacketAckResult<T> {
         fn deserialize_limit() -> usize {
@@ -223,12 +282,25 @@ pub mod ibc {
             read_limits::RESULT_IBC_PACKET_ACK
         }
     }
-    impl<T> From<IbcPacketAckResult<T>> for ContractResult<IbcBasicResponse<T>> {
+    impl<T> From<IbcPacketAckResult<T>> for ContractResult<Response<T>> {
         fn from(IbcPacketAckResult(result): IbcPacketAckResult<T>) -> Self {
-            result
+            result.map(
+                |IbcBasicResponse {
+                     messages,
+                     attributes,
+                     events,
+                 }| Response {
+                    messages,
+                    attributes,
+                    events,
+                    data: None,
+                },
+            )
         }
     }
 
+    /// Response to the low level `ibc_packet_timeout` call.
+    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
     pub struct IbcPacketTimeoutResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
     impl<T> DeserializeLimit for IbcPacketTimeoutResult<T> {
         fn deserialize_limit() -> usize {
@@ -240,10 +312,93 @@ pub mod ibc {
             read_limits::RESULT_IBC_PACKET_ACK
         }
     }
-    impl<T> From<IbcPacketTimeoutResult<T>> for ContractResult<IbcBasicResponse<T>> {
+    impl<T> From<IbcPacketTimeoutResult<T>> for ContractResult<Response<T>> {
         fn from(IbcPacketTimeoutResult(result): IbcPacketTimeoutResult<T>) -> Self {
-            result
+            result.map(
+                |IbcBasicResponse {
+                     messages,
+                     attributes,
+                     events,
+                 }| Response {
+                    messages,
+                    attributes,
+                    events,
+                    data: None,
+                },
+            )
         }
+    }
+
+    /// Strong type representing a call to `ibc_channel_open` export.
+    pub struct IbcChannelOpen;
+    impl Input for IbcChannelOpen {
+        type Output = IbcChannelOpenResult;
+    }
+    impl AsFunctionName for IbcChannelOpen {
+        const NAME: &'static str = "ibc_channel_open";
+    }
+    impl HasInfo for IbcChannelOpen {
+        const HAS_INFO: bool = false;
+    }
+
+    /// Strong type representing a call to `ibc_channel_connect` export.
+    pub struct IbcChannelConnect<T = Empty>(PhantomData<T>);
+    impl<T> Input for IbcChannelConnect<T> {
+        type Output = IbcChannelConnectResult<T>;
+    }
+    impl<T> AsFunctionName for IbcChannelConnect<T> {
+        const NAME: &'static str = "ibc_channel_connect";
+    }
+    impl<T> HasInfo for IbcChannelConnect<T> {
+        const HAS_INFO: bool = false;
+    }
+
+    /// Strong type representing a call to `ibc_channel_close` export.
+    pub struct IbcChannelClose<T = Empty>(PhantomData<T>);
+    impl<T> Input for IbcChannelClose<T> {
+        type Output = IbcChannelCloseResult<T>;
+    }
+    impl<T> AsFunctionName for IbcChannelClose<T> {
+        const NAME: &'static str = "ibc_channel_close";
+    }
+    impl<T> HasInfo for IbcChannelClose<T> {
+        const HAS_INFO: bool = false;
+    }
+
+    /// Strong type representing a call to `ibc_packet_receive` export.
+    pub struct IbcPacketReceive<T = Empty>(PhantomData<T>);
+    impl<T> Input for IbcPacketReceive<T> {
+        type Output = IbcPacketReceiveResult<T>;
+    }
+    impl<T> AsFunctionName for IbcPacketReceive<T> {
+        const NAME: &'static str = "ibc_packet_receive";
+    }
+    impl<T> HasInfo for IbcPacketReceive<T> {
+        const HAS_INFO: bool = false;
+    }
+
+    /// Strong type representing a call to `ibc_packet_ack` export.
+    pub struct IbcPacketAck<T = Empty>(PhantomData<T>);
+    impl<T> Input for IbcPacketAck<T> {
+        type Output = IbcPacketAckResult<T>;
+    }
+    impl<T> AsFunctionName for IbcPacketAck<T> {
+        const NAME: &'static str = "ibc_packet_ack";
+    }
+    impl<T> HasInfo for IbcPacketAck<T> {
+        const HAS_INFO: bool = false;
+    }
+
+    /// Strong type representing a call to `ibc_packet_timeout` export.
+    pub struct IbcPacketTimeout<T = Empty>(PhantomData<T>);
+    impl<T> Input for IbcPacketTimeout<T> {
+        type Output = IbcPacketTimeoutResult<T>;
+    }
+    impl<T> AsFunctionName for IbcPacketTimeout<T> {
+        const NAME: &'static str = "ibc_packet_timeout";
+    }
+    impl<T> HasInfo for IbcPacketTimeout<T> {
+        const HAS_INFO: bool = false;
     }
 }
 
@@ -622,4 +777,33 @@ where
     let result = marshall_out(vm, pointer)?;
     deallocate(vm, pointer)?;
     Ok(result)
+}
+
+/// Execute a generic contract export (`instantiate`, `execute`, `migrate` etc...), providing the high level message.
+///
+/// # Arguments
+///
+/// * `vm` - the virtual machine.
+/// * `message` - the contract message passed to the export, usually specific to the contract (InstantiateMsg, ExecuteMsg etc...).
+///
+/// Returns either the associated `I::Output` or a `VmErrorOf<V>`.
+pub fn cosmwasm_call_serialize<I, V, M>(vm: &mut V, message: &M) -> Result<I::Output, VmErrorOf<V>>
+where
+    M: Serialize,
+    V: VM + ReadWriteMemory + Has<Env> + Has<MessageInfo>,
+    I: Input + HasInfo,
+    I::Output: DeserializeOwned + ReadLimit + DeserializeLimit,
+    V::Pointer: for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
+    for<'x> Unit: TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
+    for<'x> VmInputOf<'x, V>: TryFrom<AllocateInput<V::Pointer>, Error = VmErrorOf<V>>
+        + TryFrom<DeallocateInput<V::Pointer>, Error = VmErrorOf<V>>
+        + TryFrom<CosmwasmCallInput<'x, V::Pointer, I>, Error = VmErrorOf<V>>
+        + TryFrom<CosmwasmCallWithoutInfoInput<'x, V::Pointer, I>, Error = VmErrorOf<V>>,
+    VmErrorOf<V>:
+        From<ReadableMemoryErrorOf<V>> + From<WritableMemoryErrorOf<V>> + From<ExecutorError>,
+{
+    cosmwasm_call(
+        vm,
+        &serde_json::to_vec(message).map_err(|_| ExecutorError::FailedToSerialize)?,
+    )
 }
