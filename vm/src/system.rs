@@ -28,14 +28,13 @@
 
 #[cfg(feature = "stargate")]
 use crate::executor::ibc::{
-    IbcChannelClose, IbcChannelConnect, IbcChannelOpen, IbcPacketAck, IbcPacketReceive,
-    IbcPacketTimeout,
+    IbcChannelClose, IbcChannelConnect, IbcPacketAck, IbcPacketReceive, IbcPacketTimeout,
 };
 use crate::{
     executor::{
         cosmwasm_call, AllocateInput, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
-        CosmwasmQueryResult, DeallocateInput, ExecuteInput, ExecutorError, HasInfo,
-        InstantiateInput, MigrateInput, QueryResult, ReplyInput, Unit,
+        CosmwasmQueryResult, DeallocateInput, DeserializeLimit, ExecuteInput, ExecutorError,
+        HasInfo, InstantiateInput, MigrateInput, QueryResult, ReadLimit, ReplyInput, Unit,
     },
     has::Has,
     input::{Input, OutputOf},
@@ -52,9 +51,8 @@ use core::fmt::Debug;
 use cosmwasm_minimal_std::ibc::IbcMsg;
 use cosmwasm_minimal_std::{
     Addr, AllBalanceResponse, Attribute, BalanceResponse, BankMsg, BankQuery, Binary,
-    ContractResult, CosmosMsg, DeserializeLimit, Env, Event, MessageInfo, QueryRequest, ReadLimit,
-    Reply, ReplyOn, Response, SubMsg, SubMsgResponse, SubMsgResult, SystemResult, WasmMsg,
-    WasmQuery,
+    ContractResult, CosmosMsg, Env, Event, MessageInfo, QueryRequest, Reply, ReplyOn, Response,
+    SubMsg, SubMsgResponse, SubMsgResult, SystemResult, WasmMsg, WasmQuery,
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -81,6 +79,16 @@ pub enum SystemEventType {
     Sudo,
     Reply,
     GovContractResult,
+    #[cfg(feature = "stargate")]
+    IbcChannelConnect,
+    #[cfg(feature = "stargate")]
+    IbcChannelClose,
+    #[cfg(feature = "stargate")]
+    IbcPacketReceive,
+    #[cfg(feature = "stargate")]
+    IbcPacketAck,
+    #[cfg(feature = "stargate")]
+    IbcPacketTimeout,
 }
 
 pub enum SystemAttributeKey {
@@ -127,7 +135,16 @@ impl Display for SystemEventType {
             SystemEventType::UnpinCode => "unpin_code",
             SystemEventType::Sudo => "sudo",
             SystemEventType::Reply => "reply",
-            SystemEventType::GovContractResult => "gov_contract_result",
+            #[cfg(feature = "stargate")]
+            SystemEventType::IbcChannelConnect => "ibc_channel_connect",
+            #[cfg(feature = "stargate")]
+            SystemEventType::IbcChannelClose => "ibc_channel_close",
+            #[cfg(feature = "stargate")]
+            SystemEventType::IbcPacketReceive => "ibc_packet_receive",
+            #[cfg(feature = "stargate")]
+            SystemEventType::IbcPacketAck => "ibc_packet_ack",
+            #[cfg(feature = "stargate")]
+            SystemEventType::IbcPacketTimeout => "ibc_packet_timeout",
         };
 
         write!(f, "{}", event_str)
@@ -163,6 +180,31 @@ impl<T> EventHasCodeId for ReplyInput<T> {
     const HAS_CODE_ID: bool = false;
 }
 
+#[cfg(feature = "stargate")]
+impl<T> EventHasCodeId for IbcChannelConnect<T> {
+    const HAS_CODE_ID: bool = false;
+}
+
+#[cfg(feature = "stargate")]
+impl<T> EventHasCodeId for IbcChannelClose<T> {
+    const HAS_CODE_ID: bool = false;
+}
+
+#[cfg(feature = "stargate")]
+impl<T> EventHasCodeId for IbcPacketReceive<T> {
+    const HAS_CODE_ID: bool = false;
+}
+
+#[cfg(feature = "stargate")]
+impl<T> EventHasCodeId for IbcPacketAck<T> {
+    const HAS_CODE_ID: bool = false;
+}
+
+#[cfg(feature = "stargate")]
+impl<T> EventHasCodeId for IbcPacketTimeout<T> {
+    const HAS_CODE_ID: bool = false;
+}
+
 pub trait EventIsTyped {
     const TYPE: SystemEventType;
 }
@@ -181,6 +223,31 @@ impl<T> EventIsTyped for MigrateInput<T> {
 
 impl<T> EventIsTyped for ReplyInput<T> {
     const TYPE: SystemEventType = SystemEventType::Reply;
+}
+
+#[cfg(feature = "stargate")]
+impl<T> EventIsTyped for IbcChannelConnect<T> {
+    const TYPE: SystemEventType = SystemEventType::IbcChannelConnect;
+}
+
+#[cfg(feature = "stargate")]
+impl<T> EventIsTyped for IbcChannelClose<T> {
+    const TYPE: SystemEventType = SystemEventType::IbcChannelClose;
+}
+
+#[cfg(feature = "stargate")]
+impl<T> EventIsTyped for IbcPacketReceive<T> {
+    const TYPE: SystemEventType = SystemEventType::IbcPacketReceive;
+}
+
+#[cfg(feature = "stargate")]
+impl<T> EventIsTyped for IbcPacketAck<T> {
+    const TYPE: SystemEventType = SystemEventType::IbcPacketAck;
+}
+
+#[cfg(feature = "stargate")]
+impl<T> EventIsTyped for IbcPacketTimeout<T> {
+    const TYPE: SystemEventType = SystemEventType::IbcPacketTimeout;
 }
 
 pub trait HasEvent {
@@ -302,8 +369,7 @@ where
 /// Extra constraints required by stargate enabled CosmWasm VM (a.k.a. IBC capable).
 pub trait StargateCosmwasmCallVM = CosmwasmBaseVM
 where
-    for<'x> VmInputOf<'x, Self>: TryFrom<CosmwasmCallInput<'x, PointerOf<Self>, IbcChannelOpen>, Error = VmErrorOf<Self>>
-        + TryFrom<
+    for<'x> VmInputOf<'x, Self>: TryFrom<
             CosmwasmCallInput<'x, PointerOf<Self>, IbcChannelConnect<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<
