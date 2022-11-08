@@ -78,7 +78,6 @@ pub enum SystemEventType {
     UnpinCode,
     Sudo,
     Reply,
-    GovContractResult,
     #[cfg(feature = "stargate")]
     IbcChannelConnect,
     #[cfg(feature = "stargate")]
