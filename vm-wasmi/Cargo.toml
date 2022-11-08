@@ -22,4 +22,5 @@ hex = { version = "0.4", default-features = false, features = [ "alloc" ]}
 [dev-dependencies]
 wat = "1.0"
 env_logger = "0.9"
-cosmwasm-crypto = "1.0.0"
+cosmwasm-crypto = "1.1.0"
+cw20-ics20 = { git = "https://github.com/CosmWasm/cw-plus", rev = "53dc88fdb81888cbd3dae8742e7318b35d3d0c0f", default-features = false, features = [ "library" ] }
