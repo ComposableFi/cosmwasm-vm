@@ -448,6 +448,9 @@ where
                 ));
             }
 
+            // Fold dispatch over the submessages. If an exception occur and we
+            // didn't expected it (reply on error), the fold is aborted.
+            // Otherwise, it's up to the parent contract to decide in each case.
             messages.into_iter().try_fold(
                 data,
                 |current,
@@ -460,15 +463,25 @@ where
                  -> Result<Option<Binary>, VmErrorOf<V>> {
                     log::debug!("Executing submessages");
                     let mut sub_events = Vec::<Event>::new();
+
+                    // Events dispatched by a submessage are added to both the
+                    // submessage events and it's parent events.
                     let mut sub_event_handler = |event: Event| {
                         event_handler(event.clone());
                         sub_events.push(event);
                     };
+
+                    // For each submessages, we might rollback and reply the
+                    // failure to the parent contract. Hence, a new state tx
+                    // must be created prior to the call.
                     vm.transaction_begin()?;
+
+                    // Gas might be limited for the sub message execution.
                     vm.gas_checkpoint_push(match gas_limit {
                         Some(limit) => VmGasCheckpoint::Limited(limit),
                         None => VmGasCheckpoint::Unlimited,
                     })?;
+
                     let sub_res = match msg {
                         CosmosMsg::Custom(message) => vm
                             .message_custom(message, &mut event_handler)
@@ -589,11 +602,18 @@ where
                     vm.gas_checkpoint_pop()?;
 
                     let sub_cont = match (sub_res, reply_on) {
+                        // If the submessage suceeded and no reply was asked or
+                        // only on error, the call is considered successful and
+                        // state change is comitted.
                         (Ok(v), ReplyOn::Never | ReplyOn::Error) => {
                             log::debug!("Commit & Continue");
                             vm.transaction_commit()?;
                             SubCallContinuation::Continue(v)
                         }
+                        // Similarly to previous case, if the submessage
+                        // suceeded and we ask for a reply, the call is
+                        // considered successful and we redispatch a reply to
+                        // the parent contract.
                         (Ok(v), ReplyOn::Always | ReplyOn::Success) => {
                             log::debug!("Commit & Reply");
                             vm.transaction_commit()?;
@@ -603,11 +623,17 @@ where
                                 data: v,
                             }))
                         }
+                        // If the submessage failed and a reply is required,
+                        // rollback the state change and dispatch a reply to the
+                        // parent contract. The transaction is not aborted
+                        // unless the reply also fails (cascading).
                         (Err(e), ReplyOn::Always | ReplyOn::Error) => {
                             log::debug!("Rollback & Reply");
                             vm.transaction_rollback()?;
                             SubCallContinuation::Reply(SubMsgResult::Err(format!("{:?}", e)))
                         }
+                        // If an error happen and we did not expected it, abort
+                        // the whole transaction.
                         (Err(e), ReplyOn::Never | ReplyOn::Success) => {
                             log::debug!("Rollback & Abort");
                             vm.transaction_rollback()?;
@@ -618,16 +644,22 @@ where
                     log::debug!("Submessage cont: {:?}", sub_cont);
 
                     match sub_cont {
-                        // Current value might be overwritten.
+                        // If the submessage execution suceeded and we don't
+                        // want to reply, proceed by overwritting the current
+                        // `data` field if a new one has been yield by the
+                        // current call.
                         SubCallContinuation::Continue(v) => Ok(v.or(current)),
-                        // Abort result in no value indeed.
+                        // An exception occured and we did not expected it (no
+                        // reply on error), abort the current execution.
                         SubCallContinuation::Abort(e) => Err(e),
-                        // Might be overwritten again.
+                        // The parent contract is expected to get a reply, try
+                        // to execute the reply and optionally overwrite the
+                        // current data with with the one yield by the reply.
                         SubCallContinuation::Reply(response) => {
                             log::debug!("Replying");
                             let raw_response = serde_json::to_vec(&Reply {
                                 id,
-                                result: response,
+                                result: response.clone(),
                             })
                             .map_err(|_| SystemError::FailedToSerialize)?;
                             cosmwasm_system_run::<ReplyInput<VmMessageCustomOf<V>>, V>(

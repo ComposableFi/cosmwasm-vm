@@ -144,6 +144,7 @@ pub mod ibc {
         Ibc3ChannelOpenResponse, IbcBasicResponse, IbcReceiveResponse,
     };
 
+    /// Response to the low level `ibc_channel_open` call.
     pub struct IbcChannelOpenResult(pub ContractResult<Option<Ibc3ChannelOpenResponse>>);
     impl DeserializeLimit for IbcChannelOpenResult {
         fn deserialize_limit() -> usize {
@@ -161,6 +162,7 @@ pub mod ibc {
         }
     }
 
+    /// Response to the low level `ibc_channel_connect` call.
     pub struct IbcChannelConnectResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
     impl<T> DeserializeLimit for IbcChannelConnectResult<T> {
         fn deserialize_limit() -> usize {
@@ -178,6 +180,7 @@ pub mod ibc {
         }
     }
 
+    /// Response to the low level `ibc_channel_close` call.
     pub struct IbcChannelCloseResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
     impl<T> DeserializeLimit for IbcChannelCloseResult<T> {
         fn deserialize_limit() -> usize {
@@ -195,6 +198,7 @@ pub mod ibc {
         }
     }
 
+    /// Response to the low level `ibc_packet_receive` call.
     pub struct IbcPacketReceiveResult<T = Empty>(pub ContractResult<IbcReceiveResponse<T>>);
     impl<T> DeserializeLimit for IbcPacketReceiveResult<T> {
         fn deserialize_limit() -> usize {
@@ -212,6 +216,7 @@ pub mod ibc {
         }
     }
 
+    /// Response to the low level `ibc_packet_ack` call.
     pub struct IbcPacketAckResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
     impl<T> DeserializeLimit for IbcPacketAckResult<T> {
         fn deserialize_limit() -> usize {
@@ -229,6 +234,7 @@ pub mod ibc {
         }
     }
 
+    /// Response to the low level `ibc_packet_timeout` call.
     pub struct IbcPacketTimeoutResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
     impl<T> DeserializeLimit for IbcPacketTimeoutResult<T> {
         fn deserialize_limit() -> usize {
