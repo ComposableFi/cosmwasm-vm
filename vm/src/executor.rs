@@ -342,7 +342,7 @@ pub mod ibc {
     }
 
     /// Strong type representing a call to `ibc_channel_connect` export.
-    pub struct IbcChannelConnect<T>(PhantomData<T>);
+    pub struct IbcChannelConnect<T = Empty>(PhantomData<T>);
     impl<T> Input for IbcChannelConnect<T> {
         type Output = IbcChannelConnectResult<T>;
     }
@@ -354,7 +354,7 @@ pub mod ibc {
     }
 
     /// Strong type representing a call to `ibc_channel_close` export.
-    pub struct IbcChannelClose<T>(PhantomData<T>);
+    pub struct IbcChannelClose<T = Empty>(PhantomData<T>);
     impl<T> Input for IbcChannelClose<T> {
         type Output = IbcChannelCloseResult<T>;
     }
@@ -366,7 +366,7 @@ pub mod ibc {
     }
 
     /// Strong type representing a call to `ibc_packet_receive` export.
-    pub struct IbcPacketReceive<T>(PhantomData<T>);
+    pub struct IbcPacketReceive<T = Empty>(PhantomData<T>);
     impl<T> Input for IbcPacketReceive<T> {
         type Output = IbcPacketReceiveResult<T>;
     }
@@ -378,7 +378,7 @@ pub mod ibc {
     }
 
     /// Strong type representing a call to `ibc_packet_ack` export.
-    pub struct IbcPacketAck<T>(PhantomData<T>);
+    pub struct IbcPacketAck<T = Empty>(PhantomData<T>);
     impl<T> Input for IbcPacketAck<T> {
         type Output = IbcPacketAckResult<T>;
     }
@@ -390,7 +390,7 @@ pub mod ibc {
     }
 
     /// Strong type representing a call to `ibc_packet_timeout` export.
-    pub struct IbcPacketTimeout<T>(PhantomData<T>);
+    pub struct IbcPacketTimeout<T = Empty>(PhantomData<T>);
     impl<T> Input for IbcPacketTimeout<T> {
         type Output = IbcPacketTimeoutResult<T>;
     }
