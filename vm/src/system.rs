@@ -667,7 +667,13 @@ where
                                 &raw_response,
                                 &mut event_handler,
                             )
-                            .map(|v| v.or(current))
+                            .map(|v| {
+                                // Tricky situation, either the reply provide a
+                                // new value that we use, or we use the
+                                // submessage value or we keep the current one.
+                                v.or(Result::from(response).ok().and_then(|x| x.data))
+                                    .or(current)
+                            })
                         }
                     }
                 },
