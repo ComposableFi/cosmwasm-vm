@@ -338,7 +338,7 @@ pub mod ibc {
         const NAME: &'static str = "ibc_channel_open";
     }
     impl HasInfo for IbcChannelOpen {
-        const HAS_INFO: bool = true;
+        const HAS_INFO: bool = false;
     }
 
     /// Strong type representing a call to `ibc_channel_connect` export.
@@ -350,7 +350,7 @@ pub mod ibc {
         const NAME: &'static str = "ibc_channel_connect";
     }
     impl<T> HasInfo for IbcChannelConnect<T> {
-        const HAS_INFO: bool = true;
+        const HAS_INFO: bool = false;
     }
 
     /// Strong type representing a call to `ibc_channel_close` export.
@@ -362,7 +362,7 @@ pub mod ibc {
         const NAME: &'static str = "ibc_channel_close";
     }
     impl<T> HasInfo for IbcChannelClose<T> {
-        const HAS_INFO: bool = true;
+        const HAS_INFO: bool = false;
     }
 
     /// Strong type representing a call to `ibc_packet_receive` export.
@@ -374,7 +374,7 @@ pub mod ibc {
         const NAME: &'static str = "ibc_packet_receive";
     }
     impl<T> HasInfo for IbcPacketReceive<T> {
-        const HAS_INFO: bool = true;
+        const HAS_INFO: bool = false;
     }
 
     /// Strong type representing a call to `ibc_packet_ack` export.
@@ -386,7 +386,7 @@ pub mod ibc {
         const NAME: &'static str = "ibc_packet_ack";
     }
     impl<T> HasInfo for IbcPacketAck<T> {
-        const HAS_INFO: bool = true;
+        const HAS_INFO: bool = false;
     }
 
     /// Strong type representing a call to `ibc_packet_timeout` export.
@@ -398,7 +398,7 @@ pub mod ibc {
         const NAME: &'static str = "ibc_packet_timeout";
     }
     impl<T> HasInfo for IbcPacketTimeout<T> {
-        const HAS_INFO: bool = true;
+        const HAS_INFO: bool = false;
     }
 }
 
