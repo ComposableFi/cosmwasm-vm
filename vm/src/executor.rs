@@ -177,11 +177,6 @@ pub mod ibc {
             read_limits::RESULT_IBC_CHANNEL_OPEN
         }
     }
-    impl From<IbcChannelOpenResult> for ContractResult<Option<Ibc3ChannelOpenResponse>> {
-        fn from(IbcChannelOpenResult(result): IbcChannelOpenResult) -> Self {
-            result
-        }
-    }
 
     /// Response to the low level `ibc_channel_connect` call.
     #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -196,9 +191,20 @@ pub mod ibc {
             read_limits::RESULT_IBC_CHANNEL_CONNECT
         }
     }
-    impl<T> From<IbcChannelConnectResult<T>> for ContractResult<IbcBasicResponse<T>> {
+    impl<T> From<IbcChannelConnectResult<T>> for ContractResult<Response<T>> {
         fn from(IbcChannelConnectResult(result): IbcChannelConnectResult<T>) -> Self {
-            result
+            result.map(
+                |IbcBasicResponse {
+                     messages,
+                     attributes,
+                     events,
+                 }| Response {
+                    messages,
+                    attributes,
+                    events,
+                    data: None,
+                },
+            )
         }
     }
 
@@ -215,9 +221,20 @@ pub mod ibc {
             read_limits::RESULT_IBC_CHANNEL_CLOSE
         }
     }
-    impl<T> From<IbcChannelCloseResult<T>> for ContractResult<IbcBasicResponse<T>> {
+    impl<T> From<IbcChannelCloseResult<T>> for ContractResult<Response<T>> {
         fn from(IbcChannelCloseResult(result): IbcChannelCloseResult<T>) -> Self {
-            result
+            result.map(
+                |IbcBasicResponse {
+                     messages,
+                     attributes,
+                     events,
+                 }| Response {
+                    messages,
+                    attributes,
+                    events,
+                    data: None,
+                },
+            )
         }
     }
 
@@ -234,9 +251,21 @@ pub mod ibc {
             read_limits::RESULT_IBC_PACKET_RECEIVE
         }
     }
-    impl<T> From<IbcPacketReceiveResult<T>> for ContractResult<IbcReceiveResponse<T>> {
+    impl<T> From<IbcPacketReceiveResult<T>> for ContractResult<Response<T>> {
         fn from(IbcPacketReceiveResult(result): IbcPacketReceiveResult<T>) -> Self {
-            result
+            result.map(
+                |IbcReceiveResponse {
+                     acknowledgement,
+                     messages,
+                     attributes,
+                     events,
+                 }| Response {
+                    messages,
+                    attributes,
+                    events,
+                    data: Some(acknowledgement),
+                },
+            )
         }
     }
 
@@ -253,9 +282,20 @@ pub mod ibc {
             read_limits::RESULT_IBC_PACKET_ACK
         }
     }
-    impl<T> From<IbcPacketAckResult<T>> for ContractResult<IbcBasicResponse<T>> {
+    impl<T> From<IbcPacketAckResult<T>> for ContractResult<Response<T>> {
         fn from(IbcPacketAckResult(result): IbcPacketAckResult<T>) -> Self {
-            result
+            result.map(
+                |IbcBasicResponse {
+                     messages,
+                     attributes,
+                     events,
+                 }| Response {
+                    messages,
+                    attributes,
+                    events,
+                    data: None,
+                },
+            )
         }
     }
 
@@ -272,9 +312,20 @@ pub mod ibc {
             read_limits::RESULT_IBC_PACKET_ACK
         }
     }
-    impl<T> From<IbcPacketTimeoutResult<T>> for ContractResult<IbcBasicResponse<T>> {
+    impl<T> From<IbcPacketTimeoutResult<T>> for ContractResult<Response<T>> {
         fn from(IbcPacketTimeoutResult(result): IbcPacketTimeoutResult<T>) -> Self {
-            result
+            result.map(
+                |IbcBasicResponse {
+                     messages,
+                     attributes,
+                     events,
+                 }| Response {
+                    messages,
+                    attributes,
+                    events,
+                    data: None,
+                },
+            )
         }
     }
 
