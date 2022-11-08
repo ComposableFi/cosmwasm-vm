@@ -26,6 +26,11 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+#[cfg(feature = "stargate")]
+use crate::executor::ibc::{
+    IbcChannelClose, IbcChannelConnect, IbcChannelOpen, IbcPacketAck, IbcPacketReceive,
+    IbcPacketTimeout,
+};
 use crate::{
     executor::{
         cosmwasm_call, AllocateInput, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
@@ -43,8 +48,10 @@ use crate::{
 };
 use alloc::{fmt::Display, format, string::String, vec, vec::Vec};
 use core::fmt::Debug;
+#[cfg(feature = "stargate")]
+use cosmwasm_minimal_std::ibc::IbcMsg;
 use cosmwasm_minimal_std::{
-    ibc::IbcMsg, Addr, AllBalanceResponse, Attribute, BalanceResponse, BankMsg, BankQuery, Binary,
+    Addr, AllBalanceResponse, Attribute, BalanceResponse, BankMsg, BankQuery, Binary,
     ContractResult, CosmosMsg, DeserializeLimit, Env, Event, MessageInfo, QueryRequest, ReadLimit,
     Reply, ReplyOn, Response, SubMsg, SubMsgResponse, SubMsgResult, SystemResult, WasmMsg,
     WasmQuery,
@@ -291,6 +298,31 @@ where
         + DeserializeLimit
         + Into<ContractResult<Response<VmMessageCustomOf<Self>>>>;
 
+#[cfg(feature = "stargate")]
+/// Extra constraints required by stargate enabled CosmWasm VM (a.k.a. IBC capable).
+pub trait StargateCosmwasmCallVM = CosmwasmBaseVM
+where
+    for<'x> VmInputOf<'x, Self>: TryFrom<CosmwasmCallInput<'x, PointerOf<Self>, IbcChannelOpen>, Error = VmErrorOf<Self>>
+        + TryFrom<
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcChannelConnect<VmMessageCustomOf<Self>>>,
+            Error = VmErrorOf<Self>,
+        > + TryFrom<
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcChannelClose<VmMessageCustomOf<Self>>>,
+            Error = VmErrorOf<Self>,
+        > + TryFrom<
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcPacketReceive<VmMessageCustomOf<Self>>>,
+            Error = VmErrorOf<Self>,
+        > + TryFrom<
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcPacketAck<VmMessageCustomOf<Self>>>,
+            Error = VmErrorOf<Self>,
+        > + TryFrom<
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcPacketTimeout<VmMessageCustomOf<Self>>>,
+            Error = VmErrorOf<Self>,
+        >;
+
+#[cfg(not(feature = "stargate"))]
+pub trait StargateCosmwasmCallVM =;
+
 /// High level dispatch for a CosmWasm VM.
 /// This call will manage and handle subcall as well as the transactions etc...
 /// The implementation must be semantically valid w.r.t https://github.com/CosmWasm/cosmwasm/blob/main/SEMANTICS.md
@@ -301,7 +333,7 @@ pub fn cosmwasm_system_entrypoint<I, V>(
     message: &[u8],
 ) -> Result<(Option<Binary>, Vec<Event>), VmErrorOf<V>>
 where
-    V: CosmwasmCallVM<I>,
+    V: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
 {
     log::debug!("SystemEntrypoint");
     let mut events = Vec::<Event>::new();
@@ -400,7 +432,7 @@ pub fn cosmwasm_system_run<I, V>(
     mut event_handler: &mut dyn FnMut(Event),
 ) -> Result<Option<Binary>, VmErrorOf<V>>
 where
-    V: CosmwasmCallVM<I>,
+    V: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
 {
     log::debug!("SystemRun");
     let info: MessageInfo = vm.get();
@@ -572,6 +604,7 @@ where
                                 Ok(None)
                             }
                         },
+                        #[cfg(feature = "stargate")]
                         CosmosMsg::Ibc(ibc_message) => match ibc_message {
                             IbcMsg::Transfer {
                                 channel_id,
