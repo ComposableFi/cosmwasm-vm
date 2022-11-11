@@ -386,12 +386,12 @@ pub mod ibc {
     pub struct IbcPacketTimeoutResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
     impl<T> DeserializeLimit for IbcPacketTimeoutResult<T> {
         fn deserialize_limit() -> usize {
-            deserialization_limits::RESULT_IBC_PACKET_ACK
+            deserialization_limits::RESULT_IBC_PACKET_TIMEOUT
         }
     }
     impl<T> ReadLimit for IbcPacketTimeoutResult<T> {
         fn read_limit() -> usize {
-            read_limits::RESULT_IBC_PACKET_ACK
+            read_limits::RESULT_IBC_PACKET_TIMEOUT
         }
     }
     impl<T> From<IbcPacketTimeoutResult<T>> for ContractResult<Response<T>> {
