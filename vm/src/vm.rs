@@ -33,10 +33,10 @@ use crate::{
 use alloc::{string::String, vec::Vec};
 use core::fmt::Debug;
 #[cfg(feature = "stargate")]
-use cosmwasm_minimal_std::ibc::IbcTimeout;
+use cosmwasm_std::IbcTimeout;
 #[cfg(feature = "iterator")]
-use cosmwasm_minimal_std::Order;
-use cosmwasm_minimal_std::{Binary, Coin, ContractInfoResponse, Event, SystemResult};
+use cosmwasm_std::Order;
+use cosmwasm_std::{Binary, Coin, ContractInfoResponse, Event, SystemResult};
 
 use serde::de::DeserializeOwned;
 

@@ -1,2 +1,2 @@
 [workspace]
-members = [ "std", "vm", "vm-wasmi" ]
+members = [ "vm", "vm-wasmi" ]

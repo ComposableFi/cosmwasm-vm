@@ -5,9 +5,9 @@ edition = "2021"
 
 [features]
 default = [ "iterator", "stargate" ]
-iterator = [ "cosmwasm-minimal-std/iterator" ]
-stargate = [ "cosmwasm-minimal-std/stargate" ]
-ibc3 = [ "cosmwasm-minimal-std/ibc3" ]
+iterator = [ "cosmwasm-std/iterator" ]
+stargate = [ "cosmwasm-std/stargate" ]
+ibc3 = [ "cosmwasm-std/ibc3" ]
 
 [dependencies]
 serde = { version = "1", default-features = false, features = ["derive"] }
@@ -15,7 +15,7 @@ serde_json = { version = "1", default-features = false, features = ["alloc"] }
 either = { version = "1.6", default-features = false }
 log = { version = "0.4", default-features = false }
 
-cosmwasm-minimal-std =  { path = "../std", default-features = false }
+cosmwasm-std = { git = "https://github.com/ComposableFi/cosmwasm", rev = "abeae7f88dfce286d9d5831bbcc7fb1f138e6906", default-features = false }
 
 [dev-dependencies]
 wat = "1.0"

@@ -38,11 +38,86 @@ use crate::{
 };
 use alloc::vec::Vec;
 use core::{fmt::Debug, marker::PhantomData};
-use cosmwasm_minimal_std::{
-    deserialization_limits, read_limits, Binary, ContractResult, Empty, Env, MessageInfo,
-    QueryRequest, Response,
-};
+use cosmwasm_std::{Binary, ContractResult, Empty, Env, MessageInfo, QueryRequest, Response};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+
+pub mod read_limits {
+    /// A mibi (mega binary)
+    const MI: usize = 1024 * 1024;
+    /// Max length (in bytes) of the result data from an instantiate call.
+    pub const RESULT_INSTANTIATE: usize = 64 * MI;
+    /// Max length (in bytes) of the result data from an execute call.
+    pub const RESULT_EXECUTE: usize = 64 * MI;
+    /// Max length (in bytes) of the result data from a migrate call.
+    pub const RESULT_MIGRATE: usize = 64 * MI;
+    /// Max length (in bytes) of the result data from a sudo call.
+    pub const RESULT_SUDO: usize = 64 * MI;
+    /// Max length (in bytes) of the result data from a reply call.
+    pub const RESULT_REPLY: usize = 64 * MI;
+    /// Max length (in bytes) of the result data from a query call.
+    pub const RESULT_QUERY: usize = 64 * MI;
+    /// Max length (in bytes) of the query data from a query_chain call.
+    pub const REQUEST_QUERY: usize = 64 * MI;
+    /// Max length (in bytes) of the result data from a ibc_channel_open call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_CHANNEL_OPEN: usize = 64 * MI;
+    /// Max length (in bytes) of the result data from a ibc_channel_connect call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_CHANNEL_CONNECT: usize = 64 * MI;
+    /// Max length (in bytes) of the result data from a ibc_channel_close call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_CHANNEL_CLOSE: usize = 64 * MI;
+    /// Max length (in bytes) of the result data from a ibc_packet_receive call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_PACKET_RECEIVE: usize = 64 * MI;
+    /// Max length (in bytes) of the result data from a ibc_packet_ack call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_PACKET_ACK: usize = 64 * MI;
+    /// Max length (in bytes) of the result data from a ibc_packet_timeout call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_PACKET_TIMEOUT: usize = 64 * MI;
+}
+
+/// The limits for the JSON deserialization.
+///
+/// Those limits are not used when the Rust JSON deserializer is bypassed by using the
+/// public `call_*_raw` functions directly.
+pub mod deserialization_limits {
+    /// A kibi (kilo binary)
+    const KI: usize = 1024;
+    /// Max length (in bytes) of the result data from an instantiate call.
+    pub const RESULT_INSTANTIATE: usize = 256 * KI;
+    /// Max length (in bytes) of the result data from an execute call.
+    pub const RESULT_EXECUTE: usize = 256 * KI;
+    /// Max length (in bytes) of the result data from a migrate call.
+    pub const RESULT_MIGRATE: usize = 256 * KI;
+    /// Max length (in bytes) of the result data from a sudo call.
+    pub const RESULT_SUDO: usize = 256 * KI;
+    /// Max length (in bytes) of the result data from a reply call.
+    pub const RESULT_REPLY: usize = 256 * KI;
+    /// Max length (in bytes) of the result data from a query call.
+    pub const RESULT_QUERY: usize = 256 * KI;
+    /// Max length (in bytes) of the query data from a query_chain call.
+    pub const REQUEST_QUERY: usize = 256 * KI;
+    /// Max length (in bytes) of the result data from a ibc_channel_open call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_CHANNEL_OPEN: usize = 256 * KI;
+    /// Max length (in bytes) of the result data from a ibc_channel_connect call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_CHANNEL_CONNECT: usize = 256 * KI;
+    /// Max length (in bytes) of the result data from a ibc_channel_close call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_CHANNEL_CLOSE: usize = 256 * KI;
+    /// Max length (in bytes) of the result data from a ibc_packet_receive call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_PACKET_RECEIVE: usize = 256 * KI;
+    /// Max length (in bytes) of the result data from a ibc_packet_ack call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_PACKET_ACK: usize = 256 * KI;
+    /// Max length (in bytes) of the result data from a ibc_packet_timeout call.
+    #[cfg(feature = "stargate")]
+    pub const RESULT_IBC_PACKET_TIMEOUT: usize = 256 * KI;
+}
 
 pub type CosmwasmExecutionResult<T> = ContractResult<Response<T>>;
 pub type CosmwasmQueryResult = ContractResult<QueryResponse>;
@@ -160,9 +235,7 @@ pub mod ibc {
     #![cfg(feature = "stargate")]
 
     use super::*;
-    use cosmwasm_minimal_std::ibc::{
-        Ibc3ChannelOpenResponse, IbcBasicResponse, IbcReceiveResponse,
-    };
+    use cosmwasm_std::{Ibc3ChannelOpenResponse, IbcBasicResponse, IbcReceiveResponse};
 
     /// Response to the low level `ibc_channel_open` call.
     #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -193,18 +266,20 @@ pub mod ibc {
     }
     impl<T> From<IbcChannelConnectResult<T>> for ContractResult<Response<T>> {
         fn from(IbcChannelConnectResult(result): IbcChannelConnectResult<T>) -> Self {
-            result.map(
-                |IbcBasicResponse {
-                     messages,
-                     attributes,
-                     events,
-                 }| Response {
+            match result {
+                ContractResult::Ok(IbcBasicResponse {
                     messages,
                     attributes,
                     events,
-                    data: None,
-                },
-            )
+                    ..
+                }) => ContractResult::Ok(
+                    Response::new()
+                        .add_submessages(messages)
+                        .add_attributes(attributes)
+                        .add_events(events),
+                ),
+                ContractResult::Err(x) => ContractResult::Err(x),
+            }
         }
     }
 
@@ -223,18 +298,20 @@ pub mod ibc {
     }
     impl<T> From<IbcChannelCloseResult<T>> for ContractResult<Response<T>> {
         fn from(IbcChannelCloseResult(result): IbcChannelCloseResult<T>) -> Self {
-            result.map(
-                |IbcBasicResponse {
-                     messages,
-                     attributes,
-                     events,
-                 }| Response {
+            match result {
+                ContractResult::Ok(IbcBasicResponse {
                     messages,
                     attributes,
                     events,
-                    data: None,
-                },
-            )
+                    ..
+                }) => ContractResult::Ok(
+                    Response::new()
+                        .add_submessages(messages)
+                        .add_attributes(attributes)
+                        .add_events(events),
+                ),
+                ContractResult::Err(x) => ContractResult::Err(x),
+            }
         }
     }
 
@@ -253,19 +330,22 @@ pub mod ibc {
     }
     impl<T> From<IbcPacketReceiveResult<T>> for ContractResult<Response<T>> {
         fn from(IbcPacketReceiveResult(result): IbcPacketReceiveResult<T>) -> Self {
-            result.map(
-                |IbcReceiveResponse {
-                     acknowledgement,
-                     messages,
-                     attributes,
-                     events,
-                 }| Response {
+            match result {
+                ContractResult::Ok(IbcReceiveResponse {
                     messages,
                     attributes,
                     events,
-                    data: Some(acknowledgement),
-                },
-            )
+                    acknowledgement,
+                    ..
+                }) => ContractResult::Ok(
+                    Response::new()
+                        .add_submessages(messages)
+                        .add_attributes(attributes)
+                        .add_events(events)
+                        .set_data(acknowledgement),
+                ),
+                ContractResult::Err(x) => ContractResult::Err(x),
+            }
         }
     }
 
@@ -284,18 +364,20 @@ pub mod ibc {
     }
     impl<T> From<IbcPacketAckResult<T>> for ContractResult<Response<T>> {
         fn from(IbcPacketAckResult(result): IbcPacketAckResult<T>) -> Self {
-            result.map(
-                |IbcBasicResponse {
-                     messages,
-                     attributes,
-                     events,
-                 }| Response {
+            match result {
+                ContractResult::Ok(IbcBasicResponse {
                     messages,
                     attributes,
                     events,
-                    data: None,
-                },
-            )
+                    ..
+                }) => ContractResult::Ok(
+                    Response::new()
+                        .add_submessages(messages)
+                        .add_attributes(attributes)
+                        .add_events(events),
+                ),
+                ContractResult::Err(x) => ContractResult::Err(x),
+            }
         }
     }
 
@@ -314,18 +396,20 @@ pub mod ibc {
     }
     impl<T> From<IbcPacketTimeoutResult<T>> for ContractResult<Response<T>> {
         fn from(IbcPacketTimeoutResult(result): IbcPacketTimeoutResult<T>) -> Self {
-            result.map(
-                |IbcBasicResponse {
-                     messages,
-                     attributes,
-                     events,
-                 }| Response {
+            match result {
+                ContractResult::Ok(IbcBasicResponse {
                     messages,
                     attributes,
                     events,
-                    data: None,
-                },
-            )
+                    ..
+                }) => ContractResult::Ok(
+                    Response::new()
+                        .add_submessages(messages)
+                        .add_attributes(attributes)
+                        .add_events(events),
+                ),
+                ContractResult::Err(x) => ContractResult::Err(x),
+            }
         }
     }
 

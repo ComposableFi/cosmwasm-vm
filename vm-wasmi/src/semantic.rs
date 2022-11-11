@@ -3,15 +3,14 @@ extern crate std;
 use super::*;
 use alloc::{boxed::Box, string::ToString};
 use core::{assert_matches::assert_matches, num::NonZeroU32, str::FromStr};
-#[cfg(feature = "stargate")]
-use cosmwasm_minimal_std::ibc::IbcTimeout;
 #[cfg(feature = "iterator")]
-use cosmwasm_minimal_std::Order;
-use cosmwasm_minimal_std::{
-    ibc::{IbcChannel, IbcChannelOpenMsg, IbcEndpoint, IbcOrder},
+use cosmwasm_std::Order;
+use cosmwasm_std::{
     Addr, Attribute, Binary, BlockInfo, Coin, ContractInfo, ContractResult, Empty, Env, Event,
     MessageInfo, Timestamp,
 };
+#[cfg(feature = "stargate")]
+use cosmwasm_std::{IbcChannel, IbcChannelOpenMsg, IbcEndpoint, IbcOrder, IbcTimeout};
 use cosmwasm_vm::{
     executor::{
         cosmwasm_call, cosmwasm_call_serialize,
@@ -462,10 +461,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         Ok(vec![])
     }
 
-    fn query_info(
-        &mut self,
-        _: Self::Address,
-    ) -> Result<cosmwasm_minimal_std::ContractInfoResponse, Self::Error> {
+    fn query_info(&mut self, _: Self::Address) -> Result<ContractInfoResponse, Self::Error> {
         Err(SimpleVMError::Unsupported)
     }
 
@@ -891,7 +887,7 @@ fn create_simple_vm<'a>(
         Env {
             block: BlockInfo {
                 height: 0xDEADC0DE,
-                time: Timestamp(10000),
+                time: Timestamp::from_seconds(10000),
                 chain_id: "abstract-test".into(),
             },
             transaction: None,
@@ -1225,7 +1221,7 @@ fn test_reply() {
 mod cw20_ics20 {
     use super::*;
     use ::cw20_ics20::ibc::{Ics20Ack, Ics20Packet};
-    use cosmwasm_minimal_std::ibc::{IbcChannelConnectMsg, IbcPacket, IbcPacketReceiveMsg};
+    use cosmwasm_std::{IbcChannelConnectMsg, IbcPacket, IbcPacketReceiveMsg, Uint128};
     use cosmwasm_vm::{
         executor::ibc::IbcPacketReceiveInput, system::cosmwasm_system_entrypoint_serialize,
     };
@@ -1256,29 +1252,29 @@ mod cw20_ics20 {
     }
 
     fn create_channel(channel_id: &str) -> IbcChannel {
-        IbcChannel {
-            endpoint: IbcEndpoint {
+        IbcChannel::new(
+            IbcEndpoint {
                 port_id: CONTRACT_PORT.into(),
                 channel_id: channel_id.into(),
             },
-            counterparty_endpoint: IbcEndpoint {
+            IbcEndpoint {
                 port_id: REMOTE_PORT.into(),
                 channel_id: format!("{}", channel_id),
             },
-            order: IbcOrder::Unordered,
-            version: ICS20_VERSION.into(),
-            connection_id: CONNECTION_ID.into(),
-        }
+            IbcOrder::Unordered,
+            ICS20_VERSION,
+            CONNECTION_ID,
+        )
     }
 
     fn reverse_channel(channel: IbcChannel) -> IbcChannel {
-        IbcChannel {
-            endpoint: channel.counterparty_endpoint,
-            counterparty_endpoint: channel.endpoint,
-            order: channel.order,
-            version: channel.version,
-            connection_id: channel.connection_id,
-        }
+        IbcChannel::new(
+            channel.counterparty_endpoint,
+            channel.endpoint,
+            channel.order,
+            channel.version,
+            channel.connection_id,
+        )
     }
 
     fn reverse_packet(
@@ -1312,7 +1308,7 @@ mod cw20_ics20 {
         let env = Env {
             block: BlockInfo {
                 height: 0xDEADC0DE,
-                time: Timestamp(10000),
+                time: Timestamp::from_seconds(10000),
                 chain_id: "abstract-test".into(),
             },
             transaction: None,
@@ -1393,7 +1389,7 @@ mod cw20_ics20 {
             funded(
                 vec![Coin {
                     denom: "PICA".into(),
-                    amount: 1000,
+                    amount: Uint128::new(1000),
                 }],
                 info.clone(),
             ),
@@ -1433,16 +1429,16 @@ mod cw20_ics20 {
                 packets_sent.iter().enumerate().for_each(
                     |(i, SimpleIBCPacket { data, timeout, .. })| {
                         let packet = serde_json::from_slice::<Ics20Packet>(data.as_ref()).unwrap();
-                        packets_to_dispatch.push(IbcPacket {
-                            data: Binary::from(
+                        packets_to_dispatch.push(IbcPacket::new(
+                            Binary::from(
                                 serde_json::to_vec(&reverse_packet(channel.clone(), packet))
                                     .unwrap(),
                             ),
-                            src: channel.counterparty_endpoint.clone(),
-                            dest: channel.endpoint.clone(),
-                            sequence: next_seq + i as u64,
-                            timeout: timeout.clone(),
-                        })
+                            channel.counterparty_endpoint.clone(),
+                            channel.endpoint.clone(),
+                            next_seq + i as u64,
+                            timeout.clone(),
+                        ))
                     },
                 );
                 (next_seq + packets_sent.len() as u64, packets_to_dispatch)
@@ -1451,12 +1447,13 @@ mod cw20_ics20 {
 
         let mut vm = create_vm(&mut extension, env.clone(), info.clone());
         for packet in packets_to_dispatch.into_iter() {
-            let (acknowledgment, _events) = cosmwasm_system_entrypoint_serialize::<
-                IbcPacketReceiveInput,
-                WasmiVM<SimpleWasmiVM>,
-                _,
-            >(&mut vm, &IbcPacketReceiveMsg { packet })
-            .unwrap();
+            let (acknowledgment, _events) =
+                cosmwasm_system_entrypoint_serialize::<
+                    IbcPacketReceiveInput,
+                    WasmiVM<SimpleWasmiVM>,
+                    _,
+                >(&mut vm, &IbcPacketReceiveMsg::new(packet))
+                .unwrap();
             let acknowledgment =
                 serde_json::from_slice::<Ics20Ack>(acknowledgment.unwrap().as_ref()).unwrap();
             /*
