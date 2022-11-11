@@ -15,7 +15,7 @@ use cosmwasm_minimal_std::{
 use cosmwasm_vm::{
     executor::{
         cosmwasm_call, cosmwasm_call_serialize,
-        ibc::{IbcChannelConnect, IbcChannelOpen, IbcChannelOpenResult},
+        ibc::{IbcChannelConnectInput, IbcChannelOpenInput, IbcChannelOpenResult},
         CosmwasmExecutionResult, ExecuteInput, ExecuteResult, InstantiateInput, InstantiateResult,
         MigrateInput, QueryInput,
     },
@@ -1223,13 +1223,13 @@ fn test_reply() {
 }
 
 mod cw20_ics20 {
+    use super::*;
     use ::cw20_ics20::ibc::{Ics20Ack, Ics20Packet};
     use cosmwasm_minimal_std::ibc::{IbcChannelConnectMsg, IbcPacket, IbcPacketReceiveMsg};
     use cosmwasm_vm::{
-        executor::ibc::IbcPacketReceive, system::cosmwasm_system_entrypoint_serialize,
+        executor::ibc::IbcPacketReceiveInput, system::cosmwasm_system_entrypoint_serialize,
     };
 
-    use super::*;
     const DEFAULT_TIMEOUT: u64 = 3600;
     const CONTRACT_PORT: &str = "ibc:wasm1234567890abcdef";
     const REMOTE_PORT: &str = "transfer";
@@ -1366,7 +1366,7 @@ mod cw20_ics20 {
         let channel = create_channel(channel_name.into());
 
         assert_matches!(
-            cosmwasm_call_serialize::<IbcChannelOpen, WasmiVM<SimpleWasmiVM>, _>(
+            cosmwasm_call_serialize::<IbcChannelOpenInput, WasmiVM<SimpleWasmiVM>, _>(
                 &mut vm,
                 &IbcChannelOpenMsg::OpenInit {
                     channel: channel.clone()
@@ -1376,7 +1376,7 @@ mod cw20_ics20 {
             IbcChannelOpenResult(ContractResult::Ok(None))
         );
         assert_matches!(
-            cosmwasm_system_entrypoint_serialize::<IbcChannelConnect, WasmiVM<SimpleWasmiVM>, _>(
+            cosmwasm_system_entrypoint_serialize::<IbcChannelConnectInput, WasmiVM<SimpleWasmiVM>, _>(
                 &mut vm,
                 &IbcChannelConnectMsg::OpenAck {
                     channel: channel.clone(),
@@ -1452,7 +1452,7 @@ mod cw20_ics20 {
         let mut vm = create_vm(&mut extension, env.clone(), info.clone());
         for packet in packets_to_dispatch.into_iter() {
             let (acknowledgment, _events) = cosmwasm_system_entrypoint_serialize::<
-                IbcPacketReceive,
+                IbcPacketReceiveInput,
                 WasmiVM<SimpleWasmiVM>,
                 _,
             >(&mut vm, &IbcPacketReceiveMsg { packet })

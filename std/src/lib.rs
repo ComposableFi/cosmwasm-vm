@@ -1062,9 +1062,8 @@ pub mod ibc {
     #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
     #[serde(rename_all = "snake_case")]
     pub struct IbcTimeout {
-        // use private fields to enforce the use of constructors, which ensure that at least one is set
-        block: Option<IbcTimeoutBlock>,
-        timestamp: Option<Timestamp>,
+        pub block: Option<IbcTimeoutBlock>,
+        pub timestamp: Option<Timestamp>,
     }
 
     /// IbcChannel defines all information on a channel.

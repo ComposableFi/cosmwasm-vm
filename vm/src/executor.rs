@@ -330,74 +330,74 @@ pub mod ibc {
     }
 
     /// Strong type representing a call to `ibc_channel_open` export.
-    pub struct IbcChannelOpen;
-    impl Input for IbcChannelOpen {
+    pub struct IbcChannelOpenInput;
+    impl Input for IbcChannelOpenInput {
         type Output = IbcChannelOpenResult;
     }
-    impl AsFunctionName for IbcChannelOpen {
+    impl AsFunctionName for IbcChannelOpenInput {
         const NAME: &'static str = "ibc_channel_open";
     }
-    impl HasInfo for IbcChannelOpen {
+    impl HasInfo for IbcChannelOpenInput {
         const HAS_INFO: bool = false;
     }
 
     /// Strong type representing a call to `ibc_channel_connect` export.
-    pub struct IbcChannelConnect<T = Empty>(PhantomData<T>);
-    impl<T> Input for IbcChannelConnect<T> {
+    pub struct IbcChannelConnectInput<T = Empty>(PhantomData<T>);
+    impl<T> Input for IbcChannelConnectInput<T> {
         type Output = IbcChannelConnectResult<T>;
     }
-    impl<T> AsFunctionName for IbcChannelConnect<T> {
+    impl<T> AsFunctionName for IbcChannelConnectInput<T> {
         const NAME: &'static str = "ibc_channel_connect";
     }
-    impl<T> HasInfo for IbcChannelConnect<T> {
+    impl<T> HasInfo for IbcChannelConnectInput<T> {
         const HAS_INFO: bool = false;
     }
 
     /// Strong type representing a call to `ibc_channel_close` export.
-    pub struct IbcChannelClose<T = Empty>(PhantomData<T>);
-    impl<T> Input for IbcChannelClose<T> {
+    pub struct IbcChannelCloseInput<T = Empty>(PhantomData<T>);
+    impl<T> Input for IbcChannelCloseInput<T> {
         type Output = IbcChannelCloseResult<T>;
     }
-    impl<T> AsFunctionName for IbcChannelClose<T> {
+    impl<T> AsFunctionName for IbcChannelCloseInput<T> {
         const NAME: &'static str = "ibc_channel_close";
     }
-    impl<T> HasInfo for IbcChannelClose<T> {
+    impl<T> HasInfo for IbcChannelCloseInput<T> {
         const HAS_INFO: bool = false;
     }
 
     /// Strong type representing a call to `ibc_packet_receive` export.
-    pub struct IbcPacketReceive<T = Empty>(PhantomData<T>);
-    impl<T> Input for IbcPacketReceive<T> {
+    pub struct IbcPacketReceiveInput<T = Empty>(PhantomData<T>);
+    impl<T> Input for IbcPacketReceiveInput<T> {
         type Output = IbcPacketReceiveResult<T>;
     }
-    impl<T> AsFunctionName for IbcPacketReceive<T> {
+    impl<T> AsFunctionName for IbcPacketReceiveInput<T> {
         const NAME: &'static str = "ibc_packet_receive";
     }
-    impl<T> HasInfo for IbcPacketReceive<T> {
+    impl<T> HasInfo for IbcPacketReceiveInput<T> {
         const HAS_INFO: bool = false;
     }
 
     /// Strong type representing a call to `ibc_packet_ack` export.
-    pub struct IbcPacketAck<T = Empty>(PhantomData<T>);
-    impl<T> Input for IbcPacketAck<T> {
+    pub struct IbcPacketAckInput<T = Empty>(PhantomData<T>);
+    impl<T> Input for IbcPacketAckInput<T> {
         type Output = IbcPacketAckResult<T>;
     }
-    impl<T> AsFunctionName for IbcPacketAck<T> {
+    impl<T> AsFunctionName for IbcPacketAckInput<T> {
         const NAME: &'static str = "ibc_packet_ack";
     }
-    impl<T> HasInfo for IbcPacketAck<T> {
+    impl<T> HasInfo for IbcPacketAckInput<T> {
         const HAS_INFO: bool = false;
     }
 
     /// Strong type representing a call to `ibc_packet_timeout` export.
-    pub struct IbcPacketTimeout<T = Empty>(PhantomData<T>);
-    impl<T> Input for IbcPacketTimeout<T> {
+    pub struct IbcPacketTimeoutInput<T = Empty>(PhantomData<T>);
+    impl<T> Input for IbcPacketTimeoutInput<T> {
         type Output = IbcPacketTimeoutResult<T>;
     }
-    impl<T> AsFunctionName for IbcPacketTimeout<T> {
+    impl<T> AsFunctionName for IbcPacketTimeoutInput<T> {
         const NAME: &'static str = "ibc_packet_timeout";
     }
-    impl<T> HasInfo for IbcPacketTimeout<T> {
+    impl<T> HasInfo for IbcPacketTimeoutInput<T> {
         const HAS_INFO: bool = false;
     }
 }
