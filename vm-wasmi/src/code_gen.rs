@@ -1,6 +1,6 @@
 use alloc::string::String;
 use alloc::{vec, vec::Vec};
-use cosmwasm_minimal_std::{ContractResult, Empty, Response};
+use cosmwasm_std::{ContractResult, Empty, Response};
 use wasm_instrument::parity_wasm::{
     builder,
     elements::{FuncBody, Instruction, Instructions, Local, ValueType},
