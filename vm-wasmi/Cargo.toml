@@ -6,9 +6,10 @@ authors = [ "Hussein Ait Lahcen hussein.aitlahcen@gmail.com", "Abdullah Eryuzlu 
 homepage = "https://composable.finance"
 
 [features]
-default = [ "iterator", "stargate" ]
+default = [ "iterator", "stargate", "ibc3" ]
 iterator = [ "cosmwasm-vm/iterator" ]
 stargate = [ "cosmwasm-vm/stargate" ]
+ibc3 = [ "cosmwasm-vm/ibc3" ]
 
 [dependencies]
 serde = { version = "1", default-features = false, features = ["derive"] }
@@ -17,12 +18,12 @@ either = { version = "1.6", default-features = false }
 log = { version = "0.4", default-features = false }
 wasmi = { git = "https://github.com/ComposableFi/wasmi", rev = "cd8c0c775a1d197a35ff3d5c7d6cded3d476411b", default-features = false }
 wasm-instrument = { version = "0.2", default-features = false }
-cosmwasm-std = { git = "https://github.com/ComposableFi/cosmwasm", rev = "abeae7f88dfce286d9d5831bbcc7fb1f138e6906", default-features = false }
+cosmwasm-std = { git = "https://github.com/ComposableFi/cosmwasm", rev = "7d288c23772d03e8cd666b76cb5bbdc5952721dd", default-features = false, features = [ "iterator" ] }
 cosmwasm-vm = { path = "../vm", default-features = false }
 hex = { version = "0.4", default-features = false, features = [ "alloc" ]}
 
 [dev-dependencies]
 wat = "1.0"
 env_logger = "0.9"
-cosmwasm-crypto = { git = "https://github.com/ComposableFi/cosmwasm", rev = "abeae7f88dfce286d9d5831bbcc7fb1f138e6906" }
+cosmwasm-crypto = { git = "https://github.com/ComposableFi/cosmwasm", rev = "7d288c23772d03e8cd666b76cb5bbdc5952721dd" }
 cw20-ics20 = { git = "https://github.com/CosmWasm/cw-plus", rev = "53dc88fdb81888cbd3dae8742e7318b35d3d0c0f", default-features = false, features = [ "library" ] }
