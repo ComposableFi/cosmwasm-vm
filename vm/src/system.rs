@@ -588,16 +588,16 @@ where
                         sub_events.push(event);
                     };
 
-                    // For each submessages, we might rollback and reply the
-                    // failure to the parent contract. Hence, a new state tx
-                    // must be created prior to the call.
-                    vm.transaction_begin()?;
-
                     // Gas might be limited for the sub message execution.
                     vm.gas_checkpoint_push(match gas_limit {
                         Some(limit) => VmGasCheckpoint::Limited(limit),
                         None => VmGasCheckpoint::Unlimited,
                     })?;
+
+                    // For each submessages, we might rollback and reply the
+                    // failure to the parent contract. Hence, a new state tx
+                    // must be created prior to the call.
+                    vm.transaction_begin()?;
 
                     let sub_res = match msg {
                         CosmosMsg::Custom(message) => vm
@@ -727,8 +727,6 @@ where
 
                     log::debug!("Submessage result: {:?}", sub_res);
 
-                    vm.gas_checkpoint_pop()?;
-
                     let sub_cont = match (sub_res, reply_on) {
                         // If the submessage suceeded and no reply was asked or
                         // only on error, the call is considered successful and
@@ -768,6 +766,8 @@ where
                             SubCallContinuation::Abort(e)
                         }
                     };
+
+                    vm.gas_checkpoint_pop()?;
 
                     log::debug!("Submessage cont: {:?}", sub_cont);
 

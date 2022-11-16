@@ -915,7 +915,7 @@ fn test_bare() {
     let funds = vec![];
     let mut extension = SimpleWasmiVMExtension {
         storage: Default::default(),
-        codes: BTreeMap::from([(0x1337, code.clone())]),
+        codes: BTreeMap::from([(0x1337, code)]),
         contracts: BTreeMap::from([(
             address,
             CosmwasmContractMeta {
@@ -962,13 +962,13 @@ fn test_bare() {
 
 #[test]
 fn test_code_gen() {
-    let code: code_gen::WasmModule = code_gen::ModuleDefinition::new(vec![], 10).unwrap().into();
+    let module: code_gen::WasmModule = code_gen::ModuleDefinition::new(vec![], 10).unwrap().into();
     let sender = BankAccount(100);
     let address = BankAccount(10_000);
     let funds = vec![];
     let mut extension = SimpleWasmiVMExtension {
         storage: Default::default(),
-        codes: BTreeMap::from([(0x1337, code.code.clone())]),
+        codes: BTreeMap::from([(0x1337, module.code)]),
         contracts: BTreeMap::from([(
             address,
             CosmwasmContractMeta {
@@ -1019,7 +1019,7 @@ fn test_orchestration_base() {
     let funds = vec![];
     let mut extension = SimpleWasmiVMExtension {
         storage: Default::default(),
-        codes: BTreeMap::from([(0x1337, code.clone())]),
+        codes: BTreeMap::from([(0x1337, code)]),
         contracts: BTreeMap::from([(
             address,
             CosmwasmContractMeta {

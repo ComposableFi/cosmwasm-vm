@@ -93,6 +93,7 @@ pub enum WasmiVMError {
     InvalidPointer,
     UnexpectedUnit,
     ExpectedUnit,
+    ExpectedPointer,
     InvalidHostSignature,
     InvalidValue,
     MaxLimitExceeded,
@@ -294,7 +295,7 @@ where
     fn try_from(WasmiOutput(value, _): WasmiOutput<'a, WasmiVM<T>>) -> Result<Self, Self::Error> {
         match value {
             Either::Right((_, RuntimeValue::I32(rt_value))) => Ok(rt_value as u32),
-            _ => Err(WasmiVMError::UnexpectedUnit.into()),
+            _ => Err(WasmiVMError::ExpectedPointer.into()),
         }
     }
 }
@@ -849,21 +850,21 @@ pub mod host_functions {
                     WasmiFunctionName("db_read".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0001),
-                        env_db_read::<T> as WasmiHostFunction<T>,
+                        env_db_read as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("db_write".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0002),
-                        env_db_write::<T> as WasmiHostFunction<T>,
+                        env_db_write as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("db_remove".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0003),
-                        env_db_remove::<T> as WasmiHostFunction<T>,
+                        env_db_remove as WasmiHostFunction<T>,
                     ),
                 ),
                 #[cfg(feature = "iterator")]
@@ -871,7 +872,7 @@ pub mod host_functions {
                     WasmiFunctionName("db_scan".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0004),
-                        env_db_scan::<T> as WasmiHostFunction<T>,
+                        env_db_scan as WasmiHostFunction<T>,
                     ),
                 ),
                 #[cfg(feature = "iterator")]
@@ -879,84 +880,84 @@ pub mod host_functions {
                     WasmiFunctionName("db_next".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0005),
-                        env_db_next::<T> as WasmiHostFunction<T>,
+                        env_db_next as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("addr_validate".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0006),
-                        env_addr_validate::<T> as WasmiHostFunction<T>,
+                        env_addr_validate as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("addr_canonicalize".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0007),
-                        env_addr_canonicalize::<T> as WasmiHostFunction<T>,
+                        env_addr_canonicalize as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("addr_humanize".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0008),
-                        env_addr_humanize::<T> as WasmiHostFunction<T>,
+                        env_addr_humanize as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("secp256k1_verify".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0009),
-                        env_secp256k1_verify::<T> as WasmiHostFunction<T>,
+                        env_secp256k1_verify as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("secp256k1_recover_pubkey".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x000B),
-                        env_secp256k1_recover_pubkey::<T> as WasmiHostFunction<T>,
+                        env_secp256k1_recover_pubkey as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("ed25519_verify".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x000C),
-                        env_ed25519_verify::<T> as WasmiHostFunction<T>,
+                        env_ed25519_verify as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("ed25519_batch_verify".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x000D),
-                        env_ed25519_batch_verify::<T> as WasmiHostFunction<T>,
+                        env_ed25519_batch_verify as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("debug".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x000E),
-                        env_debug::<T> as WasmiHostFunction<T>,
+                        env_debug as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("query_chain".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x000F),
-                        env_query_chain::<T> as WasmiHostFunction<T>,
+                        env_query_chain as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("abort".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0010),
-                        env_abort::<T> as WasmiHostFunction<T>,
+                        env_abort as WasmiHostFunction<T>,
                     ),
                 ),
                 (
                     WasmiFunctionName("gas".to_owned()),
                     (
                         WasmiHostFunctionIndex(0x0011),
-                        env_gas::<T> as WasmiHostFunction<T>,
+                        env_gas as WasmiHostFunction<T>,
                     ),
                 ),
             ]),
