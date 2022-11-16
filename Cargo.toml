@@ -1,2 +1,3 @@
 [workspace]
 members = [ "vm", "vm-wasmi" ]
+resolver = "2"
