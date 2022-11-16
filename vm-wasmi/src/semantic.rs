@@ -993,7 +993,7 @@ fn test_code_gen() {
 }
 
 pub fn digit_sum(input: &[u8]) -> usize {
-    input.iter().fold(0, |sum, val| sum + (*val as usize))
+    input.iter().map(|v| *v as usize).sum()
 }
 
 pub fn riffle_shuffle<T: Clone>(input: &[T]) -> Vec<T> {
