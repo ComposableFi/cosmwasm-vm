@@ -11,12 +11,14 @@ use cosmwasm_std::{
 };
 #[cfg(feature = "stargate")]
 use cosmwasm_std::{IbcChannel, IbcChannelOpenMsg, IbcEndpoint, IbcOrder, IbcTimeout};
+#[cfg(feature = "stargate")]
+use cosmwasm_vm::executor::ibc::{
+    IbcChannelConnectInput, IbcChannelOpenInput, IbcChannelOpenResult,
+};
 use cosmwasm_vm::{
     executor::{
-        cosmwasm_call, cosmwasm_call_serialize,
-        ibc::{IbcChannelConnectInput, IbcChannelOpenInput, IbcChannelOpenResult},
-        CosmwasmExecutionResult, ExecuteInput, ExecuteResult, InstantiateInput, InstantiateResult,
-        MigrateInput, QueryInput,
+        cosmwasm_call, cosmwasm_call_serialize, CosmwasmExecutionResult, ExecuteInput,
+        ExecuteResult, InstantiateInput, InstantiateResult, MigrateInput, QueryInput,
     },
     system::{
         cosmwasm_system_entrypoint, cosmwasm_system_run, CosmwasmCodeId, CosmwasmContractMeta,
@@ -158,6 +160,7 @@ struct SimpleWasmiVMStorage {
     iterators: BTreeMap<u32, Iter>,
 }
 
+#[cfg(feature = "stargate")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct SimpleIBCPacket {
     channel_id: String,
@@ -165,6 +168,7 @@ struct SimpleIBCPacket {
     timeout: IbcTimeout,
 }
 
+#[cfg(feature = "stargate")]
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
 struct SimpleIBCState {
     packets_sent: Vec<SimpleIBCPacket>,
@@ -172,6 +176,7 @@ struct SimpleIBCState {
 
 #[derive(Default, Clone)]
 struct SimpleWasmiVMExtension {
+    #[cfg(feature = "stargate")]
     ibc: BTreeMap<BankAccount, SimpleIBCState>,
     storage: BTreeMap<BankAccount, SimpleWasmiVMStorage>,
     codes: BTreeMap<CosmwasmCodeId, Vec<u8>>,
@@ -1218,6 +1223,7 @@ fn test_reply() {
     }
 }
 
+#[cfg(feature = "stargate")]
 mod cw20_ics20 {
     use super::*;
     use ::cw20_ics20::ibc::{Ics20Ack, Ics20Packet};
@@ -1446,14 +1452,17 @@ mod cw20_ics20 {
         );
 
         let mut vm = create_vm(&mut extension, env.clone(), info.clone());
+        #[cfg(feature = "ibc3")]
+        let make_receive_msg = |packet| IbcPacketReceiveMsg::new(packet, Addr::unchecked("1337"));
+        #[cfg(not(feature = "ibc3"))]
+        let make_receive_msg = |packet| IbcPacketReceiveMsg::new(packet);
         for packet in packets_to_dispatch.into_iter() {
-            let (acknowledgment, _events) =
-                cosmwasm_system_entrypoint_serialize::<
-                    IbcPacketReceiveInput,
-                    WasmiVM<SimpleWasmiVM>,
-                    _,
-                >(&mut vm, &IbcPacketReceiveMsg::new(packet))
-                .unwrap();
+            let (acknowledgment, _events) = cosmwasm_system_entrypoint_serialize::<
+                IbcPacketReceiveInput,
+                WasmiVM<SimpleWasmiVM>,
+                _,
+            >(&mut vm, &make_receive_msg(packet))
+            .unwrap();
             let acknowledgment =
                 serde_json::from_slice::<Ics20Ack>(acknowledgment.unwrap().as_ref()).unwrap();
             /*
