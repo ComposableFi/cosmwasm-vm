@@ -1328,7 +1328,7 @@ mod cw20_ics20 {
         };
         let mut extension = SimpleWasmiVMExtension {
             storage: Default::default(),
-            codes: BTreeMap::from([(0x1337, code.clone())]),
+            codes: BTreeMap::from([(0x1337, code)]),
             contracts: BTreeMap::from([(
                 contract,
                 CosmwasmContractMeta {
@@ -1365,7 +1365,7 @@ mod cw20_ics20 {
 
         // IBC channel opening
         let channel_name = "PicassoXTerra";
-        let channel = create_channel(channel_name.into());
+        let channel = create_channel(channel_name);
 
         assert_matches!(
             cosmwasm_call_serialize::<IbcChannelOpenInput, WasmiVM<SimpleWasmiVM>, _>(
@@ -1451,7 +1451,7 @@ mod cw20_ics20 {
             },
         );
 
-        let mut vm = create_vm(&mut extension, env.clone(), info.clone());
+        let mut vm = create_vm(&mut extension, env, info);
         #[cfg(feature = "ibc3")]
         let make_receive_msg = |packet| IbcPacketReceiveMsg::new(packet, Addr::unchecked("1337"));
         #[cfg(not(feature = "ibc3"))]
@@ -1466,7 +1466,7 @@ mod cw20_ics20 {
             let acknowledgment =
                 serde_json::from_slice::<Ics20Ack>(acknowledgment.unwrap().as_ref()).unwrap();
             /*
-            Seee `ack_success` in cw20-ics20 ibs.rs
+            See `ack_success` in cw20-ics20 ibs.rs
 
             // create a serialized success message
             fn ack_success() -> Binary {
