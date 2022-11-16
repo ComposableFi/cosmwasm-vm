@@ -808,12 +808,7 @@ where
     T: serde::de::DeserializeOwned + ReadLimit + DeserializeLimit,
 {
     log::trace!("MarshallOut");
-    let RawFromRegion(output) = RawFromRegion::try_from(LimitedRead(
-        vm,
-        pointer,
-        TryFrom::<usize>::try_from(T::read_limit())
-            .map_err(|_| ExecutorError::CallReadLimitWouldOverflow)?,
-    ))?;
+    let output = passthrough_out::<V, T>(vm, pointer)?;
     Ok(serde_json::from_slice(&output).map_err(|_| ExecutorError::FailedToDeserialize)?)
 }
 

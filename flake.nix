@@ -52,8 +52,10 @@
         common-cached-args = common-args // { cargoArtifacts = common-deps; };
 
       in rec {
-        packages.cosmwasm-vm = crane-nightly.buildPackage common-cached-args;
-        packages.default = packages.cosmwasm-vm;
+        packages = rec {
+          cosmwasm-vm = crane-nightly.buildPackage common-cached-args;
+          default = cosmwasm-vm;
+        };
         checks = {
           package = packages.default;
           clippy = crane-nightly.cargoClippy (common-cached-args // {
