@@ -10,6 +10,15 @@ use cosmwasm_vm::{
 use cosmwasm_vm_wasmi::WasmiVM;
 use serde::Serialize;
 
+/// Instantiate a contract and get back the contract address and the instantiate result.
+///
+/// * `vm_state`: Shared VM state.
+/// * `sender`: Caller of the `instantiate` entrypoint.
+/// * `code_id`: Id of code to instantiate a contract from.
+/// * `admin`: Admin of the contract.
+/// * `funds`: Assets to send to contract prior to execution.
+/// * `gas`: Gas limit of this call.
+/// * `message`: Raw JSON-encoded `InstantiateMsg`.
 pub fn instantiate_raw(
     vm_state: &mut State,
     sender: &Account,
@@ -37,6 +46,15 @@ pub fn instantiate_raw(
     )
 }
 
+/// Instantiate a contract and get back the contract address and the instantiate result.
+///
+/// * `vm_state`: Shared VM state.
+/// * `sender`: Caller of the `instantiate` entrypoint.
+/// * `code_id`: Id of code to instantiate a contract from.
+/// * `admin`: Admin of the contract.
+/// * `funds`: Assets to send to contract prior to execution.
+/// * `gas`: Gas limit of this call.
+/// * `message`: Typed message. Possibly `InstantiateMsg` from a contract.
 pub fn instantiate<M: Serialize>(
     vm_state: &mut State,
     sender: &Account,
@@ -50,6 +68,17 @@ pub fn instantiate<M: Serialize>(
     instantiate_raw(vm_state, sender, code_id, admin, funds, gas, &message)
 }
 
+/// Instantiate a contract and set the contract address to `address`. This should be preferred
+/// if your contract uses a static contract address to execute/query etc.
+///
+/// * `address`: Instantiated contract's address.
+/// * `vm_state`: Shared VM state.
+/// * `sender`: Caller of the `instantiate` entrypoint.
+/// * `code_id`: Id of code to instantiate a contract from.
+/// * `admin`: Admin of the contract.
+/// * `funds`: Assets to send to contract prior to execution.
+/// * `gas`: Gas limit of this call.
+/// * `message`: Typed message. Possibly `InstantiateMsg` from a contract.
 #[allow(clippy::too_many_arguments)]
 pub fn instantiate_with_address<M: Serialize>(
     address: &Account,
@@ -67,6 +96,17 @@ pub fn instantiate_with_address<M: Serialize>(
     )
 }
 
+/// Instantiate a contract and set the contract address to `address`. This should be preferred
+/// if your contract uses a static contract address to execute/query etc.
+///
+/// * `address`: Instantiated contract's address.
+/// * `vm_state`: Shared VM state.
+/// * `sender`: Caller of the `instantiate` entrypoint.
+/// * `code_id`: Id of code to instantiate a contract from.
+/// * `admin`: Admin of the contract.
+/// * `funds`: Assets to send to contract prior to execution.
+/// * `gas`: Gas limit of this call.
+/// * `message`: Raw JSON-encoded `InstantiateMsg`.
 #[allow(clippy::too_many_arguments)]
 pub fn instantiate_with_address_raw(
     address: &Account,
@@ -115,6 +155,14 @@ pub fn instantiate_with_address_raw(
     ))
 }
 
+/// Execute a contract.
+///
+/// * `vm_state`: Shared VM state.
+/// * `sender`: Caller of the `instantiate` entrypoint.
+/// * `contract`: Contract to be executed.
+/// * `funds`: Assets to send to contract prior to execution.
+/// * `gas`: Gas limit of this call.
+/// * `message`: Raw JSON-encoded `ExecuteMsg`.
 pub fn execute_raw(
     vm_state: &mut State,
     sender: &Account,
@@ -145,6 +193,14 @@ pub fn execute_raw(
     cosmwasm_call::<ExecuteInput<Empty>, WasmiVM<Context>>(&mut vm, message)
 }
 
+/// Execute a contract.
+///
+/// * `vm_state`: Shared VM state.
+/// * `sender`: Caller of the `instantiate` entrypoint.
+/// * `contract`: Contract to be executed.
+/// * `funds`: Assets to send to contract prior to execution.
+/// * `gas`: Gas limit of this call.
+/// * `message`: Typed message. Possibly `ExecuteMsg` from a contract.
 pub fn execute<M: Serialize>(
     vm_state: &mut State,
     sender: &Account,
@@ -157,6 +213,11 @@ pub fn execute<M: Serialize>(
     execute_raw(vm_state, sender, contract, funds, gas, &message)
 }
 
+/// Query a contract.
+///
+/// * `vm_state`: Shared VM state.
+/// * `contract`: Contract to be queried.
+/// * `message`: Raw JSON-encoded `QueryMsg`.
 pub fn query_raw(
     vm_state: &mut State,
     contract: &Account,
@@ -183,6 +244,11 @@ pub fn query_raw(
     cosmwasm_call::<QueryInput, WasmiVM<Context>>(&mut vm, message)
 }
 
+/// Query a contract.
+///
+/// * `vm_state`: Shared VM state.
+/// * `contract`: Contract to be queried.
+/// * `message`: Typed message. Possibly `ExecuteMsg` from a contract.
 pub fn query<M: Serialize>(
     vm_state: &mut State,
     contract: &Account,
