@@ -19,12 +19,13 @@ mod tests {
     const CW20_BASE_URL: &'static str =
         "https://github.com/CosmWasm/cw-plus/releases/download/v0.16.0/cw20_base.wasm";
 
-    #[test]
-    fn works() {
+    #[tokio::test]
+    async fn works() {
         let code = CosmosFetcher::from_contract_addr(
             "https://juno-api.polkachu.com",
             "juno19rqljkh95gh40s7qdx40ksx3zq5tm4qsmsrdz9smw668x9zdr3lqtg33mf",
         )
+        .await
         .unwrap();
         let sender = Account::unchecked("sender");
 

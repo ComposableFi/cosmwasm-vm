@@ -27,7 +27,9 @@ cw20-ics20-contract = { package = "cw20-ics20", git = "https://github.com/CosmWa
 ] }
 reqwest = { version = "0.11", features = ["blocking"] }
 base64 = "0.13.1"
+async-trait = { version = "0.1.58" }
 
 [dev-dependencies]
 cw20 = "0.16"
 cw20-base = { version = "0.16", features = ["library"] }
+tokio = { version = "1.22", features = [ "rt", "macros" ] }

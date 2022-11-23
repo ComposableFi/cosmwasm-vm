@@ -63,6 +63,9 @@
           });
           fmt = crane-nightly.cargoFmt common-args;
         };
-        devShell = pkgs.mkShell { buildInputs = [ rust-nightly ]; };
+        devShell = pkgs.mkShell {
+          buildInputs = [ rust-nightly ]
+            ++ (with pkgs; [ openssl openssl.dev pkgconfig taplo nixfmt ]);
+        };
       });
 }
