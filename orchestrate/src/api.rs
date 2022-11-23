@@ -25,12 +25,65 @@ pub fn instantiate_raw(
         .ok_or(VmError::CodeNotFound(code_id))?
         .1;
     let contract_addr = Account::generate(code_hash, message);
+    instantiate_with_address_raw(
+        &contract_addr,
+        vm_state,
+        sender,
+        code_id,
+        admin,
+        funds,
+        gas,
+        message,
+    )
+}
+
+pub fn instantiate<M: Serialize>(
+    vm_state: &mut State,
+    sender: &Account,
+    code_id: CosmwasmCodeId,
+    admin: Option<Account>,
+    funds: Vec<Coin>,
+    gas: u64,
+    message: M,
+) -> Result<(Account, InstantiateResult<Empty>), VmError> {
+    let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotSerialize)?;
+    instantiate_raw(vm_state, sender, code_id, admin, funds, gas, &message)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn instantiate_with_address<M: Serialize>(
+    address: &Account,
+    vm_state: &mut State,
+    sender: &Account,
+    code_id: CosmwasmCodeId,
+    admin: Option<Account>,
+    funds: Vec<Coin>,
+    gas: u64,
+    message: M,
+) -> Result<(Account, InstantiateResult<Empty>), VmError> {
+    let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotSerialize)?;
+    instantiate_with_address_raw(
+        address, vm_state, sender, code_id, admin, funds, gas, &message,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn instantiate_with_address_raw(
+    address: &Account,
+    vm_state: &mut State,
+    sender: &Account,
+    code_id: CosmwasmCodeId,
+    admin: Option<Account>,
+    funds: Vec<Coin>,
+    gas: u64,
+    message: &[u8],
+) -> Result<(Account, InstantiateResult<Empty>), VmError> {
     vm_state.gas = Gas::new(gas);
-    if vm_state.contracts.contains_key(&contract_addr) {
+    if vm_state.contracts.contains_key(address) {
         return Err(VmError::AlreadyInstantiated);
     }
     vm_state.contracts.insert(
-        contract_addr.clone(),
+        address.clone(),
         CosmwasmContractMeta {
             code_id,
             admin,
@@ -47,7 +100,7 @@ pub fn instantiate_raw(
             },
             transaction: None,
             contract: ContractInfo {
-                address: contract_addr.clone().into(),
+                address: address.clone().into(),
             },
         },
         MessageInfo {
@@ -57,22 +110,9 @@ pub fn instantiate_raw(
     );
 
     Ok((
-        contract_addr,
+        address.clone(),
         cosmwasm_call::<InstantiateInput<Empty>, WasmiVM<Context>>(&mut vm, message)?,
     ))
-}
-
-pub fn instantiate<M: Serialize>(
-    vm_state: &mut State,
-    sender: &Account,
-    code_id: CosmwasmCodeId,
-    admin: Option<Account>,
-    funds: Vec<Coin>,
-    gas: u64,
-    message: M,
-) -> Result<(Account, InstantiateResult<Empty>), VmError> {
-    let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotSerialize)?;
-    instantiate_raw(vm_state, sender, code_id, admin, funds, gas, &message)
 }
 
 pub fn execute_raw(
