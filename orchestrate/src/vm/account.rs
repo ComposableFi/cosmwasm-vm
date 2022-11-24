@@ -2,7 +2,7 @@ use super::VmError;
 use alloc::format;
 use alloc::vec::Vec;
 use cosmwasm_std::{Addr, Binary, CanonicalAddr};
-use sha2::{Digest, Sha256};
+use sha1::{Digest, Sha1};
 
 #[derive(Debug, Clone)]
 pub struct CanonicalAccount(pub CanonicalAddr);
@@ -59,9 +59,9 @@ impl Account {
     /// * `code_hash` - Hash of the contract code
     /// * `message` - Raw instantiate message
     ///
-    /// The address is generated with the algorithm: `Sha256(code_hash + message)`
+    /// The address is generated with the algorithm: `Sha1(code_hash + message)`
     pub fn generate(code_hash: &[u8], message: &[u8]) -> Self {
-        let hash = Sha256::new()
+        let hash = Sha1::new()
             .chain_update(code_hash)
             .chain_update(message)
             .finalize();
@@ -79,7 +79,7 @@ impl Account {
     /// execution.
     /// See [`Self::generate`] for the generation algorithm
     pub fn generate_by_code(code: &[u8], message: &[u8]) -> Self {
-        let code_hash = Sha256::new().chain_update(code).finalize();
+        let code_hash = Sha1::new().chain_update(code).finalize();
         Self::generate(&code_hash[..], message)
     }
 }

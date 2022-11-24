@@ -728,7 +728,13 @@ pub(crate) fn create_vm(extension: &mut State, env: Env, info: MessageInfo) -> W
         .get(
             &extension
                 .contracts
-                .get(&env.clone().contract.address.try_into().unwrap())
+                .get(
+                    &env.clone()
+                        .contract
+                        .address
+                        .try_into()
+                        .expect("Invalid address"),
+                )
                 .expect("contract should have been uploaded")
                 .code_id,
         )

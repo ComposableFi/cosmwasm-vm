@@ -3,16 +3,14 @@
 #[cfg(test)]
 mod tests {
     use cosmwasm_std::to_binary;
-    use cosmwasm_vm::executor::{
-        CosmwasmExecutionResult, CosmwasmQueryResult, InstantiateResult, QueryResult,
-    };
+    use cosmwasm_std::ContractResult;
+    use cosmwasm_vm::executor::{CosmwasmQueryResult, QueryResult};
     use cw20::{BalanceResponse, Cw20Coin};
     use cw20_base::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
     use cw_orchestrate::{
-        execute,
         fetcher::*,
-        instantiate, query,
         vm::{Account, State},
+        Entrypoint, Full, Unit,
     };
     use std::assert_matches::assert_matches;
 
@@ -30,7 +28,7 @@ mod tests {
         let sender = Account::unchecked("sender");
 
         let mut state = State::with_codes(vec![&code]);
-        let (contract, res) = instantiate(
+        let (contract, res) = Unit::instantiate(
             &mut state,
             &sender,
             1,
@@ -50,9 +48,9 @@ mod tests {
             },
         )
         .unwrap();
-        assert_matches!(res, InstantiateResult(CosmwasmExecutionResult::Ok(_)));
+        assert_matches!(res, ContractResult::Ok(_));
 
-        let _ = execute(
+        let _ = Full::execute(
             &mut state,
             &sender,
             &contract,
@@ -66,7 +64,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            query(
+            Unit::query(
                 &mut state,
                 &contract,
                 QueryMsg::Balance {

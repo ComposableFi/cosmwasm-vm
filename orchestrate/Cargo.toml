@@ -21,6 +21,7 @@ wasmi = { git = "https://github.com/ComposableFi/wasmi", rev = "cd8c0c775a1d197a
 wasm-instrument = { version = "0.2", default-features = false }
 log = { version = "0.4", default-features = false }
 cosmwasm-crypto = { git = "https://github.com/ComposableFi/cosmwasm" }
+sha1 = { version = "0.10", default-features = false }
 sha2 = { version = "0.10", default-features = false }
 cw20-ics20-contract = { package = "cw20-ics20", git = "https://github.com/CosmWasm/cw-plus", rev = "53dc88fdb81888cbd3dae8742e7318b35d3d0c0f", default-features = false, features = [
   "library",
