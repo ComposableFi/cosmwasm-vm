@@ -782,7 +782,7 @@ impl<'a> Transactional for Context<'a> {
     }
     fn transaction_commit(&mut self) -> Result<(), Self::Error> {
         let _ = self.state.transactions.pop_back().expect("impossible");
-        log::debug!("< Transaction end: {}", self.state.transactions.len());
+        log::debug!("< Transaction commit: {}", self.state.transactions.len());
         Ok(())
     }
     fn transaction_rollback(&mut self) -> Result<(), Self::Error> {
