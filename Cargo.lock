@@ -171,18 +171,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cosmwasm-crypto"
-version = "1.1.6"
-source = "git+https://github.com/ComposableFi/cosmwasm#21351cc1ced863b9af7c8a69f923036bc919b3b1"
-dependencies = [
- "digest 0.10.5",
- "ed25519-zebra",
- "k256",
- "rand_core 0.6.3",
- "thiserror",
-]
-
-[[package]]
 name = "cosmwasm-derive"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -197,6 +185,30 @@ version = "1.1.6"
 source = "git+https://github.com/ComposableFi/cosmwasm?rev=21351cc1ced863b9af7c8a69f923036bc919b3b1#21351cc1ced863b9af7c8a69f923036bc919b3b1"
 dependencies = [
  "syn",
+]
+
+[[package]]
+name = "cosmwasm-orchestrate"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64",
+ "cosmwasm-crypto 1.1.6",
+ "cosmwasm-std 1.1.6",
+ "cosmwasm-vm",
+ "cosmwasm-vm-wasmi",
+ "cw20 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cw20-base",
+ "cw20-ics20",
+ "log",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2 0.10.6",
+ "tokio",
+ "wasm-instrument",
+ "wasmi",
 ]
 
 [[package]]
@@ -248,7 +260,7 @@ version = "1.1.6"
 source = "git+https://github.com/ComposableFi/cosmwasm?rev=21351cc1ced863b9af7c8a69f923036bc919b3b1#21351cc1ced863b9af7c8a69f923036bc919b3b1"
 dependencies = [
  "base64",
- "cosmwasm-crypto 1.1.6 (git+https://github.com/ComposableFi/cosmwasm?rev=21351cc1ced863b9af7c8a69f923036bc919b3b1)",
+ "cosmwasm-crypto 1.1.6",
  "cosmwasm-derive 1.1.6",
  "derivative",
  "forward_ref",
@@ -354,30 +366,6 @@ dependencies = [
  "schemars",
  "serde",
  "thiserror",
-]
-
-[[package]]
-name = "cw-orchestrate"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "base64",
- "cosmwasm-crypto 1.1.6 (git+https://github.com/ComposableFi/cosmwasm)",
- "cosmwasm-std 1.1.6",
- "cosmwasm-vm",
- "cosmwasm-vm-wasmi",
- "cw20 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "cw20-base",
- "cw20-ics20",
- "log",
- "reqwest",
- "serde",
- "serde_json",
- "sha1",
- "sha2 0.10.6",
- "tokio",
- "wasm-instrument",
- "wasmi",
 ]
 
 [[package]]
