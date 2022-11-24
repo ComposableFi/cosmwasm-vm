@@ -308,6 +308,12 @@ impl<'a> VMBase for Context<'a> {
         message: &[u8],
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error> {
+        self.state.db.bank.transfer(
+            &self.env.contract.address.clone().try_into()?,
+            &address,
+            funds.as_ref(),
+        )?;
+
         self.load_subvm(address, funds, |sub_vm| {
             cosmwasm_system_run::<ExecuteInput<Self::MessageCustom>, _>(
                 sub_vm,
@@ -333,6 +339,13 @@ impl<'a> VMBase for Context<'a> {
                 .1,
             message,
         );
+
+        self.state.db.bank.transfer(
+            &self.env.contract.address.clone().try_into()?,
+            &address,
+            funds.as_ref(),
+        )?;
+
         self.state
             .db
             .contracts
@@ -732,7 +745,7 @@ impl<'a> VMBase for Context<'a> {
             Some(channel) => {
                 channel.packets.push(IbcPacket { data, timeout });
                 Ok(())
-            },
+            }
             None => Err(VmError::UnknownIbcChannel),
         }
     }
