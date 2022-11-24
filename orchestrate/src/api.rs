@@ -125,10 +125,10 @@ pub trait Entrypoint {
         message: &[u8],
     ) -> Result<(Account, Self::Output<'a>), VmError> {
         vm_state.gas = Gas::new(gas);
-        if vm_state.contracts.contains_key(address) {
+        if vm_state.db.contracts.contains_key(address) {
             return Err(VmError::AlreadyInstantiated);
         }
-        vm_state.contracts.insert(
+        vm_state.db.contracts.insert(
             address.clone(),
             CosmwasmContractMeta {
                 code_id,
@@ -155,10 +155,13 @@ pub trait Entrypoint {
             },
         );
 
-        Ok((
-            address.clone(),
-            Self::raw_system_call::<InstantiateInput>(&mut vm, message)?,
-        ))
+        match Self::raw_system_call::<InstantiateInput>(&mut vm, message) {
+            Ok(output) => Ok((address.clone(), output)),
+            Err(e) => {
+                vm_state.db.contracts.remove(address);
+                Err(e)
+            }
+        }
     }
 
     /// Execute a contract.

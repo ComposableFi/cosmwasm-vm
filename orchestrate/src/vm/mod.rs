@@ -3,7 +3,10 @@ pub mod cw20_ics20;
 mod error;
 
 pub use account::*;
-use alloc::{collections::BTreeMap, string::ToString};
+use alloc::{
+    collections::{BTreeMap, VecDeque},
+    string::ToString,
+};
 use core::num::NonZeroU32;
 use cosmwasm_std::{
     Binary, Coin, ContractInfo, ContractInfoResponse, Empty, Env, Event, IbcTimeout, MessageInfo,
@@ -112,11 +115,17 @@ pub struct IbcState {
 }
 
 #[derive(Default, Clone)]
-pub struct State {
+pub struct Db {
     pub ibc: BTreeMap<Account, IbcState>,
-    pub storage: BTreeMap<Account, Storage>,
-    pub codes: BTreeMap<CosmwasmCodeId, (Vec<u8>, Vec<u8>)>,
     pub contracts: BTreeMap<Account, CosmwasmContractMeta<Account>>,
+    pub storage: BTreeMap<Account, Storage>,
+}
+
+#[derive(Default, Clone)]
+pub struct State {
+    pub tmp_db_queue: VecDeque<Db>,
+    pub db: Db,
+    pub codes: BTreeMap<CosmwasmCodeId, (Vec<u8>, Vec<u8>)>,
     pub transaction_depth: u32,
     pub gas: Gas,
 }
@@ -175,6 +184,7 @@ impl<'a> Context<'a> {
         let code = (|| {
             let CosmwasmContractMeta { code_id, .. } = self
                 .state
+                .db
                 .contracts
                 .get(&address)
                 .cloned()
@@ -227,6 +237,7 @@ impl<'a> VMBase for Context<'a> {
     fn running_contract_meta(&mut self) -> Result<Self::ContractMeta, Self::Error> {
         Ok(self
             .state
+            .db
             .contracts
             .get(&Account::try_from(self.env.contract.address.clone()).expect("impossible"))
             .cloned()
@@ -240,6 +251,7 @@ impl<'a> VMBase for Context<'a> {
     ) -> Result<(), Self::Error> {
         let meta = self
             .state
+            .db
             .contracts
             .get_mut(&address)
             .ok_or(VmError::ContractNotFound(address))?;
@@ -251,6 +263,7 @@ impl<'a> VMBase for Context<'a> {
 
     fn contract_meta(&mut self, address: Self::Address) -> Result<Self::ContractMeta, Self::Error> {
         self.state
+            .db
             .contracts
             .get_mut(&address)
             .ok_or(VmError::ContractNotFound(address))
@@ -299,7 +312,10 @@ impl<'a> VMBase for Context<'a> {
                 .1,
             message,
         );
-        self.state.contracts.insert(address.clone(), contract_meta);
+        self.state
+            .db
+            .contracts
+            .insert(address.clone(), contract_meta);
 
         self.load_subvm(address.clone(), funds, |sub_vm| {
             cosmwasm_system_run::<InstantiateInput<Self::MessageCustom>, _>(
@@ -348,6 +364,7 @@ impl<'a> VMBase for Context<'a> {
     ) -> Result<Option<Self::StorageValue>, Self::Error> {
         Ok(self
             .state
+            .db
             .storage
             .get(&address)
             .unwrap_or(&Default::default())
@@ -400,6 +417,7 @@ impl<'a> VMBase for Context<'a> {
         let mut empty = Storage::default();
         let storage = self
             .state
+            .db
             .storage
             .get_mut(&contract_addr)
             .unwrap_or(&mut empty);
@@ -426,6 +444,7 @@ impl<'a> VMBase for Context<'a> {
         let contract_addr = self.env.contract.address.clone().try_into()?;
         let storage = self
             .state
+            .db
             .storage
             .get_mut(&contract_addr)
             .ok_or(VmError::IteratorDoesNotExist)?;
@@ -566,6 +585,7 @@ impl<'a> VMBase for Context<'a> {
         let empty = Storage::default();
         Ok(self
             .state
+            .db
             .storage
             .get(&contract_addr)
             .unwrap_or(&empty)
@@ -581,6 +601,7 @@ impl<'a> VMBase for Context<'a> {
     ) -> Result<(), Self::Error> {
         let contract_addr = self.env.contract.address.clone().try_into()?;
         self.state
+            .db
             .storage
             .entry(contract_addr)
             .or_insert_with(Storage::default)
@@ -592,6 +613,7 @@ impl<'a> VMBase for Context<'a> {
     fn db_remove(&mut self, key: Self::StorageKey) -> Result<(), Self::Error> {
         let contract_addr = self.env.contract.address.clone().try_into()?;
         self.state
+            .db
             .storage
             .get_mut(&contract_addr)
             .map(|contract_storage| contract_storage.data.remove(&key));
@@ -662,7 +684,7 @@ impl<'a> VMBase for Context<'a> {
         timeout: IbcTimeout,
     ) -> Result<(), Self::Error> {
         let contract_addr = self.env.contract.address.clone().try_into()?;
-        let entry = self.state.ibc.entry(contract_addr).or_default();
+        let entry = self.state.db.ibc.entry(contract_addr).or_default();
         entry.packets_sent.push(IbcPacket {
             channel_id,
             data,
@@ -691,16 +713,19 @@ impl<'a> Transactional for Context<'a> {
     type Error = VmError;
     fn transaction_begin(&mut self) -> Result<(), Self::Error> {
         self.state.transaction_depth += 1;
+        self.state.tmp_db_queue.push_back(self.state.db.clone());
         log::debug!("> Transaction begin: {}", self.state.transaction_depth);
         Ok(())
     }
     fn transaction_commit(&mut self) -> Result<(), Self::Error> {
         self.state.transaction_depth -= 1;
+        let _ = self.state.tmp_db_queue.pop_back().expect("impossible");
         log::debug!("< Transaction end: {}", self.state.transaction_depth);
         Ok(())
     }
     fn transaction_rollback(&mut self) -> Result<(), Self::Error> {
         self.state.transaction_depth -= 1;
+        self.state.db = self.state.tmp_db_queue.pop_back().expect("impossible");
         log::debug!("< Transaction abort: {}", self.state.transaction_depth);
         Ok(())
     }
@@ -727,6 +752,7 @@ pub(crate) fn create_vm(extension: &mut State, env: Env, info: MessageInfo) -> W
         .codes
         .get(
             &extension
+                .db
                 .contracts
                 .get(
                     &env.clone()
