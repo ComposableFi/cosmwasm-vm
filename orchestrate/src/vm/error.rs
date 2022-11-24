@@ -7,12 +7,14 @@ use cosmwasm_vm::{
 use cosmwasm_vm_wasmi::WasmiVMError;
 use wasmi::CanResume;
 
+use super::bank;
 use super::Account;
 
 #[derive(Debug)]
 pub enum VmError {
     Interpreter(wasmi::Error),
     VMError(WasmiVMError),
+    BankError(bank::Error),
     CodeNotFound(CosmwasmCodeId),
     ContractNotFound(Account),
     InvalidAddress,
@@ -61,6 +63,12 @@ impl From<MemoryReadError> for VmError {
 impl From<MemoryWriteError> for VmError {
     fn from(e: MemoryWriteError) -> Self {
         VmError::VMError(e.into())
+    }
+}
+
+impl From<bank::Error> for VmError {
+    fn from(e: bank::Error) -> Self {
+        Self::BankError(e)
     }
 }
 

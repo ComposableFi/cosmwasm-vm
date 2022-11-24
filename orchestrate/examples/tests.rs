@@ -2,23 +2,82 @@
 
 #[cfg(test)]
 mod tests {
-    use cosmwasm_std::to_binary;
-    use cosmwasm_std::ContractResult;
+    use cosmwasm_orchestrate::{
+        fetcher::*,
+        vm::{Account, StateBuilder},
+        Entrypoint, Full, Unit,
+    };
+    use cosmwasm_std::{to_binary, BankMsg, Coin, ContractResult, CosmosMsg};
     use cosmwasm_vm::executor::{CosmwasmQueryResult, QueryResult};
     use cw20::{BalanceResponse, Cw20Coin};
     use cw20_base::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
-    use cw_orchestrate::{
-        fetcher::*,
-        vm::{Account, State},
-        Entrypoint, Full, Unit,
-    };
     use std::assert_matches::assert_matches;
 
-    const CW20_BASE_URL: &'static str =
-        "https://github.com/CosmWasm/cw-plus/releases/download/v0.16.0/cw20_base.wasm";
+    const REFLECT_URL: &'static str =
+        "https://github.com/CosmWasm/cosmwasm/releases/download/v1.1.8/reflect.wasm";
 
     #[tokio::test]
-    async fn works() {
+    async fn bank() {
+        let code = FileFetcher::from_url(REFLECT_URL).await.unwrap();
+        let sender = Account::unchecked("sender");
+        let mut state = StateBuilder::new()
+            .add_code(&code)
+            .add_balance(&sender, &Coin::new(10_000_000, "denom"))
+            .build();
+        let (contract, _) = Full::instantiate_raw(
+            &mut state,
+            &sender,
+            1,
+            None,
+            vec![Coin::new(400_000, "denom")],
+            100_000_000,
+            r#"{}"#.as_bytes(),
+        )
+        .unwrap();
+
+        let msgs: Vec<CosmosMsg> = vec![
+            BankMsg::Send {
+                to_address: "receiver".into(),
+                amount: vec![Coin::new(100_000, "denom")],
+            }
+            .into(),
+            BankMsg::Burn {
+                amount: vec![Coin::new(200_000, "denom")],
+            }
+            .into(),
+        ];
+
+        let _ = Full::execute_raw(
+            &mut state,
+            &sender,
+            &contract,
+            vec![],
+            100_000_000,
+            format!(
+                r#"{{
+                    "reflect_msg": {{
+                        "msgs": {}
+                    }}
+                }}"#,
+                serde_json::to_string(&msgs).unwrap()
+            )
+            .as_bytes(),
+        );
+
+        assert_eq!(state.db.bank.balance(&sender, "denom"), 9_600_000);
+        assert_eq!(state.db.bank.balance(&contract, "denom"), 100_000);
+        assert_eq!(
+            state
+                .db
+                .bank
+                .balance(&Account::unchecked("receiver"), "denom"),
+            100_000
+        );
+        assert_eq!(*state.db.bank.supply.get("denom").unwrap(), 9_800_000);
+    }
+
+    #[tokio::test]
+    async fn cw20() {
         let code = CosmosFetcher::from_contract_addr(
             "https://juno-api.polkachu.com",
             "juno19rqljkh95gh40s7qdx40ksx3zq5tm4qsmsrdz9smw668x9zdr3lqtg33mf",
@@ -27,7 +86,7 @@ mod tests {
         .unwrap();
         let sender = Account::unchecked("sender");
 
-        let mut state = State::with_codes(vec![&code]);
+        let mut state = StateBuilder::new().add_code(&code).build();
         let (contract, res) = Unit::instantiate(
             &mut state,
             &sender,

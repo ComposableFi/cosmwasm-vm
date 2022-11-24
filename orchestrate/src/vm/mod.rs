@@ -1,12 +1,16 @@
 mod account;
+mod bank;
 pub mod cw20_ics20;
 mod error;
 
 pub use account::*;
+pub use error::*;
+
 use alloc::{
     collections::{BTreeMap, VecDeque},
     string::ToString,
 };
+use bank::Bank;
 use core::num::NonZeroU32;
 use cosmwasm_std::{
     Binary, Coin, ContractInfo, ContractInfoResponse, Empty, Env, Event, IbcTimeout, MessageInfo,
@@ -27,7 +31,6 @@ use cosmwasm_vm_wasmi::{
     host_functions, new_wasmi_vm, WasmiHostFunction, WasmiHostFunctionIndex, WasmiImportResolver,
     WasmiInput, WasmiModule, WasmiModuleExecutor, WasmiOutput, WasmiVM, WasmiVMError,
 };
-pub use error::*;
 use sha2::{Digest, Sha256};
 use wasm_instrument::gas_metering::Rules;
 
@@ -137,6 +140,7 @@ pub struct Db {
     pub ibc: BTreeMap<(Account, IbcChannelId), IbcState>,
     pub contracts: BTreeMap<Account, CosmwasmContractMeta<Account>>,
     pub storage: BTreeMap<Account, Storage>,
+    pub bank: Bank,
 }
 
 #[derive(Default, Clone)]
@@ -397,22 +401,34 @@ impl<'a> VMBase for Context<'a> {
             to,
             funds
         );
-        Err(VmError::Unsupported)
+        let account = self.env.contract.address.clone().try_into()?;
+        self.state
+            .db
+            .bank
+            .transfer(&account, to, funds)
+            .map_err(Into::into)
     }
 
     fn burn(&mut self, funds: &[Coin]) -> Result<(), Self::Error> {
         log::debug!("Burn: {:?}\n{:?}", self.env.contract.address, funds);
-        Err(VmError::Unsupported)
+        self.state
+            .db
+            .bank
+            .burn(&self.env.contract.address.clone().try_into()?, funds)
+            .map_err(Into::into)
     }
 
-    fn balance(&mut self, _: &Self::Address, _: String) -> Result<Coin, Self::Error> {
+    fn balance(&mut self, account: &Self::Address, denom: String) -> Result<Coin, Self::Error> {
         log::debug!("Query balance.");
-        Err(VmError::Unsupported)
+        Ok(Coin::new(
+            self.state.db.bank.balance(account, &denom),
+            denom,
+        ))
     }
 
-    fn all_balance(&mut self, _: &Self::Address) -> Result<Vec<Coin>, Self::Error> {
+    fn all_balance(&mut self, account: &Self::Address) -> Result<Vec<Coin>, Self::Error> {
         log::debug!("Query all balance.");
-        Err(VmError::Unsupported)
+        Ok(self.state.db.bank.all_balances(account))
     }
 
     fn query_info(&mut self, _: Self::Address) -> Result<ContractInfoResponse, Self::Error> {
@@ -814,17 +830,80 @@ pub(crate) fn create_vm(extension: &mut State, env: Env, info: MessageInfo) -> W
 }
 
 impl State {
-    pub fn with_codes(codes: Vec<&[u8]>) -> Self {
+    pub fn new(codes: Vec<Vec<u8>>, initial_balances: Vec<(Account, Coin)>) -> Self {
         let mut code_id = 0;
         Self {
             codes: BTreeMap::from_iter(codes.into_iter().map(|code| {
                 code_id += 1;
-                let code_hash: Vec<u8> = Sha256::new().chain_update(code).finalize()[..].into();
-                (code_id, (code_hash, code.into()))
+                let code_hash: Vec<u8> = Sha256::new().chain_update(&code).finalize()[..].into();
+                (code_id, (code_hash, code))
             })),
             gas: Gas::new(100_000_000),
-            ..Default::default()
+            db: if !initial_balances.is_empty() {
+                let mut supply = bank::Supply::new();
+                let mut balances = bank::Balances::new();
+
+                initial_balances.into_iter().for_each(|(account, coin)| {
+                    supply
+                        .entry(coin.denom.clone())
+                        .and_modify(|amount| *amount += Into::<u128>::into(coin.amount))
+                        .or_insert_with(|| coin.amount.into());
+                    balances
+                        .entry(account)
+                        .and_modify(|coins| {
+                            coins
+                                .entry(coin.denom.clone())
+                                .and_modify(|amount| *amount += Into::<u128>::into(coin.amount))
+                                .or_insert_with(|| (coin.amount.into()));
+                        })
+                        .or_insert_with(|| [(coin.denom, coin.amount.into())].into());
+                });
+
+                Db {
+                    bank: Bank::new(supply, balances),
+                    ..Default::default()
+                }
+            } else {
+                Default::default()
+            },
+            transactions: Default::default(),
         }
+    }
+}
+
+#[derive(Default)]
+pub struct StateBuilder {
+    codes: Vec<Vec<u8>>,
+    balances: Vec<(Account, Coin)>,
+}
+
+impl StateBuilder {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn add_code(mut self, code: &[u8]) -> Self {
+        self.codes.push(code.into());
+        self
+    }
+
+    pub fn add_balance(mut self, account: &Account, coin: &Coin) -> Self {
+        self.balances.push((account.clone(), coin.clone()));
+        self
+    }
+
+    pub fn add_codes(mut self, codes: Vec<&[u8]>) -> Self {
+        self.codes.extend(codes.into_iter().map(Into::into));
+        self
+    }
+
+    pub fn add_balances(mut self, balances: Vec<(Account, Coin)>) -> Self {
+        self.balances.extend(balances.into_iter().map(Into::into));
+        self
+    }
+
+    pub fn build(self) -> State {
+        State::new(self.codes, self.balances)
     }
 }
 

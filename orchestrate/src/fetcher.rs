@@ -5,10 +5,12 @@ use serde::{Deserialize, Serialize};
 pub struct FileFetcher;
 
 impl FileFetcher {
-    pub fn from_url<S: AsRef<str>>(url: S) -> Result<Vec<u8>, Error> {
-        Ok(reqwest::blocking::get(url.as_ref())
+    pub async fn from_url<S: AsRef<str>>(url: S) -> Result<Vec<u8>, Error> {
+        Ok(reqwest::get(url.as_ref())
+            .await
             .map_err(|_| Error::Network)?
             .bytes()
+            .await
             .map_err(|_| Error::Network)?
             .to_vec())
     }

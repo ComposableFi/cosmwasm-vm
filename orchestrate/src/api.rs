@@ -136,6 +136,7 @@ pub trait Entrypoint {
                 label: String::from("test-label"),
             },
         );
+        vm_state.db.bank.transfer(sender, address, &funds)?;
         let mut vm = create_vm(
             vm_state,
             Env {
@@ -151,10 +152,9 @@ pub trait Entrypoint {
             },
             MessageInfo {
                 sender: sender.clone().into(),
-                funds,
+                funds: funds.clone(),
             },
         );
-
         match Self::raw_system_call::<InstantiateInput>(&mut vm, message) {
             Ok(output) => Ok((address.clone(), output)),
             Err(e) => {
@@ -181,6 +181,7 @@ pub trait Entrypoint {
         message: &[u8],
     ) -> Result<Self::Output<'a>, VmError> {
         vm_state.gas = Gas::new(gas);
+        vm_state.db.bank.transfer(sender, contract, &funds)?;
         let mut vm = create_vm(
             vm_state,
             Env {
@@ -196,10 +197,9 @@ pub trait Entrypoint {
             },
             MessageInfo {
                 sender: sender.clone().into(),
-                funds,
+                funds: funds.clone(),
             },
         );
-        // cosmwasm_system_entrypoint::<ExecuteInput, WasmiVM<Context>>(&mut vm, message)
         Self::raw_system_call::<ExecuteInput>(&mut vm, message)
     }
 
