@@ -608,23 +608,22 @@ where
                                 contract_addr,
                                 msg: Binary(msg),
                                 funds,
-                            } => {
-                                let vm_contract_addr = contract_addr.try_into()?;
+                            } => contract_addr.try_into().and_then(|vm_contract_addr| {
                                 vm.continue_execute(
                                     vm_contract_addr,
                                     funds,
                                     &msg,
                                     &mut sub_event_handler,
                                 )
-                            }
+                            }),
                             WasmMsg::Instantiate {
                                 admin,
                                 code_id,
                                 msg,
                                 funds,
                                 label,
-                            } => {
-                                let (_, data) = vm.continue_instantiate(
+                            } => vm
+                                .continue_instantiate(
                                     CosmwasmContractMeta {
                                         code_id,
                                         admin: match admin {
@@ -636,59 +635,69 @@ where
                                     funds,
                                     &msg,
                                     &mut sub_event_handler,
-                                )?;
-
-                                Ok(data)
-                            }
+                                )
+                                .map(|(_, data)| data),
                             WasmMsg::Migrate {
                                 contract_addr,
                                 new_code_id,
                                 msg: Binary(msg),
-                            } => {
-                                let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
-                                let CosmwasmContractMeta { admin, label, .. } =
-                                    vm.contract_meta(vm_contract_addr.clone())?;
-                                ensure_admin::<V>(&info.sender, admin.clone())?;
-                                vm.set_contract_meta(
-                                    vm_contract_addr.clone(),
-                                    CosmwasmContractMeta {
-                                        code_id: new_code_id,
-                                        admin,
-                                        label,
-                                    },
-                                )?;
-                                vm.continue_migrate(vm_contract_addr, &msg, &mut sub_event_handler)
-                            }
+                            } => VmAddressOf::<V>::try_from(contract_addr).and_then(
+                                |vm_contract_addr| {
+                                    vm.contract_meta(vm_contract_addr.clone()).and_then(
+                                        |CosmwasmContractMeta { admin, label, .. }| {
+                                            ensure_admin::<V>(&info.sender, admin.clone()).and_then(
+                                                |_| {
+                                                    vm.set_contract_meta(
+                                                        vm_contract_addr.clone(),
+                                                        CosmwasmContractMeta {
+                                                            code_id: new_code_id,
+                                                            admin,
+                                                            label,
+                                                        },
+                                                    )
+                                                    .and_then(|_| {
+                                                        vm.continue_migrate(
+                                                            vm_contract_addr,
+                                                            &msg,
+                                                            &mut sub_event_handler,
+                                                        )
+                                                    })
+                                                },
+                                            )
+                                        },
+                                    )
+                                },
+                            ),
                             WasmMsg::UpdateAdmin {
                                 contract_addr,
                                 admin: new_admin,
-                            } => {
-                                let new_admin = new_admin.try_into()?;
-                                let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
-                                update_admin::<V>(
-                                    vm,
-                                    &info.sender,
-                                    vm_contract_addr,
-                                    Some(new_admin),
+                            } => new_admin.try_into().and_then(|new_admin| {
+                                VmAddressOf::<V>::try_from(contract_addr).and_then(
+                                    |vm_contract_addr| {
+                                        update_admin::<V>(
+                                            vm,
+                                            &info.sender,
+                                            vm_contract_addr,
+                                            Some(new_admin),
+                                        )
+                                        .map(|_| None)
+                                    },
                                 )
-                                .map(|_| None)
-                            }
-                            WasmMsg::ClearAdmin { contract_addr } => {
-                                let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
+                            }),
+                            WasmMsg::ClearAdmin { contract_addr } => VmAddressOf::<V>::try_from(
+                                contract_addr,
+                            )
+                            .and_then(|vm_contract_addr| {
                                 update_admin::<V>(vm, &info.sender, vm_contract_addr, None)
                                     .map(|_| None)
-                            }
+                            }),
                             _ => Err(SystemError::UnsupportedMessage.into()),
                         },
                         CosmosMsg::Bank(bank_message) => match bank_message {
-                            BankMsg::Send { to_address, amount } => {
-                                vm.transfer(&to_address.try_into()?, &amount)?;
-                                Ok(None)
-                            }
-                            BankMsg::Burn { amount } => {
-                                vm.burn(&amount)?;
-                                Ok(None)
-                            }
+                            BankMsg::Send { to_address, amount } => to_address
+                                .try_into()
+                                .and_then(|dest| vm.transfer(&dest, &amount).map(|_| None)),
+                            BankMsg::Burn { amount } => vm.burn(&amount).map(|_| None),
                             _ => Err(SystemError::UnsupportedMessage.into()),
                         },
                         #[cfg(feature = "stargate")]
@@ -698,21 +707,16 @@ where
                                 to_address,
                                 amount,
                                 timeout,
-                            } => {
-                                vm.ibc_transfer(channel_id, to_address, amount, timeout)?;
-                                Ok(None)
-                            }
+                            } => vm
+                                .ibc_transfer(channel_id, to_address, amount, timeout)
+                                .map(|_| None),
                             IbcMsg::SendPacket {
                                 channel_id,
                                 data,
                                 timeout,
-                            } => {
-                                vm.ibc_send_packet(channel_id, data, timeout)?;
-                                Ok(None)
-                            }
+                            } => vm.ibc_send_packet(channel_id, data, timeout).map(|_| None),
                             IbcMsg::CloseChannel { channel_id } => {
-                                vm.ibc_close_channel(channel_id)?;
-                                Ok(None)
+                                vm.ibc_close_channel(channel_id).map(|_| None)
                             }
                             _ => Err(SystemError::UnsupportedMessage.into()),
                         },
