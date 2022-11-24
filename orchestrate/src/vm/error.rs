@@ -25,6 +25,7 @@ pub enum VmError {
     IteratorDoesNotExist,
     AlreadyInstantiated,
     CannotSerialize,
+    UnknownIbcChannel,
 }
 
 impl From<wasmi::Error> for VmError {

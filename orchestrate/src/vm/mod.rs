@@ -104,14 +104,12 @@ pub struct Storage {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IbcPacket {
-    pub channel_id: String,
     pub data: Binary,
     pub timeout: IbcTimeout,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IbcTransfer {
-    pub channel_id: String,
     pub to_address: String,
     pub amount: Coin,
     pub timeout: IbcTimeout,
@@ -121,12 +119,22 @@ pub struct IbcTransfer {
 pub struct IbcState {
     pub packets: Vec<IbcPacket>,
     pub transfers: Vec<IbcTransfer>,
-    pub close_requests: Vec<String>,
+    pub request_close: bool,
 }
+
+impl IbcState {
+    pub fn clear(&mut self) {
+        self.packets.clear();
+        self.transfers.clear();
+        self.request_close = false;
+    }
+}
+
+pub type IbcChannelId = String;
 
 #[derive(Default, Clone)]
 pub struct Db {
-    pub ibc: BTreeMap<Account, IbcState>,
+    pub ibc: BTreeMap<(Account, IbcChannelId), IbcState>,
     pub contracts: BTreeMap<Account, CosmwasmContractMeta<Account>>,
     pub storage: BTreeMap<Account, Storage>,
 }
@@ -684,14 +692,17 @@ impl<'a> VMBase for Context<'a> {
         timeout: IbcTimeout,
     ) -> Result<(), Self::Error> {
         let contract_addr = self.env.contract.address.clone().try_into()?;
-        let entry = self.state.db.ibc.entry(contract_addr).or_default();
-        entry.transfers.push(IbcTransfer {
-            channel_id,
-            to_address,
-            amount,
-            timeout,
-        });
-        Ok(())
+        match self.state.db.ibc.get_mut(&(contract_addr, channel_id)) {
+            Some(channel) => {
+                channel.transfers.push(IbcTransfer {
+                    to_address,
+                    amount,
+                    timeout,
+                });
+                Ok(())
+            }
+            None => Err(VmError::UnknownIbcChannel),
+        }
     }
 
     fn ibc_send_packet(
@@ -701,20 +712,24 @@ impl<'a> VMBase for Context<'a> {
         timeout: IbcTimeout,
     ) -> Result<(), Self::Error> {
         let contract_addr = self.env.contract.address.clone().try_into()?;
-        let entry = self.state.db.ibc.entry(contract_addr).or_default();
-        entry.packets.push(IbcPacket {
-            channel_id,
-            data,
-            timeout,
-        });
-        Ok(())
+        match self.state.db.ibc.get_mut(&(contract_addr, channel_id)) {
+            Some(channel) => {
+                channel.packets.push(IbcPacket { data, timeout });
+                Ok(())
+            },
+            None => Err(VmError::UnknownIbcChannel),
+        }
     }
 
     fn ibc_close_channel(&mut self, channel_id: String) -> Result<(), Self::Error> {
         let contract_addr = self.env.contract.address.clone().try_into()?;
-        let entry = self.state.db.ibc.entry(contract_addr).or_default();
-        entry.close_requests.push(channel_id);
-        Ok(())
+        match self.state.db.ibc.get_mut(&(contract_addr, channel_id)) {
+            Some(channel) => {
+                channel.request_close = true;
+                Ok(())
+            }
+            None => Err(VmError::UnknownIbcChannel),
+        }
     }
 }
 

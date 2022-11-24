@@ -1,3 +1,5 @@
+use core::fmt::Display;
+
 use super::VmError;
 use alloc::format;
 use alloc::vec::Vec;
@@ -28,6 +30,12 @@ impl From<CanonicalAccount> for CanonicalAddr {
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Account(pub Addr);
+
+impl Display for Account {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+      <Addr as Display>::fmt(&self.0, f)
+    }
+}
 
 impl TryFrom<Addr> for Account {
     type Error = VmError;
