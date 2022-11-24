@@ -109,9 +109,19 @@ pub struct IbcPacket {
     pub timeout: IbcTimeout,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IbcTransfer {
+    pub channel_id: String,
+    pub to_address: String,
+    pub amount: Coin,
+    pub timeout: IbcTimeout,
+}
+
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub struct IbcState {
-    pub packets_sent: Vec<IbcPacket>,
+    pub packets: Vec<IbcPacket>,
+    pub transfers: Vec<IbcTransfer>,
+    pub close_requests: Vec<String>,
 }
 
 #[derive(Default, Clone)]
@@ -123,10 +133,9 @@ pub struct Db {
 
 #[derive(Default, Clone)]
 pub struct State {
-    pub tmp_db_queue: VecDeque<Db>,
+    pub transactions: VecDeque<Db>,
     pub db: Db,
     pub codes: BTreeMap<CosmwasmCodeId, (Vec<u8>, Vec<u8>)>,
-    pub transaction_depth: u32,
     pub gas: Gas,
 }
 
@@ -380,12 +389,12 @@ impl<'a> VMBase for Context<'a> {
             to,
             funds
         );
-        Ok(())
+        Err(VmError::Unsupported)
     }
 
     fn burn(&mut self, funds: &[Coin]) -> Result<(), Self::Error> {
         log::debug!("Burn: {:?}\n{:?}", self.env.contract.address, funds);
-        Ok(())
+        Err(VmError::Unsupported)
     }
 
     fn balance(&mut self, _: &Self::Address, _: String) -> Result<Coin, Self::Error> {
@@ -395,7 +404,7 @@ impl<'a> VMBase for Context<'a> {
 
     fn all_balance(&mut self, _: &Self::Address) -> Result<Vec<Coin>, Self::Error> {
         log::debug!("Query all balance.");
-        Ok(vec![])
+        Err(VmError::Unsupported)
     }
 
     fn query_info(&mut self, _: Self::Address) -> Result<ContractInfoResponse, Self::Error> {
@@ -669,12 +678,20 @@ impl<'a> VMBase for Context<'a> {
 
     fn ibc_transfer(
         &mut self,
-        _channel_id: String,
-        _to_address: String,
-        _amount: Coin,
-        _timeout: IbcTimeout,
+        channel_id: String,
+        to_address: String,
+        amount: Coin,
+        timeout: IbcTimeout,
     ) -> Result<(), Self::Error> {
-        todo!()
+        let contract_addr = self.env.contract.address.clone().try_into()?;
+        let entry = self.state.db.ibc.entry(contract_addr).or_default();
+        entry.transfers.push(IbcTransfer {
+            channel_id,
+            to_address,
+            amount,
+            timeout,
+        });
+        Ok(())
     }
 
     fn ibc_send_packet(
@@ -685,7 +702,7 @@ impl<'a> VMBase for Context<'a> {
     ) -> Result<(), Self::Error> {
         let contract_addr = self.env.contract.address.clone().try_into()?;
         let entry = self.state.db.ibc.entry(contract_addr).or_default();
-        entry.packets_sent.push(IbcPacket {
+        entry.packets.push(IbcPacket {
             channel_id,
             data,
             timeout,
@@ -693,8 +710,11 @@ impl<'a> VMBase for Context<'a> {
         Ok(())
     }
 
-    fn ibc_close_channel(&mut self, _channel_id: String) -> Result<(), Self::Error> {
-        todo!()
+    fn ibc_close_channel(&mut self, channel_id: String) -> Result<(), Self::Error> {
+        let contract_addr = self.env.contract.address.clone().try_into()?;
+        let entry = self.state.db.ibc.entry(contract_addr).or_default();
+        entry.close_requests.push(channel_id);
+        Ok(())
     }
 }
 
@@ -712,21 +732,18 @@ impl<'a> Has<MessageInfo> for Context<'a> {
 impl<'a> Transactional for Context<'a> {
     type Error = VmError;
     fn transaction_begin(&mut self) -> Result<(), Self::Error> {
-        self.state.transaction_depth += 1;
-        self.state.tmp_db_queue.push_back(self.state.db.clone());
-        log::debug!("> Transaction begin: {}", self.state.transaction_depth);
+        self.state.transactions.push_back(self.state.db.clone());
+        log::debug!("> Transaction begin: {}", self.state.transactions.len());
         Ok(())
     }
     fn transaction_commit(&mut self) -> Result<(), Self::Error> {
-        self.state.transaction_depth -= 1;
-        let _ = self.state.tmp_db_queue.pop_back().expect("impossible");
-        log::debug!("< Transaction end: {}", self.state.transaction_depth);
+        let _ = self.state.transactions.pop_back().expect("impossible");
+        log::debug!("< Transaction end: {}", self.state.transactions.len());
         Ok(())
     }
     fn transaction_rollback(&mut self) -> Result<(), Self::Error> {
-        self.state.transaction_depth -= 1;
-        self.state.db = self.state.tmp_db_queue.pop_back().expect("impossible");
-        log::debug!("< Transaction abort: {}", self.state.transaction_depth);
+        self.state.db = self.state.transactions.pop_back().expect("impossible");
+        log::debug!("< Transaction abort: {}", self.state.transactions.len());
         Ok(())
     }
 }
@@ -790,7 +807,6 @@ impl State {
                 let code_hash: Vec<u8> = Sha256::new().chain_update(code).finalize()[..].into();
                 (code_id, (code_hash, code.into()))
             })),
-            transaction_depth: 0,
             gas: Gas::new(100_000_000),
             ..Default::default()
         }
