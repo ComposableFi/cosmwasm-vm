@@ -8,6 +8,7 @@ extern crate alloc;
 mod api;
 pub mod error;
 pub mod fetcher;
+pub mod ibc;
 pub mod vm;
 
 pub use api::*;

@@ -1,9 +1,16 @@
 use crate::vm::{create_vm, Account, Context, Gas, State, VmError};
 use cosmwasm_std::{
-    Addr, Binary, BlockInfo, Coin, ContractInfo, Env, Event, MessageInfo, Timestamp,
+    Addr, Binary, BlockInfo, Coin, ContractInfo, Env, Event, IbcChannelConnectMsg, IbcPacketAckMsg,
+    IbcPacketReceiveMsg, MessageInfo, Timestamp, IbcPacketTimeoutMsg,
 };
 use cosmwasm_vm::{
-    executor::{cosmwasm_call, ExecuteInput, InstantiateInput, QueryInput, QueryResult},
+    executor::{
+        cosmwasm_call,
+        ibc::{
+            IbcChannelConnectInput, IbcChannelOpenInput, IbcPacketAckInput, IbcPacketReceiveInput, IbcPacketTimeoutInput,
+        },
+        ExecuteInput, InstantiateInput, QueryInput, QueryResult,
+    },
     system::{
         cosmwasm_system_entrypoint, CosmwasmCallVM, CosmwasmCodeId, CosmwasmContractMeta,
         StargateCosmwasmCallVM,
@@ -223,6 +230,173 @@ pub trait Entrypoint {
         Self::execute_raw(vm_state, sender, contract, funds, gas, &message)
     }
 
+    /// Initiate an IBC channel handshake.
+    ///
+    /// * `vm_state`: Shared VM state.
+    /// * `sender`: Caller of the `instantiate` entrypoint.
+    /// * `contract`: Contract to be executed.
+    /// * `funds`: Assets to send to contract prior to execution.
+    /// * `gas`: Gas limit of this call.
+    /// * `message`: Raw JSON-encoded `ExecuteMsg`.
+    fn ibc_channel_connect<'a>(
+        vm_state: &mut State,
+        sender: Account,
+        contract: Account,
+        funds: Vec<Coin>,
+        gas: u64,
+        message: IbcChannelConnectMsg,
+    ) -> Result<Self::Output<'a>, VmError> {
+        vm_state.gas = Gas::new(gas);
+        vm_state.db.bank.transfer(&sender, &contract, &funds)?;
+        let mut vm = create_vm(
+            vm_state,
+            Env {
+                block: BlockInfo {
+                    height: 0xCAFEBABE,
+                    time: Timestamp::from_seconds(10000),
+                    chain_id: "abstract-test".into(),
+                },
+                transaction: None,
+                contract: ContractInfo {
+                    address: contract.into(),
+                },
+            },
+            MessageInfo {
+                sender: sender.into(),
+                funds
+            },
+        );
+        Self::raw_system_call::<IbcChannelConnectInput>(
+            &mut vm,
+            &serde_json::to_vec(&message).map_err(|_| VmError::CannotSerialize)?,
+        )
+    }
+
+    /// Receive an IBC packet.
+    ///
+    /// * `vm_state`: Shared VM state.
+    /// * `sender`: Caller of the `instantiate` entrypoint.
+    /// * `contract`: Contract to be executed.
+    /// * `funds`: Assets to send to contract prior to execution.
+    /// * `gas`: Gas limit of this call.
+    /// * `message`: Raw JSON-encoded `ExecuteMsg`.
+    fn ibc_packet_receive<'a>(
+        vm_state: &mut State,
+        sender: &Account,
+        contract: &Account,
+        funds: Vec<Coin>,
+        gas: u64,
+        message: IbcPacketReceiveMsg,
+    ) -> Result<Self::Output<'a>, VmError> {
+        vm_state.gas = Gas::new(gas);
+        vm_state.db.bank.transfer(sender, contract, &funds)?;
+        let mut vm = create_vm(
+            vm_state,
+            Env {
+                block: BlockInfo {
+                    height: 0xCAFEBABE,
+                    time: Timestamp::from_seconds(10000),
+                    chain_id: "abstract-test".into(),
+                },
+                transaction: None,
+                contract: ContractInfo {
+                    address: contract.clone().into(),
+                },
+            },
+            MessageInfo {
+                sender: sender.clone().into(),
+                funds: funds.clone(),
+            },
+        );
+        Self::raw_system_call::<IbcPacketReceiveInput>(
+            &mut vm,
+            &serde_json::to_vec(&message).map_err(|_| VmError::CannotSerialize)?,
+        )
+    }
+
+    /// Receive an IBC packet acknowledgement.
+    ///
+    /// * `vm_state`: Shared VM state.
+    /// * `sender`: Caller of the `instantiate` entrypoint.
+    /// * `contract`: Contract to be executed.
+    /// * `funds`: Assets to send to contract prior to execution.
+    /// * `gas`: Gas limit of this call.
+    /// * `message`: Raw JSON-encoded `ExecuteMsg`.
+    fn ibc_packet_ack<'a>(
+        vm_state: &mut State,
+        sender: &Account,
+        contract: &Account,
+        funds: Vec<Coin>,
+        gas: u64,
+        message: IbcPacketAckMsg,
+    ) -> Result<Self::Output<'a>, VmError> {
+        vm_state.gas = Gas::new(gas);
+        vm_state.db.bank.transfer(sender, contract, &funds)?;
+        let mut vm = create_vm(
+            vm_state,
+            Env {
+                block: BlockInfo {
+                    height: 0xCAFEBABE,
+                    time: Timestamp::from_seconds(10000),
+                    chain_id: "abstract-test".into(),
+                },
+                transaction: None,
+                contract: ContractInfo {
+                    address: contract.clone().into(),
+                },
+            },
+            MessageInfo {
+                sender: sender.clone().into(),
+                funds: funds.clone(),
+            },
+        );
+        Self::raw_system_call::<IbcPacketAckInput>(
+            &mut vm,
+            &serde_json::to_vec(&message).map_err(|_| VmError::CannotSerialize)?,
+        )
+    }
+
+    /// Receive an IBC packet timeout.
+    ///
+    /// * `vm_state`: Shared VM state.
+    /// * `sender`: Caller of the `instantiate` entrypoint.
+    /// * `contract`: Contract to be executed.
+    /// * `funds`: Assets to send to contract prior to execution.
+    /// * `gas`: Gas limit of this call.
+    /// * `message`: Raw JSON-encoded `ExecuteMsg`.
+    fn ibc_packet_timeout<'a>(
+        vm_state: &mut State,
+        sender: &Account,
+        contract: &Account,
+        funds: Vec<Coin>,
+        gas: u64,
+        message: IbcPacketTimeoutMsg,
+    ) -> Result<Self::Output<'a>, VmError> {
+        vm_state.gas = Gas::new(gas);
+        vm_state.db.bank.transfer(sender, contract, &funds)?;
+        let mut vm = create_vm(
+            vm_state,
+            Env {
+                block: BlockInfo {
+                    height: 0xCAFEBABE,
+                    time: Timestamp::from_seconds(10000),
+                    chain_id: "abstract-test".into(),
+                },
+                transaction: None,
+                contract: ContractInfo {
+                    address: contract.clone().into(),
+                },
+            },
+            MessageInfo {
+                sender: sender.clone().into(),
+                funds: funds.clone(),
+            },
+        );
+        Self::raw_system_call::<IbcPacketTimeoutInput>(
+            &mut vm,
+            &serde_json::to_vec(&message).map_err(|_| VmError::CannotSerialize)?,
+        )
+    }
     /// Query a contract.
     ///
     /// * `vm_state`: Shared VM state.

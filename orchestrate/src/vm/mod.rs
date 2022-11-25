@@ -1,6 +1,5 @@
 mod account;
 mod bank;
-pub mod cw20_ics20;
 mod error;
 
 pub use account::*;
@@ -11,7 +10,7 @@ use alloc::{
     string::ToString,
 };
 use bank::Bank;
-use core::num::NonZeroU32;
+use core::{fmt::Debug, num::NonZeroU32};
 use cosmwasm_std::{
     Binary, Coin, ContractInfo, ContractInfoResponse, Empty, Env, Event, IbcTimeout, MessageInfo,
     Order, SystemResult,
@@ -137,10 +136,20 @@ pub type IbcChannelId = String;
 
 #[derive(Default, Clone)]
 pub struct Db {
-    pub ibc: BTreeMap<(Account, IbcChannelId), IbcState>,
+    pub ibc: BTreeMap<IbcChannelId, IbcState>,
     pub contracts: BTreeMap<Account, CosmwasmContractMeta<Account>>,
     pub storage: BTreeMap<Account, Storage>,
     pub bank: Bank,
+}
+
+impl Debug for Db {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Db")
+            .field("ibc", &self.ibc)
+            .field("contracts", &self.contracts)
+            .field("bank", &self.bank)
+            .finish()
+    }
 }
 
 #[derive(Default, Clone)]
@@ -149,6 +158,15 @@ pub struct State {
     pub db: Db,
     pub codes: BTreeMap<CosmwasmCodeId, (Vec<u8>, Vec<u8>)>,
     pub gas: Gas,
+}
+
+impl Debug for State {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("State")
+            .field("db", &self.db)
+            .field("gas", &self.gas)
+            .finish()
+    }
 }
 
 pub struct Context<'a> {
@@ -720,8 +738,7 @@ impl<'a> VMBase for Context<'a> {
         amount: Coin,
         timeout: IbcTimeout,
     ) -> Result<(), Self::Error> {
-        let contract_addr = self.env.contract.address.clone().try_into()?;
-        match self.state.db.ibc.get_mut(&(contract_addr, channel_id)) {
+        match self.state.db.ibc.get_mut(&channel_id) {
             Some(channel) => {
                 channel.transfers.push(IbcTransfer {
                     to_address,
@@ -740,8 +757,7 @@ impl<'a> VMBase for Context<'a> {
         data: Binary,
         timeout: IbcTimeout,
     ) -> Result<(), Self::Error> {
-        let contract_addr = self.env.contract.address.clone().try_into()?;
-        match self.state.db.ibc.get_mut(&(contract_addr, channel_id)) {
+        match self.state.db.ibc.get_mut(&channel_id) {
             Some(channel) => {
                 channel.packets.push(IbcPacket { data, timeout });
                 Ok(())
@@ -751,8 +767,7 @@ impl<'a> VMBase for Context<'a> {
     }
 
     fn ibc_close_channel(&mut self, channel_id: String) -> Result<(), Self::Error> {
-        let contract_addr = self.env.contract.address.clone().try_into()?;
-        match self.state.db.ibc.get_mut(&(contract_addr, channel_id)) {
+        match self.state.db.ibc.get_mut(&channel_id) {
             Some(channel) => {
                 channel.request_close = true;
                 Ok(())
@@ -843,7 +858,11 @@ pub(crate) fn create_vm(extension: &mut State, env: Env, info: MessageInfo) -> W
 }
 
 impl State {
-    pub fn new(codes: Vec<Vec<u8>>, initial_balances: Vec<(Account, Coin)>) -> Self {
+    pub fn new(
+        codes: Vec<Vec<u8>>,
+        initial_balances: Vec<(Account, Coin)>,
+        ibc_channels: Vec<IbcChannelId>,
+    ) -> Self {
         let mut code_id = 0;
         Self {
             codes: BTreeMap::from_iter(codes.into_iter().map(|code| {
@@ -852,32 +871,34 @@ impl State {
                 (code_id, (code_hash, code))
             })),
             gas: Gas::new(100_000_000),
-            db: if !initial_balances.is_empty() {
-                let mut supply = bank::Supply::new();
-                let mut balances = bank::Balances::new();
-
-                initial_balances.into_iter().for_each(|(account, coin)| {
-                    supply
-                        .entry(coin.denom.clone())
-                        .and_modify(|amount| *amount += Into::<u128>::into(coin.amount))
-                        .or_insert_with(|| coin.amount.into());
-                    balances
-                        .entry(account)
-                        .and_modify(|coins| {
-                            coins
-                                .entry(coin.denom.clone())
-                                .and_modify(|amount| *amount += Into::<u128>::into(coin.amount))
-                                .or_insert_with(|| (coin.amount.into()));
-                        })
-                        .or_insert_with(|| [(coin.denom, coin.amount.into())].into());
-                });
-
-                Db {
-                    bank: Bank::new(supply, balances),
-                    ..Default::default()
-                }
-            } else {
-                Default::default()
+            db: Db {
+                bank: if !initial_balances.is_empty() {
+                    let mut supply = bank::Supply::new();
+                    let mut balances = bank::Balances::new();
+                    initial_balances.into_iter().for_each(|(account, coin)| {
+                        supply
+                            .entry(coin.denom.clone())
+                            .and_modify(|amount| *amount += Into::<u128>::into(coin.amount))
+                            .or_insert_with(|| coin.amount.into());
+                        balances
+                            .entry(account)
+                            .and_modify(|coins| {
+                                coins
+                                    .entry(coin.denom.clone())
+                                    .and_modify(|amount| *amount += Into::<u128>::into(coin.amount))
+                                    .or_insert_with(|| (coin.amount.into()));
+                            })
+                            .or_insert_with(|| [(coin.denom, coin.amount.into())].into());
+                    });
+                    Bank::new(supply, balances)
+                } else {
+                    Default::default()
+                },
+                ibc: ibc_channels
+                    .into_iter()
+                    .map(|x| (x, IbcState::default()))
+                    .collect(),
+                ..Default::default()
             },
             transactions: Default::default(),
         }
@@ -888,6 +909,7 @@ impl State {
 pub struct StateBuilder {
     codes: Vec<Vec<u8>>,
     balances: Vec<(Account, Coin)>,
+    ibc_channels: Vec<IbcChannelId>,
 }
 
 impl StateBuilder {
@@ -900,8 +922,13 @@ impl StateBuilder {
         self
     }
 
-    pub fn add_balance(mut self, account: &Account, coin: &Coin) -> Self {
-        self.balances.push((account.clone(), coin.clone()));
+    pub fn add_channel(mut self, channel_id: IbcChannelId) -> Self {
+        self.ibc_channels.push(channel_id);
+        self
+    }
+
+    pub fn add_balance(mut self, account: Account, coin: Coin) -> Self {
+        self.balances.push((account, coin));
         self
     }
 
@@ -916,7 +943,7 @@ impl StateBuilder {
     }
 
     pub fn build(self) -> State {
-        State::new(self.codes, self.balances)
+        State::new(self.codes, self.balances, self.ibc_channels)
     }
 }
 
