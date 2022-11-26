@@ -1,13 +1,14 @@
 use crate::vm::{create_vm, Account, Context, Gas, State, VmError};
 use cosmwasm_std::{
     Addr, Binary, BlockInfo, Coin, ContractInfo, Env, Event, IbcChannelConnectMsg, IbcPacketAckMsg,
-    IbcPacketReceiveMsg, MessageInfo, Timestamp, IbcPacketTimeoutMsg,
+    IbcPacketReceiveMsg, IbcPacketTimeoutMsg, MessageInfo, Timestamp,
 };
 use cosmwasm_vm::{
     executor::{
         cosmwasm_call,
         ibc::{
-            IbcChannelConnectInput, IbcChannelOpenInput, IbcPacketAckInput, IbcPacketReceiveInput, IbcPacketTimeoutInput,
+            IbcChannelConnectInput, IbcChannelOpenInput, IbcPacketAckInput, IbcPacketReceiveInput,
+            IbcPacketTimeoutInput,
         },
         ExecuteInput, InstantiateInput, QueryInput, QueryResult,
     },
@@ -263,7 +264,7 @@ pub trait Entrypoint {
             },
             MessageInfo {
                 sender: sender.into(),
-                funds
+                funds,
             },
         );
         Self::raw_system_call::<IbcChannelConnectInput>(

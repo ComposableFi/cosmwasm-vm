@@ -22,7 +22,7 @@ mod tests {
         let sender = Account::unchecked("sender");
         let mut state = StateBuilder::new()
             .add_code(&code)
-            .add_balance(&sender, &Coin::new(10_000_000, "denom"))
+            .add_balance(sender.clone(), Coin::new(10_000_000, "denom"))
             .build();
         let (contract, _) = Full::instantiate_raw(
             &mut state,
