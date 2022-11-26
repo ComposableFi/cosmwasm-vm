@@ -4,6 +4,7 @@ use cosmwasm_std::{
 };
 
 use crate::{
+    dummy_env,
     vm::{Account, State, VmError},
     Entrypoint, Full,
 };
@@ -50,6 +51,7 @@ pub fn ibc_handshake(
         state,
         relayer.clone(),
         contract,
+        dummy_env(),
         funds.clone(),
         gas,
         IbcChannelConnectMsg::OpenAck {
@@ -62,6 +64,7 @@ pub fn ibc_handshake(
         state_counterparty,
         relayer,
         contract_counterparty,
+        dummy_env(),
         funds,
         gas,
         IbcChannelConnectMsg::OpenConfirm {
@@ -93,6 +96,7 @@ pub fn ibc_relay_packets(
                 state,
                 &relayer,
                 &contract,
+                dummy_env(),
                 funds.clone(),
                 gas,
                 IbcPacketTimeoutMsg::new(
@@ -114,6 +118,7 @@ pub fn ibc_relay_packets(
                 state_counterparty,
                 &relayer,
                 &contract_counterparty,
+                dummy_env(),
                 funds.clone(),
                 gas,
                 IbcPacketReceiveMsg::new(

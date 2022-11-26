@@ -7,8 +7,7 @@ use cosmwasm_vm::{
     executor::{
         cosmwasm_call,
         ibc::{
-            IbcChannelConnectInput, IbcChannelOpenInput, IbcPacketAckInput, IbcPacketReceiveInput,
-            IbcPacketTimeoutInput,
+            IbcChannelConnectInput, IbcPacketAckInput, IbcPacketReceiveInput, IbcPacketTimeoutInput,
         },
         ExecuteInput, InstantiateInput, QueryInput, QueryResult,
     },
@@ -38,6 +37,7 @@ pub trait Entrypoint {
         sender: &Account,
         code_id: CosmwasmCodeId,
         admin: Option<Account>,
+        env: Env,
         funds: Vec<Coin>,
         gas: u64,
         message: &[u8],
@@ -54,6 +54,7 @@ pub trait Entrypoint {
             sender,
             code_id,
             admin,
+            env,
             funds,
             gas,
             message,
@@ -74,12 +75,13 @@ pub trait Entrypoint {
         sender: &Account,
         code_id: CosmwasmCodeId,
         admin: Option<Account>,
+        env: Env,
         funds: Vec<Coin>,
         gas: u64,
         message: M,
     ) -> Result<(Account, Self::Output<'a>), VmError> {
         let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotSerialize)?;
-        Self::instantiate_raw(vm_state, sender, code_id, admin, funds, gas, &message)
+        Self::instantiate_raw(vm_state, sender, code_id, admin, env, funds, gas, &message)
     }
 
     /// Instantiate a contract and set the contract address to `address`. This should be preferred
@@ -93,20 +95,20 @@ pub trait Entrypoint {
     /// * `funds`: Assets to send to contract prior to execution.
     /// * `gas`: Gas limit of this call.
     /// * `message`: Typed message. Possibly `InstantiateMsg` from a contract.
-    #[allow(clippy::too_many_arguments)]
     fn instantiate_with_address<'a, M: Serialize>(
         address: &Account,
         vm_state: &mut State,
         sender: &Account,
         code_id: CosmwasmCodeId,
         admin: Option<Account>,
+        env: Env,
         funds: Vec<Coin>,
         gas: u64,
         message: M,
     ) -> Result<(Account, Self::Output<'a>), VmError> {
         let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotSerialize)?;
         Self::instantiate_with_address_raw(
-            address, vm_state, sender, code_id, admin, funds, gas, &message,
+            address, vm_state, sender, code_id, admin, env, funds, gas, &message,
         )
     }
 
@@ -128,6 +130,7 @@ pub trait Entrypoint {
         sender: &Account,
         code_id: CosmwasmCodeId,
         admin: Option<Account>,
+        mut env: Env,
         funds: Vec<Coin>,
         gas: u64,
         message: &[u8],
@@ -145,19 +148,10 @@ pub trait Entrypoint {
             },
         );
         vm_state.db.bank.transfer(sender, address, &funds)?;
+        env.contract.address = address.clone().into();
         let mut vm = create_vm(
             vm_state,
-            Env {
-                block: BlockInfo {
-                    height: 0xDEADC0DE,
-                    time: Timestamp::from_seconds(10000),
-                    chain_id: "abstract-test".into(),
-                },
-                transaction: None,
-                contract: ContractInfo {
-                    address: address.clone().into(),
-                },
-            },
+            env,
             MessageInfo {
                 sender: sender.clone().into(),
                 funds: funds.clone(),
@@ -184,25 +178,17 @@ pub trait Entrypoint {
         vm_state: &mut State,
         sender: &Account,
         contract: &Account,
+        mut env: Env,
         funds: Vec<Coin>,
         gas: u64,
         message: &[u8],
     ) -> Result<Self::Output<'a>, VmError> {
         vm_state.gas = Gas::new(gas);
         vm_state.db.bank.transfer(sender, contract, &funds)?;
+        env.contract.address = contract.clone().into();
         let mut vm = create_vm(
             vm_state,
-            Env {
-                block: BlockInfo {
-                    height: 0xCAFEBABE,
-                    time: Timestamp::from_seconds(10000),
-                    chain_id: "abstract-test".into(),
-                },
-                transaction: None,
-                contract: ContractInfo {
-                    address: contract.clone().into(),
-                },
-            },
+            env,
             MessageInfo {
                 sender: sender.clone().into(),
                 funds: funds.clone(),
@@ -223,12 +209,13 @@ pub trait Entrypoint {
         vm_state: &mut State,
         sender: &Account,
         contract: &Account,
+        env: Env,
         funds: Vec<Coin>,
         gas: u64,
         message: M,
     ) -> Result<Self::Output<'a>, VmError> {
         let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotSerialize)?;
-        Self::execute_raw(vm_state, sender, contract, funds, gas, &message)
+        Self::execute_raw(vm_state, sender, contract, env, funds, gas, &message)
     }
 
     /// Initiate an IBC channel handshake.
@@ -243,25 +230,17 @@ pub trait Entrypoint {
         vm_state: &mut State,
         sender: Account,
         contract: Account,
+        mut env: Env,
         funds: Vec<Coin>,
         gas: u64,
         message: IbcChannelConnectMsg,
     ) -> Result<Self::Output<'a>, VmError> {
         vm_state.gas = Gas::new(gas);
         vm_state.db.bank.transfer(&sender, &contract, &funds)?;
+        env.contract.address = contract.into();
         let mut vm = create_vm(
             vm_state,
-            Env {
-                block: BlockInfo {
-                    height: 0xCAFEBABE,
-                    time: Timestamp::from_seconds(10000),
-                    chain_id: "abstract-test".into(),
-                },
-                transaction: None,
-                contract: ContractInfo {
-                    address: contract.into(),
-                },
-            },
+            env,
             MessageInfo {
                 sender: sender.into(),
                 funds,
@@ -285,25 +264,17 @@ pub trait Entrypoint {
         vm_state: &mut State,
         sender: &Account,
         contract: &Account,
+        mut env: Env,
         funds: Vec<Coin>,
         gas: u64,
         message: IbcPacketReceiveMsg,
     ) -> Result<Self::Output<'a>, VmError> {
         vm_state.gas = Gas::new(gas);
         vm_state.db.bank.transfer(sender, contract, &funds)?;
+        env.contract.address = contract.clone().into();
         let mut vm = create_vm(
             vm_state,
-            Env {
-                block: BlockInfo {
-                    height: 0xCAFEBABE,
-                    time: Timestamp::from_seconds(10000),
-                    chain_id: "abstract-test".into(),
-                },
-                transaction: None,
-                contract: ContractInfo {
-                    address: contract.clone().into(),
-                },
-            },
+            env,
             MessageInfo {
                 sender: sender.clone().into(),
                 funds: funds.clone(),
@@ -327,25 +298,17 @@ pub trait Entrypoint {
         vm_state: &mut State,
         sender: &Account,
         contract: &Account,
+        mut env: Env,
         funds: Vec<Coin>,
         gas: u64,
         message: IbcPacketAckMsg,
     ) -> Result<Self::Output<'a>, VmError> {
         vm_state.gas = Gas::new(gas);
         vm_state.db.bank.transfer(sender, contract, &funds)?;
+        env.contract.address = contract.clone().into();
         let mut vm = create_vm(
             vm_state,
-            Env {
-                block: BlockInfo {
-                    height: 0xCAFEBABE,
-                    time: Timestamp::from_seconds(10000),
-                    chain_id: "abstract-test".into(),
-                },
-                transaction: None,
-                contract: ContractInfo {
-                    address: contract.clone().into(),
-                },
-            },
+            env,
             MessageInfo {
                 sender: sender.clone().into(),
                 funds: funds.clone(),
@@ -369,25 +332,17 @@ pub trait Entrypoint {
         vm_state: &mut State,
         sender: &Account,
         contract: &Account,
+        mut env: Env,
         funds: Vec<Coin>,
         gas: u64,
         message: IbcPacketTimeoutMsg,
     ) -> Result<Self::Output<'a>, VmError> {
         vm_state.gas = Gas::new(gas);
         vm_state.db.bank.transfer(sender, contract, &funds)?;
+        env.contract.address = contract.clone().into();
         let mut vm = create_vm(
             vm_state,
-            Env {
-                block: BlockInfo {
-                    height: 0xCAFEBABE,
-                    time: Timestamp::from_seconds(10000),
-                    chain_id: "abstract-test".into(),
-                },
-                transaction: None,
-                contract: ContractInfo {
-                    address: contract.clone().into(),
-                },
-            },
+            env,
             MessageInfo {
                 sender: sender.clone().into(),
                 funds: funds.clone(),
@@ -406,23 +361,15 @@ pub trait Entrypoint {
     fn query_raw(
         vm_state: &mut State,
         contract: &Account,
+        mut env: Env,
         message: &[u8],
     ) -> Result<QueryResult, VmError> {
+        env.contract.address = contract.clone().into();
         let mut vm = create_vm(
             vm_state,
-            Env {
-                block: BlockInfo {
-                    height: 0xCAFEBABE,
-                    time: Timestamp::from_seconds(10000),
-                    chain_id: "abstract-test".into(),
-                },
-                transaction: None,
-                contract: ContractInfo {
-                    address: contract.clone().into(),
-                },
-            },
+            env,
             MessageInfo {
-                sender: Addr::unchecked("MOCK"),
+                sender: Addr::unchecked("MOCK_ADDR"),
                 funds: vec![],
             },
         );
@@ -437,10 +384,11 @@ pub trait Entrypoint {
     fn query<M: Serialize>(
         vm_state: &mut State,
         contract: &Account,
+        env: Env,
         message: M,
     ) -> Result<QueryResult, VmError> {
         let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotSerialize)?;
-        Self::query_raw(vm_state, contract, &message)
+        Self::query_raw(vm_state, contract, env, &message)
     }
 
     fn raw_system_call<'a, I>(
@@ -450,6 +398,20 @@ pub trait Entrypoint {
     where
         for<'x> WasmiVM<Context<'x>>: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
         for<'x> VmErrorOf<WasmiVM<Context<'x>>>: Into<VmError>;
+}
+
+pub fn dummy_env() -> Env {
+    Env {
+        block: BlockInfo {
+            height: 1,
+            time: Timestamp::from_seconds(10000),
+            chain_id: "orchestrate-test".into(),
+        },
+        transaction: None,
+        contract: ContractInfo {
+            address: Addr::unchecked("MOCK_ADDR"),
+        },
+    }
 }
 
 /// Calls that are made under this `Unit` type only executes a single

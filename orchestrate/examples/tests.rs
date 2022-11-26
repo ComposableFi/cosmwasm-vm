@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod tests {
     use cosmwasm_orchestrate::{
+        dummy_env,
         fetcher::*,
         vm::{Account, StateBuilder},
         Entrypoint, Full, Unit,
@@ -29,6 +30,7 @@ mod tests {
             &sender,
             1,
             None,
+            dummy_env(),
             vec![Coin::new(400_000, "denom")],
             100_000_000,
             r#"{}"#.as_bytes(),
@@ -51,6 +53,7 @@ mod tests {
             &mut state,
             &sender,
             &contract,
+            dummy_env(),
             vec![],
             100_000_000,
             format!(
@@ -92,6 +95,7 @@ mod tests {
             &sender,
             1,
             None,
+            dummy_env(),
             vec![],
             100_000_000,
             InstantiateMsg {
@@ -113,6 +117,7 @@ mod tests {
             &mut state,
             &sender,
             &contract,
+            dummy_env(),
             vec![],
             100_000_000,
             ExecuteMsg::Transfer {
@@ -126,6 +131,7 @@ mod tests {
             Unit::query(
                 &mut state,
                 &contract,
+                dummy_env(),
                 QueryMsg::Balance {
                     address: "receiver".into()
                 }

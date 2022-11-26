@@ -1,4 +1,5 @@
 use cosmwasm_orchestrate::{
+    dummy_env,
     fetcher::FileFetcher,
     vm::{Account, State, StateBuilder},
     Entrypoint, Unit,
@@ -47,6 +48,7 @@ async fn setup() -> (Account, State) {
         &Account::unchecked(CREATOR),
         1,
         None,
+        dummy_env(),
         vec![],
         100_000_000,
         r#"{}"#.as_bytes(),
@@ -79,7 +81,7 @@ async fn cosmos_signature_verify_works() {
         Binary(public_key)
     );
 
-    let res = Unit::query_raw(&mut state, &addr, verify_msg.as_bytes())
+    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -113,7 +115,7 @@ async fn cosmos_signature_verify_fails() {
         Binary(public_key)
     );
 
-    let res = Unit::query_raw(&mut state, &addr, verify_msg.as_bytes())
+    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -145,7 +147,7 @@ async fn ethereum_signature_verify_works() {
         signer_address,
     );
 
-    let res = Unit::query_raw(&mut state, &addr, verify_msg.as_bytes())
+    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -177,7 +179,7 @@ async fn ethereum_signature_verify_fails_for_corrupted_message() {
         signer_address,
     );
 
-    let res = Unit::query_raw(&mut state, &addr, verify_msg.as_bytes())
+    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -210,7 +212,7 @@ async fn ethereum_signature_verify_fails_for_corrupted_signature() {
         signer_address,
     );
 
-    let res = Unit::query_raw(&mut state, &addr, verify_msg.as_bytes())
+    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -286,7 +288,7 @@ async fn verify_ethereum_transaction_works() {
         v
     );
 
-    let res = Unit::query_raw(&mut state, &addr, verify_msg.as_bytes())
+    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -318,7 +320,7 @@ async fn tendermint_signature_verify_works() {
         Binary(public_key)
     );
 
-    let res = Unit::query_raw(&mut state, &addr, verify_msg.as_bytes())
+    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -351,7 +353,7 @@ async fn tendermint_signature_verify_fails() {
         Binary(public_key)
     );
 
-    let res = Unit::query_raw(&mut state, &addr, verify_msg.as_bytes())
+    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -390,7 +392,7 @@ async fn tendermint_signatures_batch_verify_works() {
         messages, signatures, public_keys,
     );
 
-    let res = Unit::query_raw(&mut state, &addr, verify_msg.as_bytes())
+    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -432,7 +434,7 @@ async fn tendermint_signatures_batch_verify_message_multisig_works() {
         messages, signatures, public_keys,
     );
 
-    let res = Unit::query_raw(&mut state, &addr, verify_msg.as_bytes())
+    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -475,7 +477,7 @@ async fn tendermint_signatures_batch_verify_single_public_key_works() {
         messages, signatures, public_keys,
     );
 
-    let res = Unit::query_raw(&mut state, &addr, verify_msg.as_bytes())
+    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -514,7 +516,7 @@ async fn tendermint_signatures_batch_verify_fails() {
         messages, signatures, public_keys,
     );
 
-    let res = Unit::query_raw(&mut state, &addr, verify_msg.as_bytes())
+    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
