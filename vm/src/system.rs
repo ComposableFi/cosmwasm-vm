@@ -523,7 +523,6 @@ where
     let info: MessageInfo = vm.get();
     let env: Env = vm.get();
     let output = cosmwasm_call::<I, V>(vm, message).map(Into::into);
-
     log::debug!("Output: {:?}", output);
     match output {
         Ok(ContractResult::Ok(Response {

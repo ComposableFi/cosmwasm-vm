@@ -42,11 +42,10 @@ pub trait Entrypoint {
         gas: u64,
         message: &[u8],
     ) -> Result<(Account, Self::Output<'a>), VmError> {
-        let code_hash = &vm_state
+        let (_, code_hash) = &vm_state
             .codes
             .get(&code_id)
-            .ok_or(VmError::CodeNotFound(code_id))?
-            .1;
+            .ok_or(VmError::CodeNotFound(code_id))?;
         let contract_addr = Account::generate(code_hash, message);
         Self::instantiate_with_address_raw(
             &contract_addr,

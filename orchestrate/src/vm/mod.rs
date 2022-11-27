@@ -219,21 +219,24 @@ impl<'a> Context<'a> {
         funds: Vec<Coin>,
         f: impl FnOnce(&mut WasmiVM<Context>) -> R,
     ) -> Result<R, VmErrorOf<Self>> {
-        log::debug!("Loading sub-vm, contract address: {:?}", address);
-        let code = (|| {
-            let CosmwasmContractMeta { code_id, .. } = self
-                .state
+        log::debug!(
+            "Loading sub-vm {:?} => {:?}",
+            self.env.contract.address,
+            address
+        );
+        let CosmwasmContractMeta { code_id, .. } =
+            self.state
                 .db
                 .contracts
                 .get(&address)
                 .cloned()
                 .ok_or_else(|| VmError::ContractNotFound(address.clone()))?;
-            self.state
-                .codes
-                .get(&code_id)
-                .ok_or(VmError::CodeNotFound(code_id))
-                .cloned()
-        })()?;
+        let code = self
+            .state
+            .codes
+            .get(&code_id)
+            .ok_or(VmError::CodeNotFound(code_id))
+            .cloned()?;
         let host_functions_definitions =
             WasmiImportResolver(host_functions::definitions::<Context>());
         let module = new_wasmi_vm(&host_functions_definitions, &code.1)?;
@@ -326,6 +329,12 @@ impl<'a> VMBase for Context<'a> {
         message: &[u8],
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error> {
+        log::debug!(
+            "Continue Execute {:?} => {:?}",
+            self.env.contract.address,
+            address
+        );
+
         self.state.db.bank.transfer(
             &self.env.contract.address.clone().try_into()?,
             &address,
@@ -348,15 +357,12 @@ impl<'a> VMBase for Context<'a> {
         message: &[u8],
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<(Self::Address, Option<Binary>), Self::Error> {
-        let address = Account::generate(
-            &self
-                .state
-                .codes
-                .get(&contract_meta.code_id)
-                .ok_or(VmError::CodeNotFound(contract_meta.code_id))?
-                .1,
-            message,
-        );
+        let (_, code_hash) = &self
+            .state
+            .codes
+            .get(&contract_meta.code_id)
+            .ok_or(VmError::CodeNotFound(contract_meta.code_id))?;
+        let address = Account::generate(code_hash, message);
 
         self.state.db.bank.transfer(
             &self.env.contract.address.clone().try_into()?,

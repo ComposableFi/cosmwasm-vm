@@ -1,6 +1,6 @@
 use cosmwasm_std::{
-    Coin, IbcChannel, IbcChannelConnectMsg, IbcEndpoint, IbcOrder, IbcPacketReceiveMsg,
-    IbcPacketTimeoutMsg,
+    Coin, IbcAcknowledgement, IbcChannel, IbcChannelConnectMsg, IbcEndpoint, IbcOrder,
+    IbcPacketAckMsg, IbcPacketReceiveMsg, IbcPacketTimeoutMsg,
 };
 
 use crate::{
@@ -112,9 +112,10 @@ pub fn ibc_relay_packets(
             )?;
         }
     } else {
-        for packet in channel_state.packets.drain(0..) {
+        for packet in channel_state.packets.drain(0..).collect::<Vec<_>>() {
+            log::info!("Relayer: {:?}", packet);
             // TODO: check timeout after env passed as parameter to Full methods
-            Full::ibc_packet_receive(
+            let (ack, _) = Full::ibc_packet_receive(
                 state_counterparty,
                 &relayer,
                 &contract_counterparty,
@@ -122,6 +123,25 @@ pub fn ibc_relay_packets(
                 funds.clone(),
                 gas,
                 IbcPacketReceiveMsg::new(
+                    cosmwasm_std::IbcPacket::new(
+                        packet.data.clone(),
+                        channel.endpoint.clone(),
+                        channel.counterparty_endpoint.clone(),
+                        0,
+                        packet.timeout.clone(),
+                    ),
+                    relayer.clone().into(),
+                ),
+            )?;
+            log::info!("Packet ACK: {:?}", ack);
+            Full::ibc_packet_ack(
+                state,
+                &relayer,
+                &contract,
+                funds.clone(),
+                gas,
+                IbcPacketAckMsg::new(
+                    IbcAcknowledgement::new(ack.unwrap()),
                     cosmwasm_std::IbcPacket::new(
                         packet.data,
                         channel.endpoint.clone(),
