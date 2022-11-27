@@ -599,7 +599,7 @@ where
                     vm.transaction_begin()?;
 
                     // We MUST not fail within this match. Questionmark operator is BANNED.
-                    // The result must be captured to determine whether we rollback or commit.
+                    // The result MUST be captured to determine whether we rollback or commit the local transaction.
                     let sub_res = match msg {
                         CosmosMsg::Custom(message) => vm
                             .message_custom(message, &mut event_handler)
