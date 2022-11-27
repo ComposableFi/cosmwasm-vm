@@ -1,8 +1,8 @@
 use crate::vm::{create_vm, Account, Context, Gas, State, VmError};
 use cosmwasm_std::{
-    Addr, Binary, BlockInfo, ContractInfo, Env, Event, IbcChannelConnectMsg, IbcChannelOpenMsg,
-    IbcPacketAckMsg, IbcPacketReceiveMsg, IbcPacketTimeoutMsg, MessageInfo, Timestamp,
-    TransactionInfo,
+    from_binary, Addr, Binary, BlockInfo, ContractInfo, Env, Event, IbcChannelConnectMsg,
+    IbcChannelOpenMsg, IbcPacketAckMsg, IbcPacketReceiveMsg, IbcPacketTimeoutMsg, MessageInfo,
+    Timestamp, TransactionInfo,
 };
 use cosmwasm_vm::{
     executor::{
@@ -20,7 +20,7 @@ use cosmwasm_vm::{
     vm::{VmErrorOf, VmMessageCustomOf},
 };
 use cosmwasm_vm_wasmi::WasmiVM;
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 
 pub trait Entrypoint {
     type Output<'a>;
@@ -349,13 +349,15 @@ pub trait Entrypoint {
     /// * `vm_state`: Shared VM state.
     /// * `contract`: Contract to be queried.
     /// * `message`: Typed message. Possibly `ExecuteMsg` from a contract.
-    fn query<M: Serialize>(
+    fn query<M: Serialize, R: DeserializeOwned>(
         vm_state: &mut State,
         env: Env,
         message: M,
-    ) -> Result<QueryResult, VmError> {
+    ) -> Result<R, VmError> {
         let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotSerialize)?;
-        Self::query_raw(vm_state, env, &message)
+        let QueryResult(value) = Self::query_raw(vm_state, env, &message)?;
+        from_binary::<R>(&value.into_result().map_err(VmError::Generic)?)
+            .map_err(|_| VmError::CannotDeserialize)
     }
 
     fn raw_system_call<'a, I>(
