@@ -28,6 +28,7 @@ pub enum VmError {
     AlreadyInstantiated,
     CannotSerialize,
     UnknownIbcChannel,
+    IbcChannelOpenFailure(String),
 }
 
 impl From<wasmi::Error> for VmError {
