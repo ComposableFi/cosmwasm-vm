@@ -33,7 +33,7 @@ pub struct Account(pub Addr);
 
 impl Display for Account {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-      <Addr as Display>::fmt(&self.0, f)
+        <Addr as Display>::fmt(&self.0, f)
     }
 }
 

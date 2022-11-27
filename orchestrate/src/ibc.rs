@@ -1,12 +1,11 @@
+use crate::{
+    vm::{Account, State, VmError},
+    Entrypoint, Full, Unit,
+};
 use cosmwasm_std::{
     Env, Ibc3ChannelOpenResponse, IbcAcknowledgement, IbcChannel, IbcChannelConnectMsg,
     IbcChannelOpenMsg, IbcEndpoint, IbcOrder, IbcPacketAckMsg, IbcPacketReceiveMsg,
     IbcPacketTimeoutMsg, MessageInfo,
-};
-
-use crate::{
-    vm::{Account, State, VmError},
-    Entrypoint, Full, Unit,
 };
 
 pub fn reverse_channel(channel: IbcChannel) -> IbcChannel {

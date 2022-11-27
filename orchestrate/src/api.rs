@@ -1,8 +1,8 @@
 use crate::vm::{create_vm, Account, Context, Gas, State, VmError};
 use cosmwasm_std::{
     Addr, Binary, BlockInfo, ContractInfo, Env, Event, IbcChannelConnectMsg, IbcChannelOpenMsg,
-    IbcPacketAckMsg, IbcPacketReceiveMsg, IbcPacketTimeoutMsg, MessageInfo,
-    Timestamp, TransactionInfo,
+    IbcPacketAckMsg, IbcPacketReceiveMsg, IbcPacketTimeoutMsg, MessageInfo, Timestamp,
+    TransactionInfo,
 };
 use cosmwasm_vm::{
     executor::{
