@@ -1,15 +1,9 @@
 use cosmwasm_orchestrate::{
-    dummy_env,
-    fetcher::FileFetcher,
     vm::{Account, State, StateBuilder},
-    Entrypoint, Unit,
+    Api, Unit,
 };
-use cosmwasm_std::{from_binary, Binary};
+use cosmwasm_std::{from_binary, Binary, BlockInfo, ContractInfo, Env, MessageInfo, Timestamp};
 use serde::{Deserialize, Serialize};
-
-// Output of cargo wasm
-static CRYPTO_VERIFY_URL: &str =
-    "https://github.com/CosmWasm/cosmwasm/releases/download/v1.1.8/crypto_verify.wasm";
 
 const CREATOR: &str = "creator";
 
@@ -39,17 +33,42 @@ struct VerifyResponse {
     verifies: bool,
 }
 
-async fn setup() -> (Account, State) {
-    let wasm_code = FileFetcher::from_url(CRYPTO_VERIFY_URL).await.unwrap();
-    let mut state = StateBuilder::new().add_code(&wasm_code).build();
+fn get_env(contract_addr: &Account) -> Env {
+    Env {
+        block: BlockInfo {
+            height: 1,
+            time: Timestamp::from_seconds(1000),
+            chain_id: "hello".into(),
+        },
+        transaction: None,
+        contract: ContractInfo {
+            address: contract_addr.0.clone(),
+        },
+    }
+}
 
-    let (addr, _) = Unit::instantiate_raw(
+fn message_info(sender: &Account) -> MessageInfo {
+    MessageInfo {
+        sender: sender.0.clone(),
+        funds: vec![],
+    }
+}
+
+fn setup() -> (Account, State) {
+    let wasm_code = include_bytes!("../../fixtures/crypto_verify.wasm");
+    let mut state = StateBuilder::new().add_code(wasm_code).build();
+
+    let (addr, _) = <Api<Unit>>::instantiate_raw(
         &mut state,
-        &Account::unchecked(CREATOR),
         1,
         None,
-        dummy_env(),
-        vec![],
+        BlockInfo {
+            height: 1,
+            time: Timestamp::from_seconds(1000),
+            chain_id: "hello".into(),
+        },
+        None,
+        message_info(&Account::unchecked(CREATOR)),
         100_000_000,
         r#"{}"#.as_bytes(),
     )
@@ -58,9 +77,9 @@ async fn setup() -> (Account, State) {
     (addr, state)
 }
 
-#[tokio::test]
-async fn cosmos_signature_verify_works() {
-    let (addr, mut state) = setup().await;
+#[test]
+fn cosmos_signature_verify_works() {
+    let (addr, mut state) = setup();
 
     let message = hex::decode(SECP256K1_MESSAGE_HEX).unwrap();
     let signature = hex::decode(SECP256K1_SIGNATURE_HEX).unwrap();
@@ -81,7 +100,7 @@ async fn cosmos_signature_verify_works() {
         Binary(public_key)
     );
 
-    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
+    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -90,9 +109,9 @@ async fn cosmos_signature_verify_works() {
     assert_eq!(res, VerifyResponse { verifies: true });
 }
 
-#[tokio::test]
-async fn cosmos_signature_verify_fails() {
-    let (addr, mut state) = setup().await;
+#[test]
+fn cosmos_signature_verify_fails() {
+    let (addr, mut state) = setup();
 
     let mut message = hex::decode(SECP256K1_MESSAGE_HEX).unwrap();
     // alter hash
@@ -115,7 +134,7 @@ async fn cosmos_signature_verify_fails() {
         Binary(public_key)
     );
 
-    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
+    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -124,9 +143,9 @@ async fn cosmos_signature_verify_fails() {
     assert_eq!(res, VerifyResponse { verifies: false });
 }
 
-#[tokio::test]
-async fn ethereum_signature_verify_works() {
-    let (addr, mut state) = setup().await;
+#[test]
+fn ethereum_signature_verify_works() {
+    let (addr, mut state) = setup();
 
     let message = ETHEREUM_MESSAGE;
     let signature = hex::decode(ETHEREUM_SIGNATURE_HEX).unwrap();
@@ -147,7 +166,7 @@ async fn ethereum_signature_verify_works() {
         signer_address,
     );
 
-    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
+    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -156,9 +175,9 @@ async fn ethereum_signature_verify_works() {
     assert_eq!(res, VerifyResponse { verifies: true });
 }
 
-#[tokio::test]
-async fn ethereum_signature_verify_fails_for_corrupted_message() {
-    let (addr, mut state) = setup().await;
+#[test]
+fn ethereum_signature_verify_fails_for_corrupted_message() {
+    let (addr, mut state) = setup();
 
     let message = format!("{}0", ETHEREUM_MESSAGE);
     let signature = hex::decode(ETHEREUM_SIGNATURE_HEX).unwrap();
@@ -179,7 +198,7 @@ async fn ethereum_signature_verify_fails_for_corrupted_message() {
         signer_address,
     );
 
-    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
+    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -188,9 +207,9 @@ async fn ethereum_signature_verify_fails_for_corrupted_message() {
     assert_eq!(res, VerifyResponse { verifies: false });
 }
 
-#[tokio::test]
-async fn ethereum_signature_verify_fails_for_corrupted_signature() {
-    let (addr, mut state) = setup().await;
+#[test]
+fn ethereum_signature_verify_fails_for_corrupted_signature() {
+    let (addr, mut state) = setup();
 
     let message = format!("{}0", ETHEREUM_MESSAGE);
     let mut signature = hex::decode(ETHEREUM_SIGNATURE_HEX).unwrap();
@@ -212,7 +231,7 @@ async fn ethereum_signature_verify_fails_for_corrupted_signature() {
         signer_address,
     );
 
-    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
+    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -221,9 +240,9 @@ async fn ethereum_signature_verify_fails_for_corrupted_signature() {
     assert_eq!(res, VerifyResponse { verifies: false });
 }
 
-#[tokio::test]
-async fn verify_ethereum_transaction_works() {
-    let (addr, mut state) = setup().await;
+#[test]
+fn verify_ethereum_transaction_works() {
+    let (addr, mut state) = setup();
 
     // curl -sS -X POST --data '{"jsonrpc":"2.0","method":"eth_getTransactionByHash","params":["0x3b87faa3410f33284124a6898fac1001673f0f7c3682d18f55bdff0031cce9ce"],"id":1}' -H "Content-type: application/json" https://rinkeby-light.eth.linkpool.io | jq .result
     // {
@@ -288,7 +307,7 @@ async fn verify_ethereum_transaction_works() {
         v
     );
 
-    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
+    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -297,9 +316,9 @@ async fn verify_ethereum_transaction_works() {
     assert_eq!(res, VerifyResponse { verifies: true });
 }
 
-#[tokio::test]
-async fn tendermint_signature_verify_works() {
-    let (addr, mut state) = setup().await;
+#[test]
+fn tendermint_signature_verify_works() {
+    let (addr, mut state) = setup();
 
     let message = hex::decode(ED25519_MESSAGE_HEX).unwrap();
     let signature = hex::decode(ED25519_SIGNATURE_HEX).unwrap();
@@ -320,7 +339,7 @@ async fn tendermint_signature_verify_works() {
         Binary(public_key)
     );
 
-    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
+    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -329,9 +348,9 @@ async fn tendermint_signature_verify_works() {
     assert_eq!(res, VerifyResponse { verifies: true });
 }
 
-#[tokio::test]
-async fn tendermint_signature_verify_fails() {
-    let (addr, mut state) = setup().await;
+#[test]
+fn tendermint_signature_verify_fails() {
+    let (addr, mut state) = setup();
 
     let mut message = hex::decode(ED25519_MESSAGE_HEX).unwrap();
     message[1] ^= 0x1;
@@ -353,7 +372,7 @@ async fn tendermint_signature_verify_fails() {
         Binary(public_key)
     );
 
-    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
+    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -362,9 +381,9 @@ async fn tendermint_signature_verify_fails() {
     assert_eq!(res, VerifyResponse { verifies: false });
 }
 
-#[tokio::test]
-async fn tendermint_signatures_batch_verify_works() {
-    let (addr, mut state) = setup().await;
+#[test]
+fn tendermint_signatures_batch_verify_works() {
+    let (addr, mut state) = setup();
 
     let messages: Vec<_> = [ED25519_MESSAGE_HEX, ED25519_MESSAGE2_HEX]
         .iter()
@@ -392,7 +411,7 @@ async fn tendermint_signatures_batch_verify_works() {
         messages, signatures, public_keys,
     );
 
-    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
+    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -401,9 +420,9 @@ async fn tendermint_signatures_batch_verify_works() {
     assert_eq!(res, VerifyResponse { verifies: true });
 }
 
-#[tokio::test]
-async fn tendermint_signatures_batch_verify_message_multisig_works() {
-    let (addr, mut state) = setup().await;
+#[test]
+fn tendermint_signatures_batch_verify_message_multisig_works() {
+    let (addr, mut state) = setup();
 
     // One message
     let messages: Vec<_> = [ED25519_MESSAGE_HEX]
@@ -434,7 +453,7 @@ async fn tendermint_signatures_batch_verify_message_multisig_works() {
         messages, signatures, public_keys,
     );
 
-    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
+    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -443,9 +462,9 @@ async fn tendermint_signatures_batch_verify_message_multisig_works() {
     assert_eq!(res, VerifyResponse { verifies: true });
 }
 
-#[tokio::test]
-async fn tendermint_signatures_batch_verify_single_public_key_works() {
-    let (addr, mut state) = setup().await;
+#[test]
+fn tendermint_signatures_batch_verify_single_public_key_works() {
+    let (addr, mut state) = setup();
 
     // Multiple messages
     //FIXME: Use different messages / signatures
@@ -477,7 +496,7 @@ async fn tendermint_signatures_batch_verify_single_public_key_works() {
         messages, signatures, public_keys,
     );
 
-    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
+    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -486,9 +505,9 @@ async fn tendermint_signatures_batch_verify_single_public_key_works() {
     assert_eq!(res, VerifyResponse { verifies: true });
 }
 
-#[tokio::test]
-async fn tendermint_signatures_batch_verify_fails() {
-    let (addr, mut state) = setup().await;
+#[test]
+fn tendermint_signatures_batch_verify_fails() {
+    let (addr, mut state) = setup();
 
     let messages: Vec<_> = ["1234", ED25519_MESSAGE2_HEX]
         .iter()
@@ -516,7 +535,7 @@ async fn tendermint_signatures_batch_verify_fails() {
         messages, signatures, public_keys,
     );
 
-    let res = Unit::query_raw(&mut state, &addr, dummy_env(), verify_msg.as_bytes())
+    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()

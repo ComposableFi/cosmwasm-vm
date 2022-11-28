@@ -5,6 +5,7 @@ mod error;
 pub use account::*;
 pub use error::*;
 
+use super::ExecutionType;
 use alloc::{
     collections::{BTreeMap, VecDeque},
     string::ToString,
@@ -12,24 +13,31 @@ use alloc::{
 use bank::Bank;
 use core::{fmt::Debug, num::NonZeroU32};
 use cosmwasm_std::{
-    Binary, Coin, ContractInfo, ContractInfoResponse, Empty, Env, Event, IbcTimeout, MessageInfo,
-    Order, SystemResult,
+    Binary, BlockInfo, Coin, ContractInfo, ContractInfoResponse, Empty, Env, Event, IbcTimeout,
+    MessageInfo, Order, SystemResult, TransactionInfo,
 };
 use cosmwasm_vm::{
     executor::{
-        cosmwasm_call, CosmwasmQueryResult, ExecuteInput, InstantiateInput, MigrateInput,
-        QueryInput, QueryResult,
+        cosmwasm_call, CosmwasmCallInput, CosmwasmCallWithoutInfoInput, CosmwasmQueryResult,
+        DeserializeLimit, ExecuteInput, HasInfo, InstantiateInput, MigrateInput, QueryInput,
+        QueryResult, ReadLimit,
     },
     has::Has,
-    memory::{Pointable, ReadWriteMemory, ReadableMemory, WritableMemory},
-    system::{cosmwasm_system_run, CosmwasmCodeId, CosmwasmContractMeta, SystemError},
+    input::Input,
+    memory::{Pointable, PointerOf, ReadWriteMemory, ReadableMemory, WritableMemory},
+    system::{
+        cosmwasm_system_run, CosmwasmCallVM, CosmwasmCodeId, CosmwasmContractMeta,
+        StargateCosmwasmCallVM, SystemError,
+    },
     transaction::Transactional,
-    vm::{VMBase, VmErrorOf, VmGas, VmGasCheckpoint},
+    vm::{VMBase, VmErrorOf, VmGas, VmGasCheckpoint, VmInputOf},
 };
 use cosmwasm_vm_wasmi::{
-    host_functions, new_wasmi_vm, WasmiHostFunction, WasmiHostFunctionIndex, WasmiImportResolver,
-    WasmiInput, WasmiModule, WasmiModuleExecutor, WasmiOutput, WasmiVM, WasmiVMError,
+    host_functions, new_wasmi_vm, WasmiBaseVM, WasmiHostFunction, WasmiHostFunctionIndex,
+    WasmiImportResolver, WasmiInput, WasmiModule, WasmiModuleExecutor, WasmiOutput, WasmiVM,
+    WasmiVMError,
 };
+use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 use wasm_instrument::gas_metering::Rules;
 
@@ -40,6 +48,205 @@ const SHUFFLES_DECODE: usize = 2;
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub struct Gas {
     pub checkpoints: Vec<u64>,
+}
+
+pub trait VmState<'a, VM: WasmiBaseVM>
+where
+    VmErrorOf<WasmiVM<VM>>: Into<VmError>,
+{
+    fn do_instantiate<E: ExecutionType>(
+        &'a mut self,
+        contract: Option<Account>,
+        code_id: CosmwasmCodeId,
+        admin: Option<Account>,
+        block: BlockInfo,
+        transaction: Option<TransactionInfo>,
+        info: MessageInfo,
+        gas: u64,
+        message: &[u8],
+    ) -> Result<(Account, E::Output<VM>), VmError>;
+
+    fn do_execute<E: ExecutionType>(
+        &'a mut self,
+        env: Env,
+        info: MessageInfo,
+        gas: u64,
+        message: &[u8],
+    ) -> Result<E::Output<VM>, VmError>;
+
+    fn do_query(
+        &'a mut self,
+        env: Env,
+        info: MessageInfo,
+        message: &[u8],
+    ) -> Result<QueryResult, VmError>;
+
+    fn do_ibc<E: ExecutionType, I>(
+        &'a mut self,
+        env: Env,
+        info: MessageInfo,
+        gas: u64,
+        message: &[u8],
+    ) -> Result<E::Output<VM>, VmError>
+    where
+        WasmiVM<VM>: CosmwasmCallVM<I> + StargateCosmwasmCallVM;
+
+    fn do_direct<I>(
+        &'a mut self,
+        env: Env,
+        info: MessageInfo,
+        gas: u64,
+        message: &[u8],
+    ) -> Result<I::Output, VmError>
+    where
+        I: Input + HasInfo,
+        I::Output: DeserializeOwned + ReadLimit + DeserializeLimit,
+        for<'x> VmInputOf<'x, WasmiVM<VM>>: TryFrom<
+                CosmwasmCallInput<'x, PointerOf<WasmiVM<VM>>, I>,
+                Error = VmErrorOf<WasmiVM<VM>>,
+            > + TryFrom<
+                CosmwasmCallWithoutInfoInput<'x, PointerOf<WasmiVM<VM>>, I>,
+                Error = VmErrorOf<WasmiVM<VM>>,
+            >;
+}
+
+impl<'a> VmState<'a, Context<'a>> for State
+where
+    VmErrorOf<WasmiVM<Context<'a>>>: Into<VmError>,
+{
+    fn do_instantiate<E: ExecutionType>(
+        &'a mut self,
+        contract: Option<Account>,
+        code_id: CosmwasmCodeId,
+        admin: Option<Account>,
+        block: BlockInfo,
+        transaction: Option<TransactionInfo>,
+        info: MessageInfo,
+        gas: u64,
+        message: &[u8],
+    ) -> Result<(Account, E::Output<Context<'a>>), VmError> {
+        let contract_addr = match contract {
+            Some(contract) => contract,
+            None => {
+                let (_, code_hash) = self
+                    .codes
+                    .get(&code_id)
+                    .ok_or(VmError::CodeNotFound(code_id))?;
+                Account::generate(code_hash, message)
+            }
+        };
+        self.gas = Gas::new(gas);
+        if self.db.contracts.contains_key(&contract_addr) {
+            return Err(VmError::AlreadyInstantiated);
+        }
+        self.db.contracts.insert(
+            contract_addr.clone(),
+            CosmwasmContractMeta {
+                code_id,
+                admin,
+                label: String::from("test-label"),
+            },
+        );
+        self.db.bank.transfer(
+            &info.sender.clone().try_into()?,
+            &contract_addr,
+            &info.funds,
+        )?;
+        let mut vm = create_vm(
+            self,
+            Env {
+                block,
+                transaction,
+                contract: ContractInfo {
+                    address: contract_addr.clone().into(),
+                },
+            },
+            info,
+        );
+
+        match E::raw_system_call::<_, InstantiateInput>(&mut vm, message) {
+            Ok(output) => Ok((contract_addr, output)),
+            Err(e) => {
+                vm.0.state.db.contracts.remove(&contract_addr);
+                Err(e)
+            }
+        }
+    }
+
+    fn do_execute<E: ExecutionType>(
+        &'a mut self,
+        env: Env,
+        info: MessageInfo,
+        gas: u64,
+        message: &[u8],
+    ) -> Result<E::Output<Context<'a>>, VmError> {
+        self.gas = Gas::new(gas);
+        self.db.bank.transfer(
+            &info.sender.clone().try_into()?,
+            &env.contract.address.clone().try_into()?,
+            &info.funds,
+        )?;
+        let mut vm = create_vm(self, env, info);
+        E::raw_system_call::<Context<'a>, ExecuteInput>(&mut vm, message)
+    }
+
+    fn do_ibc<E: ExecutionType, I>(
+        &'a mut self,
+        env: Env,
+        info: MessageInfo,
+        gas: u64,
+        message: &[u8],
+    ) -> Result<E::Output<Context<'a>>, VmError>
+    where
+        WasmiVM<Context<'a>>: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
+    {
+        self.gas = Gas::new(gas);
+        self.db.bank.transfer(
+            &info.sender.clone().try_into()?,
+            &env.contract.address.clone().try_into()?,
+            &info.funds,
+        )?;
+        let mut vm = create_vm(self, env, info);
+        E::raw_system_call::<Context<'a>, I>(&mut vm, message)
+    }
+
+    fn do_query(
+        &'a mut self,
+        env: Env,
+        info: MessageInfo,
+        message: &[u8],
+    ) -> Result<QueryResult, VmError> {
+        let mut vm = create_vm(self, env, info);
+        cosmwasm_call::<QueryInput, WasmiVM<Context>>(&mut vm, message)
+    }
+
+    fn do_direct<I>(
+        &'a mut self,
+        env: Env,
+        info: MessageInfo,
+        gas: u64,
+        message: &[u8],
+    ) -> Result<I::Output, VmError>
+    where
+        I: Input + HasInfo,
+        I::Output: DeserializeOwned + ReadLimit + DeserializeLimit,
+        for<'x> VmInputOf<'x, WasmiVM<Context<'a>>>: TryFrom<
+                CosmwasmCallInput<'x, PointerOf<WasmiVM<Context<'x>>>, I>,
+                Error = VmErrorOf<WasmiVM<Context<'a>>>,
+            > + TryFrom<
+                CosmwasmCallWithoutInfoInput<'x, PointerOf<WasmiVM<Context<'x>>>, I>,
+                Error = VmErrorOf<WasmiVM<Context<'a>>>,
+            >,
+    {
+        self.gas = Gas::new(gas);
+        self.db.bank.transfer(
+            &info.sender.clone().try_into()?,
+            &env.contract.address.clone().try_into()?,
+            &info.funds,
+        )?;
+        let mut vm = create_vm(self, env, info);
+        cosmwasm_call::<I, WasmiVM<Context<'a>>>(&mut vm, message)
+    }
 }
 
 impl Gas {

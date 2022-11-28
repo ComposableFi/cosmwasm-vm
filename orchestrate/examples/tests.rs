@@ -3,12 +3,14 @@
 #[cfg(test)]
 mod tests {
     use cosmwasm_orchestrate::{
-        dummy_env,
         fetcher::*,
         vm::{Account, StateBuilder},
-        Entrypoint, Full, Unit,
+        Api, Unit,
     };
-    use cosmwasm_std::{to_binary, BankMsg, Coin, ContractResult, CosmosMsg};
+    use cosmwasm_std::{
+        to_binary, BankMsg, BlockInfo, Coin, ContractInfo, ContractResult, CosmosMsg, Env,
+        MessageInfo, Timestamp,
+    };
     use cosmwasm_vm::executor::{CosmwasmQueryResult, QueryResult};
     use cw20::{BalanceResponse, Cw20Coin};
     use cw20_base::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
@@ -25,13 +27,22 @@ mod tests {
             .add_code(&code)
             .add_balance(sender.clone(), Coin::new(10_000_000, "denom"))
             .build();
-        let (contract, _) = Full::instantiate_raw(
+        let block = BlockInfo {
+            height: 1,
+            time: Timestamp::from_seconds(100),
+            chain_id: "asd".into(),
+        };
+        let info = MessageInfo {
+            sender: sender.clone().into(),
+            funds: vec![Coin::new(400_000, "denom")],
+        };
+        let (contract, _) = <Api>::instantiate_raw(
             &mut state,
-            &sender,
             1,
             None,
-            dummy_env(),
-            vec![Coin::new(400_000, "denom")],
+            block.clone(),
+            None,
+            info.clone(),
             100_000_000,
             r#"{}"#.as_bytes(),
         )
@@ -49,12 +60,18 @@ mod tests {
             .into(),
         ];
 
-        let _ = Full::execute_raw(
+        let env = Env {
+            block: block.clone(),
+            transaction: None,
+            contract: ContractInfo {
+                address: contract.clone().into(),
+            },
+        };
+
+        let _ = <Api>::execute_raw(
             &mut state,
-            &sender,
-            &contract,
-            dummy_env(),
-            vec![],
+            env,
+            info.clone(),
             100_000_000,
             format!(
                 r#"{{
@@ -90,13 +107,22 @@ mod tests {
         let sender = Account::unchecked("sender");
 
         let mut state = StateBuilder::new().add_code(&code).build();
-        let (contract, res) = Unit::instantiate(
+        let block = BlockInfo {
+            height: 1,
+            time: Timestamp::from_seconds(100),
+            chain_id: "asd".into(),
+        };
+        let info = MessageInfo {
+            sender: sender.clone().into(),
+            funds: vec![],
+        };
+        let (contract, res) = <Api<Unit>>::instantiate(
             &mut state,
-            &sender,
             1,
             None,
-            dummy_env(),
-            vec![],
+            block.clone(),
+            None,
+            info.clone(),
             100_000_000,
             InstantiateMsg {
                 name: "Picasso".into(),
@@ -111,14 +137,19 @@ mod tests {
             },
         )
         .unwrap();
+        let env = Env {
+            block: block.clone(),
+            transaction: None,
+            contract: ContractInfo {
+                address: contract.into(),
+            },
+        };
         assert_matches!(res, ContractResult::Ok(_));
 
-        let _ = Full::execute(
+        let _ = <Api>::execute(
             &mut state,
-            &sender,
-            &contract,
-            dummy_env(),
-            vec![],
+            env.clone(),
+            info,
             100_000_000,
             ExecuteMsg::Transfer {
                 recipient: "receiver".into(),
@@ -128,13 +159,13 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            Unit::query(
+            <Api<Unit>>::query_raw(
                 &mut state,
-                &contract,
-                dummy_env(),
-                QueryMsg::Balance {
+                env,
+                &serde_json::to_vec(&QueryMsg::Balance {
                     address: "receiver".into()
-                }
+                })
+                .unwrap()
             )
             .unwrap(),
             QueryResult(CosmwasmQueryResult::Ok(

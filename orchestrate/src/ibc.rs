@@ -1,6 +1,6 @@
 use crate::{
     vm::{Account, IbcState, State, VmError},
-    Entrypoint, Full, Unit,
+    Api, Unit,
 };
 use cosmwasm_std::{
     Env, Ibc3ChannelOpenResponse, IbcAcknowledgement, IbcChannel, IbcChannelConnectMsg,
@@ -104,7 +104,7 @@ impl<'a> IbcNetwork<'a> {
         );
 
         // Step 1, OpenInit/Try
-        let override_version = Unit::ibc_channel_open(
+        let override_version = <Api<Unit>>::ibc_channel_open(
             self.state,
             env.clone(),
             info.clone(),
@@ -123,7 +123,7 @@ impl<'a> IbcNetwork<'a> {
             None => {}
         }
 
-        let override_version_counterparty = Unit::ibc_channel_open(
+        let override_version_counterparty = <Api<Unit>>::ibc_channel_open(
             self.state_counterparty,
             env_counterparty.clone(),
             info_counterparty.clone(),
@@ -146,7 +146,7 @@ impl<'a> IbcNetwork<'a> {
         let channel_counterparty = ibc_reverse_channel(channel.clone());
 
         // Step 2, OpenAck/Confirm
-        let result = Full::ibc_channel_connect(
+        let result = <Api>::ibc_channel_connect(
             self.state,
             env,
             info,
@@ -157,7 +157,7 @@ impl<'a> IbcNetwork<'a> {
             },
         )?;
         log::debug!("Handshake: {:?}", result);
-        let result = Full::ibc_channel_connect(
+        let result = <Api>::ibc_channel_connect(
             self.state_counterparty,
             env_counterparty,
             info_counterparty,
@@ -220,7 +220,7 @@ pub fn ibc_relay(
         .ok_or(VmError::UnknownIbcChannel)?;
     if channel_state.request_close {
         for packet in channel_state.packets.drain(0..).collect::<Vec<_>>() {
-            Full::ibc_packet_timeout(
+            <Api>::ibc_packet_timeout(
                 state,
                 env.clone(),
                 info.clone(),
@@ -241,7 +241,7 @@ pub fn ibc_relay(
         for packet in channel_state.packets.drain(0..).collect::<Vec<_>>() {
             log::info!("Relaying: {:?}", packet);
             // TODO: check timeout after env passed as parameter to Full methods
-            let (ack, _) = Full::ibc_packet_receive(
+            let (ack, _) = <Api>::ibc_packet_receive(
                 state_counterparty,
                 env_counterparty.clone(),
                 info_counterparty.clone(),
@@ -258,7 +258,7 @@ pub fn ibc_relay(
                 ),
             )?;
             log::info!("Packet ACK: {:?}", ack);
-            Full::ibc_packet_ack(
+            <Api>::ibc_packet_ack(
                 state,
                 env.clone(),
                 info.clone(),
