@@ -14,13 +14,13 @@ use bank::Bank;
 use core::{fmt::Debug, num::NonZeroU32};
 use cosmwasm_std::{
     Binary, BlockInfo, Coin, ContractInfo, ContractInfoResponse, Empty, Env, Event, IbcTimeout,
-    MessageInfo, Order, SystemResult, TransactionInfo,
+    MessageInfo, Order, Reply, SystemResult, TransactionInfo,
 };
 use cosmwasm_vm::{
     executor::{
         cosmwasm_call, CosmwasmCallInput, CosmwasmCallWithoutInfoInput, CosmwasmQueryResult,
         DeserializeLimit, ExecuteCall, HasInfo, InstantiateCall, MigrateCall, QueryCall,
-        QueryResult, ReadLimit,
+        QueryResult, ReadLimit, ReplyCall,
     },
     has::Has,
     input::Input,
@@ -572,6 +572,24 @@ impl<'a> VMBase for Context<'a> {
                 event_handler,
             )
         })?
+    }
+
+    fn continue_reply(
+        &mut self,
+        message: Reply,
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<Option<Binary>, Self::Error> {
+        self.load_subvm(
+            self.env.contract.address.clone().into_string().try_into()?,
+            vec![],
+            |sub_vm| {
+                cosmwasm_system_run::<ReplyCall<Self::MessageCustom>, _>(
+                    sub_vm,
+                    &serde_json::to_vec(&message).map_err(|_| VmError::CannotDeserialize)?,
+                    event_handler,
+                )
+            },
+        )?
     }
 
     fn query_custom(

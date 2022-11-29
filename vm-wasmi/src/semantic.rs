@@ -16,7 +16,7 @@ use cosmwasm_vm::executor::ibc::{IbcChannelConnectCall, IbcChannelOpenCall, IbcC
 use cosmwasm_vm::{
     executor::{
         cosmwasm_call, cosmwasm_call_serialize, CosmwasmExecutionResult, ExecuteCall,
-        ExecuteResult, InstantiateCall, InstantiateResult, MigrateCall, QueryCall,
+        ExecuteResult, InstantiateCall, InstantiateResult, MigrateCall, QueryCall, ReplyCall,
     },
     system::{
         cosmwasm_system_entrypoint, cosmwasm_system_run, CosmwasmCodeId, CosmwasmContractMeta,
@@ -51,6 +51,7 @@ enum SimpleVMError {
     OutOfGas,
     #[cfg(feature = "iterator")]
     IteratorDoesNotExist,
+    CannotDeserialize,
     Custom(Box<dyn Error>),
 }
 impl From<wasmi::Error> for SimpleVMError {
@@ -407,6 +408,24 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
                 event_handler,
             )
         })?
+    }
+
+    fn continue_reply(
+        &mut self,
+        message: Reply,
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<Option<Binary>, Self::Error> {
+        self.load_subvm(
+            self.env.contract.address.clone().into_string().try_into()?,
+            vec![],
+            |sub_vm| {
+                cosmwasm_system_run::<ReplyCall<Self::MessageCustom>, _>(
+                    sub_vm,
+                    &serde_json::to_vec(&message).map_err(|_| SimpleVMError::CannotDeserialize)?,
+                    event_handler,
+                )
+            },
+        )?
     }
 
     fn query_custom(

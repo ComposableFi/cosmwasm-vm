@@ -47,7 +47,8 @@ use core::{
 #[cfg(feature = "iterator")]
 use cosmwasm_std::Order;
 use cosmwasm_std::{
-    Addr, Binary, CanonicalAddr, Coin, ContractInfoResponse, Env, Event, MessageInfo, SystemResult,
+    Addr, Binary, CanonicalAddr, Coin, ContractInfoResponse, Env, Event, MessageInfo, Reply,
+    SystemResult,
 };
 use cosmwasm_vm::{
     executor::{
@@ -502,6 +503,15 @@ where
     ) -> Result<Option<Binary>, Self::Error> {
         self.charge(VmGas::ContinueMigrate)?;
         self.0.continue_migrate(address, message, event_handler)
+    }
+
+    fn continue_reply(
+        &mut self,
+        message: Reply,
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<Option<Binary>, Self::Error> {
+        self.charge(VmGas::ContinueReply)?;
+        self.0.continue_reply(message, event_handler)
     }
 
     fn query_custom(

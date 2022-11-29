@@ -792,15 +792,11 @@ where
                         // to execute the reply and optionally overwrite the
                         // current data with with the one yield by the reply.
                         SubCallContinuation::Reply(response) => {
-                            log::debug!("Replying with: {:?}", response);
-                            let raw_response = serde_json::to_vec(&Reply {
-                                id,
-                                result: response.clone(),
-                            })
-                            .map_err(|_| SystemError::FailedToSerialize)?;
-                            cosmwasm_system_run::<ReplyCall<VmMessageCustomOf<V>>, V>(
-                                vm,
-                                &raw_response,
+                            vm.continue_reply(
+                                Reply {
+                                    id,
+                                    result: response.clone(),
+                                },
                                 &mut event_handler,
                             )
                             .map(|v| {
