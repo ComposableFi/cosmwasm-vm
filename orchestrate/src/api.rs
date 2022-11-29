@@ -1,9 +1,9 @@
 use crate::vm::{Account, Context, IbcChannelId, State, VmError, VmState};
 use core::marker::PhantomData;
 use cosmwasm_std::{
-    from_binary, Addr, Binary, BlockInfo, Coin, ContractInfo, Env, Event, IbcChannelConnectMsg,
+    from_binary, Addr, Binary, BlockInfo, Coin, Env, Event, IbcChannelConnectMsg,
     IbcChannelOpenMsg, IbcPacketAckMsg, IbcPacketReceiveMsg, IbcPacketTimeoutMsg, MessageInfo,
-    Timestamp, TransactionInfo,
+    TransactionInfo,
 };
 use cosmwasm_vm::{
     executor::{
@@ -34,13 +34,15 @@ impl<'a, E: ExecutionType, S: VmState<'a, V>, V: WasmiBaseVM> Api<'a, E, S, V>
 where
     VmErrorOf<WasmiVM<V>>: Into<VmError>,
 {
-    /// Instantiate a contract and get back the contract address and the instantiate result.
+    /// Instantiate a contract and get back the contract address and the
+    /// instantiate result.
     ///
     /// * `vm_state`: Shared VM state.
-    /// * `sender`: Caller of the `instantiate` entrypoint.
     /// * `code_id`: Id of code to instantiate a contract from.
     /// * `admin`: Admin of the contract.
-    /// * `funds`: Assets to send to contract prior to execution.
+    /// * `transaction`: `TransactionInfo` to be passed to contract.
+    /// * `block`: `BlockInfo` to be passed to contract.
+    /// * `info`: `MessageInfo` to be passed to contract.
     /// * `gas`: Gas limit of this call.
     /// * `message`: Raw JSON-encoded `InstantiateMsg`.
     pub fn instantiate_raw(
@@ -56,13 +58,15 @@ where
         vm_state.do_instantiate::<E>(None, code_id, admin, block, transaction, info, gas, message)
     }
 
-    /// Instantiate a contract and get back the contract address and the instantiate result.
+    /// Instantiate a contract and get back the contract address and the
+    /// instantiate result.
     ///
     /// * `vm_state`: Shared VM state.
-    /// * `sender`: Caller of the `instantiate` entrypoint.
     /// * `code_id`: Id of code to instantiate a contract from.
     /// * `admin`: Admin of the contract.
-    /// * `funds`: Assets to send to contract prior to execution.
+    /// * `transaction`: `TransactionInfo` to be passed to contract.
+    /// * `block`: `BlockInfo` to be passed to contract.
+    /// * `info`: `MessageInfo` to be passed to contract.
     /// * `gas`: Gas limit of this call.
     /// * `message`: Typed message. Possibly `InstantiateMsg` from a contract.
     pub fn instantiate<M: Serialize>(
@@ -88,15 +92,15 @@ where
         )
     }
 
-    /// Instantiate a contract and set the contract address to `address`. This should be preferred
-    /// if your contract uses a static contract address to execute/query etc.
+    /// Instantiate a contract and set the contract address to
+    /// `env.contract.address`. This should be preferred if your contract uses
+    /// a static contract address to execute/query etc.
     ///
-    /// * `address`: Instantiated contract's address.
     /// * `vm_state`: Shared VM state.
-    /// * `sender`: Caller of the `instantiate` entrypoint.
     /// * `code_id`: Id of code to instantiate a contract from.
     /// * `admin`: Admin of the contract.
-    /// * `funds`: Assets to send to contract prior to execution.
+    /// * `env`: `Env` to be passed to contract.
+    /// * `info`: `MessageInfo` to be passed to contract.
     /// * `gas`: Gas limit of this call.
     /// * `message`: Typed message. Possibly `InstantiateMsg` from a contract.
     pub fn instantiate_with_address<M: Serialize>(
@@ -112,15 +116,15 @@ where
         Self::instantiate_with_address_raw(vm_state, code_id, admin, env, info, gas, &message)
     }
 
-    /// Instantiate a contract and set the contract address to `address`. This should be preferred
-    /// if your contract uses a static contract address to execute/query etc.
+    /// Instantiate a contract and set the contract address to
+    /// `env.contract.address`. This should be preferred if your contract uses
+    /// a static contract address to execute/query etc.
     ///
-    /// * `address`: Instantiated contract's address.
     /// * `vm_state`: Shared VM state.
-    /// * `sender`: Caller of the `instantiate` entrypoint.
     /// * `code_id`: Id of code to instantiate a contract from.
     /// * `admin`: Admin of the contract.
-    /// * `funds`: Assets to send to contract prior to execution.
+    /// * `env`: `Env` to be passed to contract.
+    /// * `info`: `MessageInfo` to be passed to contract.
     /// * `gas`: Gas limit of this call.
     /// * `message`: Raw JSON-encoded `InstantiateMsg`.
     pub fn instantiate_with_address_raw(
@@ -147,9 +151,8 @@ where
     /// Execute a contract.
     ///
     /// * `vm_state`: Shared VM state.
-    /// * `sender`: Caller of the `instantiate` entrypoint.
-    /// * `contract`: Contract to be executed.
-    /// * `funds`: Assets to send to contract prior to execution.
+    /// * `env`: `Env` to be passed to contract.
+    /// * `info`: `MessageInfo` to be passed to contract.
     /// * `gas`: Gas limit of this call.
     /// * `message`: Raw JSON-encoded `ExecuteMsg`.
     pub fn execute_raw(
@@ -165,9 +168,8 @@ where
     /// Execute a contract.
     ///
     /// * `vm_state`: Shared VM state.
-    /// * `sender`: Caller of the `instantiate` entrypoint.
-    /// * `contract`: Contract to be executed.
-    /// * `funds`: Assets to send to contract prior to execution.
+    /// * `env`: `Env` to be passed to contract.
+    /// * `info`: `MessageInfo` to be passed to contract.
     /// * `gas`: Gas limit of this call.
     /// * `message`: Typed message. Possibly `ExecuteMsg` from a contract.
     pub fn execute<M: Serialize>(
@@ -184,9 +186,8 @@ where
     /// Initiate an IBC channel handshake.
     ///
     /// * `vm_state`: Shared VM state.
-    /// * `sender`: Caller of the `instantiate` entrypoint.
-    /// * `contract`: Contract to be executed.
-    /// * `funds`: Assets to send to contract prior to execution.
+    /// * `env`: `Env` to be passed to contract.
+    /// * `info`: `MessageInfo` to be passed to contract.
     /// * `gas`: Gas limit of this call.
     /// * `message`: Raw JSON-encoded `ExecuteMsg`.
     pub fn ibc_channel_connect(
@@ -203,9 +204,8 @@ where
     /// Receive an IBC packet.
     ///
     /// * `vm_state`: Shared VM state.
-    /// * `sender`: Caller of the `instantiate` entrypoint.
-    /// * `contract`: Contract to be executed.
-    /// * `funds`: Assets to send to contract prior to execution.
+    /// * `env`: `Env` to be passed to contract.
+    /// * `info`: `MessageInfo` to be passed to contract.
     /// * `gas`: Gas limit of this call.
     /// * `message`: Raw JSON-encoded `ExecuteMsg`.
     pub fn ibc_packet_receive(
@@ -222,9 +222,8 @@ where
     /// Receive an IBC packet acknowledgement.
     ///
     /// * `vm_state`: Shared VM state.
-    /// * `sender`: Caller of the `instantiate` entrypoint.
-    /// * `contract`: Contract to be executed.
-    /// * `funds`: Assets to send to contract prior to execution.
+    /// * `env`: `Env` to be passed to contract.
+    /// * `info`: `MessageInfo` to be passed to contract.
     /// * `gas`: Gas limit of this call.
     /// * `message`: Raw JSON-encoded `ExecuteMsg`.
     pub fn ibc_packet_ack(
@@ -241,9 +240,8 @@ where
     /// Receive an IBC packet timeout.
     ///
     /// * `vm_state`: Shared VM state.
-    /// * `sender`: Caller of the `instantiate` entrypoint.
-    /// * `contract`: Contract to be executed.
-    /// * `funds`: Assets to send to contract prior to execution.
+    /// * `env`: `Env` to be passed to contract.
+    /// * `info`: `MessageInfo` to be passed to contract.
     /// * `gas`: Gas limit of this call.
     /// * `message`: Raw JSON-encoded `ExecuteMsg`.
     pub fn ibc_packet_timeout(
@@ -265,7 +263,7 @@ where
     /// Query a contract.
     ///
     /// * `vm_state`: Shared VM state.
-    /// * `contract`: Contract to be queried.
+    /// * `env`: `Env` to be used.
     /// * `message`: Raw JSON-encoded `QueryMsg`.
     pub fn query_raw(
         vm_state: &'a mut S,
@@ -285,7 +283,7 @@ where
     /// Query a contract.
     ///
     /// * `vm_state`: Shared VM state.
-    /// * `contract`: Contract to be queried.
+    /// * `env`: `Env` to be used.
     /// * `message`: Typed message. Possibly `ExecuteMsg` from a contract.
     pub fn query<M: Serialize, R: DeserializeOwned>(
         vm_state: &'a mut S,
@@ -298,6 +296,13 @@ where
             .map_err(|_| VmError::CannotDeserialize)
     }
 
+    /// Open an ibc channel.
+    ///
+    /// * `vm_state`: Shared VM state.
+    /// * `env`: `Env` to be used.
+    /// * `info`: `MessageInfo` to be used.
+    /// * `gas`: Gas limit.
+    /// * `message`: Message to pass.
     pub fn ibc_channel_open(
         vm_state: &'a mut S,
         env: Env,
@@ -310,21 +315,7 @@ where
     }
 }
 
-pub fn dummy_env() -> Env {
-    Env {
-        block: BlockInfo {
-            height: 1,
-            time: Timestamp::from_seconds(10000),
-            chain_id: "orchestrate-test".into(),
-        },
-        transaction: None,
-        contract: ContractInfo {
-            address: Addr::unchecked("MOCK_ADDR"),
-        },
-    }
-}
-
-/// Calls that are made under this `Unit` type only executes a single
+/// Calls that are made by using `Unit` type only executes a single
 /// entrypoint. It does not execute proceeding sub-messages. One can
 /// use this for writing unit tests.
 pub struct Unit;
@@ -332,6 +323,7 @@ pub struct Unit;
 pub trait ExecutionType {
     type Output<V: WasmiBaseVM>;
 
+    /// Make a call to the contract
     fn raw_system_call<V: WasmiBaseVM, I>(
         vm: &mut WasmiVM<V>,
         message: &[u8],
@@ -359,7 +351,7 @@ impl ExecutionType for Unit {
     }
 }
 
-/// Calls that are made under this `Full` type executes the whole flow.
+/// Calls that are made by using `Full` type executes the whole flow.
 /// It runs the sub-messages as well. One can use this for integration
 /// tests.
 pub struct Full;
@@ -379,6 +371,7 @@ impl ExecutionType for Full {
     }
 }
 
+/// Convenient builder for `State`
 #[derive(Default)]
 pub struct StateBuilder {
     codes: Vec<Vec<u8>>,
