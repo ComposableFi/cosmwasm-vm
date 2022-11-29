@@ -530,6 +530,18 @@ where
         self.0.query_raw(address, key)
     }
 
+    fn transfer_from(
+        &mut self,
+        from: &Self::Address,
+        to: &Self::Address,
+        funds: &[Coin],
+    ) -> Result<(), Self::Error> {
+        self.charge(VmGas::Transfer {
+            nb_of_coins: u32::try_from(funds.len()).map_err(|_| WasmiVMError::MaxLimitExceeded)?,
+        })?;
+        self.0.transfer_from(from, to, funds)
+    }
+
     fn transfer(&mut self, to: &Self::Address, funds: &[Coin]) -> Result<(), Self::Error> {
         self.charge(VmGas::Transfer {
             nb_of_coins: u32::try_from(funds.len()).map_err(|_| WasmiVMError::MaxLimitExceeded)?,

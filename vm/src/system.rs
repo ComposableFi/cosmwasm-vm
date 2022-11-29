@@ -668,6 +668,11 @@ where
     log::debug!("SystemRun");
     let info: MessageInfo = vm.get();
     let env: Env = vm.get();
+    vm.transfer_from(
+        &info.sender.clone().into_string().try_into()?,
+        &env.contract.address.clone().into_string().try_into()?,
+        info.funds.as_slice(),
+    )?;
     let output = cosmwasm_call::<I, V>(vm, message).map(Into::into);
     log::debug!("Output: {:?}", output);
     match output {

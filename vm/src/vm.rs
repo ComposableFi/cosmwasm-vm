@@ -258,7 +258,15 @@ pub trait VMBase {
         key: Self::StorageKey,
     ) -> Result<Option<Self::StorageValue>, Self::Error>;
 
-    /// Transfer `funds` from the current bank to `to`.
+    /// Transfer `funds` from `from` to `to`
+    fn transfer_from(
+        &mut self,
+        from: &Self::Address,
+        to: &Self::Address,
+        funds: &[Coin],
+    ) -> Result<(), Self::Error>;
+
+    /// Transfer `funds` from the current contract to `to`.
     fn transfer(&mut self, to: &Self::Address, funds: &[Coin]) -> Result<(), Self::Error>;
 
     /// Burn the `funds` from the current contract.

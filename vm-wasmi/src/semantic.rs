@@ -441,6 +441,16 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
             .cloned())
     }
 
+    fn transfer_from(
+        &mut self,
+        from: &Self::Address,
+        to: &Self::Address,
+        funds: &[Coin],
+    ) -> Result<(), Self::Error> {
+        log::debug!("Transfer from: {:?} -> {:?}\n{:?}", from, to, funds);
+        Ok(())
+    }
+
     fn transfer(&mut self, to: &Self::Address, funds: &[Coin]) -> Result<(), Self::Error> {
         log::debug!(
             "Transfer: {:?} -> {:?}\n{:?}",

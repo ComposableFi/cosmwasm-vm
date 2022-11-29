@@ -147,11 +147,6 @@ where
                 label: String::from("test-label"),
             },
         );
-        self.db.bank.transfer(
-            &info.sender.clone().try_into()?,
-            &contract_addr,
-            &info.funds,
-        )?;
         let mut vm = create_vm(
             self,
             Env {
@@ -181,11 +176,6 @@ where
         message: &[u8],
     ) -> Result<E::Output<Context<'a>>, VmError> {
         self.gas = Gas::new(gas);
-        self.db.bank.transfer(
-            &info.sender.clone().try_into()?,
-            &env.contract.address.clone().try_into()?,
-            &info.funds,
-        )?;
         let mut vm = create_vm(self, env, info);
         E::raw_system_call::<Context<'a>, ExecuteInput>(&mut vm, message)
     }
@@ -201,11 +191,6 @@ where
         WasmiVM<Context<'a>>: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
     {
         self.gas = Gas::new(gas);
-        self.db.bank.transfer(
-            &info.sender.clone().try_into()?,
-            &env.contract.address.clone().try_into()?,
-            &info.funds,
-        )?;
         let mut vm = create_vm(self, env, info);
         E::raw_system_call::<Context<'a>, I>(&mut vm, message)
     }
@@ -239,11 +224,6 @@ where
             >,
     {
         self.gas = Gas::new(gas);
-        self.db.bank.transfer(
-            &info.sender.clone().try_into()?,
-            &env.contract.address.clone().try_into()?,
-            &info.funds,
-        )?;
         let mut vm = create_vm(self, env, info);
         cosmwasm_call::<I, WasmiVM<Context<'a>>>(&mut vm, message)
     }
@@ -541,13 +521,6 @@ impl<'a> VMBase for Context<'a> {
             self.env.contract.address,
             address
         );
-
-        self.state.db.bank.transfer(
-            &self.env.contract.address.clone().try_into()?,
-            &address,
-            funds.as_ref(),
-        )?;
-
         self.load_subvm(address, funds, |sub_vm| {
             cosmwasm_system_run::<ExecuteInput<Self::MessageCustom>, _>(
                 sub_vm,
@@ -570,12 +543,6 @@ impl<'a> VMBase for Context<'a> {
             .get(&contract_meta.code_id)
             .ok_or(VmError::CodeNotFound(contract_meta.code_id))?;
         let address = Account::generate(code_hash, message);
-
-        self.state.db.bank.transfer(
-            &self.env.contract.address.clone().try_into()?,
-            &address,
-            funds.as_ref(),
-        )?;
 
         self.state
             .db
@@ -638,19 +605,23 @@ impl<'a> VMBase for Context<'a> {
             .cloned())
     }
 
-    fn transfer(&mut self, to: &Self::Address, funds: &[Coin]) -> Result<(), Self::Error> {
-        log::debug!(
-            "Transfer: {:?} -> {:?}\n{:?}",
-            self.env.contract.address,
-            to,
-            funds
-        );
-        let account = self.env.contract.address.clone().try_into()?;
+    fn transfer_from(
+        &mut self,
+        from: &Self::Address,
+        to: &Self::Address,
+        funds: &[Coin],
+    ) -> Result<(), Self::Error> {
+        log::debug!("Transfer: {:?} -> {:?}\n{:?}", from, to, funds);
         self.state
             .db
             .bank
-            .transfer(&account, to, funds)
+            .transfer(from, to, funds)
             .map_err(Into::into)
+    }
+
+    fn transfer(&mut self, to: &Self::Address, funds: &[Coin]) -> Result<(), Self::Error> {
+        let account = self.env.contract.address.clone().try_into()?;
+        self.transfer_from(&account, to, funds)
     }
 
     fn burn(&mut self, funds: &[Coin]) -> Result<(), Self::Error> {

@@ -19,8 +19,17 @@ mod tests {
     const REFLECT_URL: &'static str =
         "https://github.com/CosmWasm/cosmwasm/releases/download/v1.1.8/reflect.wasm";
 
+    fn initialize() {
+        use std::sync::Once;
+        static INIT: Once = Once::new();
+        INIT.call_once(|| {
+            env_logger::init();
+        });
+    }
+
     #[tokio::test]
     async fn bank() {
+        initialize();
         let code = FileFetcher::from_url(REFLECT_URL).await.unwrap();
         let sender = Account::unchecked("sender");
         let mut state = StateBuilder::new()
@@ -32,7 +41,7 @@ mod tests {
             time: Timestamp::from_seconds(100),
             chain_id: "asd".into(),
         };
-        let info = MessageInfo {
+        let mut info = MessageInfo {
             sender: sender.clone().into(),
             funds: vec![Coin::new(400_000, "denom")],
         };
@@ -68,6 +77,7 @@ mod tests {
             },
         };
 
+        info.funds = vec![];
         let _ = <Api>::execute_raw(
             &mut state,
             env,
@@ -98,6 +108,7 @@ mod tests {
 
     #[tokio::test]
     async fn cw20() {
+        initialize();
         let code = CosmosFetcher::from_contract_addr(
             "https://juno-api.polkachu.com",
             "juno19rqljkh95gh40s7qdx40ksx3zq5tm4qsmsrdz9smw668x9zdr3lqtg33mf",
