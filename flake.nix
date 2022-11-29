@@ -44,7 +44,7 @@
         };
 
         # Default args to crane
-        common-args = { inherit src; };
+        common-args = { inherit src; buildInputs = [ pkgs.pkg-config pkgs.openssl ]; };
 
         # Common dependencies used for caching
         common-deps = crane-nightly.buildDepsOnly common-args;
