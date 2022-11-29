@@ -28,16 +28,16 @@
 
 #[cfg(feature = "stargate")]
 use crate::executor::ibc::{
-    IbcChannelCloseInput, IbcChannelConnectInput, IbcPacketAckInput, IbcPacketReceiveInput,
-    IbcPacketTimeoutInput,
+    IbcChannelCloseCall, IbcChannelConnectCall, IbcPacketAckCall, IbcPacketReceiveCall,
+    IbcPacketTimeoutCall,
 };
 #[cfg(feature = "stargate")]
 use crate::executor::AsFunctionName;
 use crate::{
     executor::{
-        cosmwasm_call, AllocateInput, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
-        CosmwasmQueryResult, DeallocateInput, DeserializeLimit, ExecuteInput, ExecutorError,
-        HasInfo, InstantiateInput, MigrateInput, QueryResult, ReadLimit, ReplyInput, Unit,
+        cosmwasm_call, AllocateCall, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
+        CosmwasmQueryResult, DeallocateCall, DeserializeLimit, ExecuteCall, ExecutorError, HasInfo,
+        InstantiateCall, MigrateCall, QueryResult, ReadLimit, ReplyCall, Unit,
     },
     has::Has,
     input::{Input, OutputOf},
@@ -138,15 +138,15 @@ impl Display for SystemEventType {
             SystemEventType::Sudo => "sudo",
             SystemEventType::Reply => "reply",
             #[cfg(feature = "stargate")]
-            SystemEventType::IbcChannelConnect => IbcChannelConnectInput::<Empty>::NAME,
+            SystemEventType::IbcChannelConnect => IbcChannelConnectCall::<Empty>::NAME,
             #[cfg(feature = "stargate")]
-            SystemEventType::IbcChannelClose => IbcChannelCloseInput::<Empty>::NAME,
+            SystemEventType::IbcChannelClose => IbcChannelCloseCall::<Empty>::NAME,
             #[cfg(feature = "stargate")]
-            SystemEventType::IbcPacketReceive => IbcPacketReceiveInput::<Empty>::NAME,
+            SystemEventType::IbcPacketReceive => IbcPacketReceiveCall::<Empty>::NAME,
             #[cfg(feature = "stargate")]
-            SystemEventType::IbcPacketAck => IbcPacketAckInput::<Empty>::NAME,
+            SystemEventType::IbcPacketAck => IbcPacketAckCall::<Empty>::NAME,
             #[cfg(feature = "stargate")]
-            SystemEventType::IbcPacketTimeout => IbcPacketTimeoutInput::<Empty>::NAME,
+            SystemEventType::IbcPacketTimeout => IbcPacketTimeoutCall::<Empty>::NAME,
         };
 
         write!(f, "{}", event_str)
@@ -168,44 +168,44 @@ pub trait EventHasCodeId {
     const HAS_CODE_ID: bool;
 }
 
-impl<T> EventHasCodeId for InstantiateInput<T> {
+impl<T> EventHasCodeId for InstantiateCall<T> {
     const HAS_CODE_ID: bool = true;
 }
 
-impl<T> EventHasCodeId for ExecuteInput<T> {
+impl<T> EventHasCodeId for ExecuteCall<T> {
     const HAS_CODE_ID: bool = false;
 }
 
-impl<T> EventHasCodeId for MigrateInput<T> {
+impl<T> EventHasCodeId for MigrateCall<T> {
     const HAS_CODE_ID: bool = true;
 }
 
-impl<T> EventHasCodeId for ReplyInput<T> {
+impl<T> EventHasCodeId for ReplyCall<T> {
     const HAS_CODE_ID: bool = false;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventHasCodeId for IbcChannelConnectInput<T> {
+impl<T> EventHasCodeId for IbcChannelConnectCall<T> {
     const HAS_CODE_ID: bool = false;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventHasCodeId for IbcChannelCloseInput<T> {
+impl<T> EventHasCodeId for IbcChannelCloseCall<T> {
     const HAS_CODE_ID: bool = false;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventHasCodeId for IbcPacketReceiveInput<T> {
+impl<T> EventHasCodeId for IbcPacketReceiveCall<T> {
     const HAS_CODE_ID: bool = false;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventHasCodeId for IbcPacketAckInput<T> {
+impl<T> EventHasCodeId for IbcPacketAckCall<T> {
     const HAS_CODE_ID: bool = false;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventHasCodeId for IbcPacketTimeoutInput<T> {
+impl<T> EventHasCodeId for IbcPacketTimeoutCall<T> {
     const HAS_CODE_ID: bool = false;
 }
 
@@ -213,44 +213,44 @@ pub trait EventIsTyped {
     const TYPE: SystemEventType;
 }
 
-impl<T> EventIsTyped for InstantiateInput<T> {
+impl<T> EventIsTyped for InstantiateCall<T> {
     const TYPE: SystemEventType = SystemEventType::Instantiate;
 }
 
-impl<T> EventIsTyped for ExecuteInput<T> {
+impl<T> EventIsTyped for ExecuteCall<T> {
     const TYPE: SystemEventType = SystemEventType::Execute;
 }
 
-impl<T> EventIsTyped for MigrateInput<T> {
+impl<T> EventIsTyped for MigrateCall<T> {
     const TYPE: SystemEventType = SystemEventType::Migrate;
 }
 
-impl<T> EventIsTyped for ReplyInput<T> {
+impl<T> EventIsTyped for ReplyCall<T> {
     const TYPE: SystemEventType = SystemEventType::Reply;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventIsTyped for IbcChannelConnectInput<T> {
+impl<T> EventIsTyped for IbcChannelConnectCall<T> {
     const TYPE: SystemEventType = SystemEventType::IbcChannelConnect;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventIsTyped for IbcChannelCloseInput<T> {
+impl<T> EventIsTyped for IbcChannelCloseCall<T> {
     const TYPE: SystemEventType = SystemEventType::IbcChannelClose;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventIsTyped for IbcPacketReceiveInput<T> {
+impl<T> EventIsTyped for IbcPacketReceiveCall<T> {
     const TYPE: SystemEventType = SystemEventType::IbcPacketReceive;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventIsTyped for IbcPacketAckInput<T> {
+impl<T> EventIsTyped for IbcPacketAckCall<T> {
     const TYPE: SystemEventType = SystemEventType::IbcPacketAck;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventIsTyped for IbcPacketTimeoutInput<T> {
+impl<T> EventIsTyped for IbcPacketTimeoutCall<T> {
     const TYPE: SystemEventType = SystemEventType::IbcPacketTimeout;
 }
 
@@ -335,31 +335,27 @@ where
         + From<SystemError>
         + From<TransactionalErrorOf<Self>>
         + Debug,
-    for<'x> VmInputOf<'x, Self>: TryFrom<AllocateInput<PointerOf<Self>>, Error = VmErrorOf<Self>>,
+    for<'x> VmInputOf<'x, Self>: TryFrom<AllocateCall<PointerOf<Self>>, Error = VmErrorOf<Self>>,
     PointerOf<Self>: for<'x> TryFrom<VmOutputOf<'x, Self>, Error = VmErrorOf<Self>>;
 
 pub trait CosmwasmCallVM<I> = CosmwasmBaseVM
 where
     for<'x> Unit: TryFrom<VmOutputOf<'x, Self>, Error = VmErrorOf<Self>>,
-    for<'x> VmInputOf<'x, Self>: TryFrom<DeallocateInput<PointerOf<Self>>, Error = VmErrorOf<Self>>
+    for<'x> VmInputOf<'x, Self>: TryFrom<DeallocateCall<PointerOf<Self>>, Error = VmErrorOf<Self>>
         + TryFrom<
-            CosmwasmCallInput<'x, PointerOf<Self>, InstantiateInput<VmMessageCustomOf<Self>>>,
+            CosmwasmCallInput<'x, PointerOf<Self>, InstantiateCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<
-            CosmwasmCallInput<'x, PointerOf<Self>, ExecuteInput<VmMessageCustomOf<Self>>>,
+            CosmwasmCallInput<'x, PointerOf<Self>, ExecuteCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<
-            CosmwasmCallInput<'x, PointerOf<Self>, ReplyInput<VmMessageCustomOf<Self>>>,
+            CosmwasmCallInput<'x, PointerOf<Self>, ReplyCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<
-            CosmwasmCallWithoutInfoInput<'x, PointerOf<Self>, ReplyInput<VmMessageCustomOf<Self>>>,
+            CosmwasmCallWithoutInfoInput<'x, PointerOf<Self>, ReplyCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<
-            CosmwasmCallWithoutInfoInput<
-                'x,
-                PointerOf<Self>,
-                MigrateInput<VmMessageCustomOf<Self>>,
-            >,
+            CosmwasmCallWithoutInfoInput<'x, PointerOf<Self>, MigrateCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<CosmwasmCallInput<'x, PointerOf<Self>, I>, Error = VmErrorOf<Self>>
         + TryFrom<CosmwasmCallWithoutInfoInput<'x, PointerOf<Self>, I>, Error = VmErrorOf<Self>>,
@@ -374,19 +370,19 @@ where
 pub trait StargateCosmwasmCallVM = CosmwasmBaseVM
 where
     for<'x> VmInputOf<'x, Self>: TryFrom<
-            CosmwasmCallInput<'x, PointerOf<Self>, IbcChannelConnectInput<VmMessageCustomOf<Self>>>,
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcChannelConnectCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<
-            CosmwasmCallInput<'x, PointerOf<Self>, IbcChannelCloseInput<VmMessageCustomOf<Self>>>,
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcChannelCloseCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<
-            CosmwasmCallInput<'x, PointerOf<Self>, IbcPacketReceiveInput<VmMessageCustomOf<Self>>>,
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcPacketReceiveCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<
-            CosmwasmCallInput<'x, PointerOf<Self>, IbcPacketAckInput<VmMessageCustomOf<Self>>>,
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcPacketAckCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<
-            CosmwasmCallInput<'x, PointerOf<Self>, IbcPacketTimeoutInput<VmMessageCustomOf<Self>>>,
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcPacketTimeoutCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         >;
 
@@ -511,6 +507,152 @@ fn sanitize_custom_attributes(
     Ok(())
 }
 
+fn dispatch_submessage<V, I>(
+    vm: &mut V,
+    info: &MessageInfo,
+    msg: CosmosMsg<VmMessageCustomOf<V>>,
+    gas_limit: Option<u64>,
+    event_handler: &mut dyn FnMut(Event),
+) -> Result<(Option<Binary>, Vec<Event>), VmErrorOf<V>>
+where
+    V: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
+{
+    // Gas might be limited for the sub message execution.
+    vm.gas_checkpoint_push(match gas_limit {
+        Some(limit) => VmGasCheckpoint::Limited(limit),
+        None => VmGasCheckpoint::Unlimited,
+    })?;
+
+    let mut sub_events = Vec::<Event>::new();
+
+    // Events dispatched by a submessage are added to both the
+    // submessage events and parent events.
+    let mut sub_event_handler = |event: Event| {
+        event_handler(event.clone());
+        sub_events.push(event);
+    };
+
+    let sub_result = (|| match msg {
+        CosmosMsg::Custom(message) => vm
+            .message_custom(message, &mut sub_event_handler)
+            .map_err(Into::into),
+        CosmosMsg::Wasm(wasm_message) => match wasm_message {
+            WasmMsg::Execute {
+                contract_addr,
+                msg: Binary(msg),
+                funds,
+            } => {
+                let vm_contract_addr = contract_addr.try_into()?;
+                vm.continue_execute(vm_contract_addr, funds, &msg, &mut sub_event_handler)
+            }
+            WasmMsg::Instantiate {
+                admin,
+                code_id,
+                msg,
+                funds,
+                label,
+            } => vm
+                .continue_instantiate(
+                    CosmwasmContractMeta {
+                        code_id,
+                        admin: match admin {
+                            Some(admin) => Some(admin.try_into()?),
+                            None => None,
+                        },
+                        label,
+                    },
+                    funds,
+                    &msg,
+                    &mut sub_event_handler,
+                )
+                .map(|(_, data)| data),
+            WasmMsg::Migrate {
+                contract_addr,
+                new_code_id,
+                msg: Binary(msg),
+            } => {
+                let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
+                let CosmwasmContractMeta { admin, label, .. } =
+                    vm.contract_meta(vm_contract_addr.clone())?;
+                ensure_admin::<V>(&info.sender, admin.clone())?;
+                vm.set_contract_meta(
+                    vm_contract_addr.clone(),
+                    CosmwasmContractMeta {
+                        code_id: new_code_id,
+                        admin,
+                        label,
+                    },
+                )?;
+                vm.continue_migrate(vm_contract_addr, &msg, &mut sub_event_handler)
+            }
+            WasmMsg::UpdateAdmin {
+                contract_addr,
+                admin: new_admin,
+            } => {
+                let new_admin = new_admin.try_into()?;
+                let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
+                update_admin::<V>(vm, &info.sender, vm_contract_addr, Some(new_admin))?;
+                Ok(None)
+            }
+            WasmMsg::ClearAdmin { contract_addr } => {
+                let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
+                update_admin::<V>(vm, &info.sender, vm_contract_addr, None)?;
+                Ok(None)
+            }
+            _ => Err(SystemError::UnsupportedMessage.into()),
+        },
+        CosmosMsg::Bank(bank_message) => match bank_message {
+            BankMsg::Send { to_address, amount } => {
+                let vm_contract_addr = to_address.try_into()?;
+                vm.transfer(&vm_contract_addr, &amount)?;
+                Ok(None)
+            }
+            BankMsg::Burn { amount } => {
+                vm.burn(&amount)?;
+                Ok(None)
+            }
+            _ => Err(SystemError::UnsupportedMessage.into()),
+        },
+        #[cfg(feature = "stargate")]
+        CosmosMsg::Ibc(ibc_message) => match ibc_message {
+            IbcMsg::Transfer {
+                channel_id,
+                to_address,
+                amount,
+                timeout,
+            } => {
+                vm.ibc_transfer(channel_id, to_address, amount, timeout)?;
+                Ok(None)
+            }
+            IbcMsg::SendPacket {
+                channel_id,
+                data,
+                timeout,
+            } => {
+                vm.ibc_send_packet(channel_id, data, timeout)?;
+                Ok(None)
+            }
+            IbcMsg::CloseChannel { channel_id } => {
+                vm.ibc_close_channel(channel_id)?;
+                Ok(None)
+            }
+            _ => Err(SystemError::UnsupportedMessage.into()),
+        },
+        // TODO(hussein-aitlahcen): determine whether we handle.
+        #[cfg(feature = "stargate")]
+        CosmosMsg::Stargate { .. } => Err(SystemError::UnsupportedMessage.into()),
+        // TODO(hussein-aitlahcen): determine whether we handle.
+        #[cfg(feature = "stargate")]
+        CosmosMsg::Gov(_) => Err(SystemError::UnsupportedMessage.into()),
+        _ => Err(SystemError::UnsupportedMessage.into()),
+    })();
+
+    // Make sure we remove the checkpoint.
+    vm.gas_checkpoint_pop()?;
+
+    sub_result.map(|data| (data, sub_events))
+}
+
 pub fn cosmwasm_system_run<I, V>(
     vm: &mut V,
     message: &[u8],
@@ -522,8 +664,12 @@ where
     log::debug!("SystemRun");
     let info: MessageInfo = vm.get();
     let env: Env = vm.get();
+    vm.transfer_from(
+        &info.sender.clone().into_string().try_into()?,
+        &env.contract.address.clone().into_string().try_into()?,
+        info.funds.as_slice(),
+    )?;
     let output = cosmwasm_call::<I, V>(vm, message).map(Into::into);
-
     log::debug!("Output: {:?}", output);
     match output {
         Ok(ContractResult::Ok(Response {
@@ -546,6 +692,7 @@ where
                 event_handler(Event::new(WASM_MODULE_EVENT_TYPE).add_attributes(attributes));
             }
 
+            // Embed ophan attributes in a custom contract event.
             // https://github.com/CosmWasm/wasmd/blob/ac92fdcf37388cc8dc24535f301f64395f8fb3da/x/wasm/keeper/events.go#L29
             for Event {
                 ty, mut attributes, ..
@@ -565,8 +712,7 @@ where
                 );
             }
 
-            // Fold dispatch over the submessages. If an exception occur and we
-            // didn't expected it (reply on error), the fold is aborted.
+            // Fold dispatch over the submessages. If an exception occur (unless expected reply on error), we abort.
             // Otherwise, it's up to the parent contract to decide in each case.
             messages.into_iter().try_fold(
                 data,
@@ -579,151 +725,16 @@ where
                  }|
                  -> Result<Option<Binary>, VmErrorOf<V>> {
                     log::debug!("Executing submessages");
-                    let mut sub_events = Vec::<Event>::new();
-
-                    // Events dispatched by a submessage are added to both the
-                    // submessage events and it's parent events.
-                    let mut sub_event_handler = |event: Event| {
-                        event_handler(event.clone());
-                        sub_events.push(event);
-                    };
-
-                    // Gas might be limited for the sub message execution.
-                    vm.gas_checkpoint_push(match gas_limit {
-                        Some(limit) => VmGasCheckpoint::Limited(limit),
-                        None => VmGasCheckpoint::Unlimited,
-                    })?;
 
                     // For each submessages, we might rollback and reply the
                     // failure to the parent contract. Hence, a new state tx
                     // must be created prior to the call.
                     vm.transaction_begin()?;
 
-                    let sub_res = match msg {
-                        CosmosMsg::Custom(message) => vm
-                            .message_custom(message, &mut event_handler)
-                            .map_err(Into::into),
-                        CosmosMsg::Wasm(wasm_message) => match wasm_message {
-                            WasmMsg::Execute {
-                                contract_addr,
-                                msg: Binary(msg),
-                                funds,
-                            } => {
-                                let vm_contract_addr = contract_addr.try_into()?;
-                                vm.continue_execute(
-                                    vm_contract_addr,
-                                    funds,
-                                    &msg,
-                                    &mut sub_event_handler,
-                                )
-                            }
-                            WasmMsg::Instantiate {
-                                admin,
-                                code_id,
-                                msg,
-                                funds,
-                                label,
-                            } => {
-                                let (_, data) = vm.continue_instantiate(
-                                    CosmwasmContractMeta {
-                                        code_id,
-                                        admin: match admin {
-                                            Some(admin) => Some(admin.try_into()?),
-                                            None => None,
-                                        },
-                                        label,
-                                    },
-                                    funds,
-                                    &msg,
-                                    &mut sub_event_handler,
-                                )?;
-
-                                Ok(data)
-                            }
-                            WasmMsg::Migrate {
-                                contract_addr,
-                                new_code_id,
-                                msg: Binary(msg),
-                            } => {
-                                let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
-                                let CosmwasmContractMeta { admin, label, .. } =
-                                    vm.contract_meta(vm_contract_addr.clone())?;
-                                ensure_admin::<V>(&info.sender, admin.clone())?;
-                                vm.set_contract_meta(
-                                    vm_contract_addr.clone(),
-                                    CosmwasmContractMeta {
-                                        code_id: new_code_id,
-                                        admin,
-                                        label,
-                                    },
-                                )?;
-                                vm.continue_migrate(vm_contract_addr, &msg, &mut sub_event_handler)
-                            }
-                            WasmMsg::UpdateAdmin {
-                                contract_addr,
-                                admin: new_admin,
-                            } => {
-                                let new_admin = new_admin.try_into()?;
-                                let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
-                                update_admin::<V>(
-                                    vm,
-                                    &info.sender,
-                                    vm_contract_addr,
-                                    Some(new_admin),
-                                )
-                                .map(|_| None)
-                            }
-                            WasmMsg::ClearAdmin { contract_addr } => {
-                                let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
-                                update_admin::<V>(vm, &info.sender, vm_contract_addr, None)
-                                    .map(|_| None)
-                            }
-                            _ => Err(SystemError::UnsupportedMessage.into()),
-                        },
-                        CosmosMsg::Bank(bank_message) => match bank_message {
-                            BankMsg::Send { to_address, amount } => {
-                                vm.transfer(&to_address.try_into()?, &amount)?;
-                                Ok(None)
-                            }
-                            BankMsg::Burn { amount } => {
-                                vm.burn(&amount)?;
-                                Ok(None)
-                            }
-                            _ => Err(SystemError::UnsupportedMessage.into()),
-                        },
-                        #[cfg(feature = "stargate")]
-                        CosmosMsg::Ibc(ibc_message) => match ibc_message {
-                            IbcMsg::Transfer {
-                                channel_id,
-                                to_address,
-                                amount,
-                                timeout,
-                            } => {
-                                vm.ibc_transfer(channel_id, to_address, amount, timeout)?;
-                                Ok(None)
-                            }
-                            IbcMsg::SendPacket {
-                                channel_id,
-                                data,
-                                timeout,
-                            } => {
-                                vm.ibc_send_packet(channel_id, data, timeout)?;
-                                Ok(None)
-                            }
-                            IbcMsg::CloseChannel { channel_id } => {
-                                vm.ibc_close_channel(channel_id)?;
-                                Ok(None)
-                            }
-                            _ => Err(SystemError::UnsupportedMessage.into()),
-                        },
-                        // TODO(hussein-aitlahcen): determine whether we handle.
-                        #[cfg(feature = "stargate")]
-                        CosmosMsg::Stargate { .. } => Err(SystemError::UnsupportedMessage.into()),
-                        // TODO(hussein-aitlahcen): determine whether we handle.
-                        #[cfg(feature = "stargate")]
-                        CosmosMsg::Gov(_) => Err(SystemError::UnsupportedMessage.into()),
-                        _ => Err(SystemError::UnsupportedMessage.into()),
-                    };
+                    // The result MUST be captured to determine whether we rollback or commit the local transaction.
+                    // We MUST not return using something like the questionmark operator, as we want to catch both the success and failure branches here.
+                    // Both branches may be used depending on the reply attached to the message. See reply_on.
+                    let sub_res = dispatch_submessage(vm, &info, msg, gas_limit, event_handler);
 
                     log::debug!("Submessage result: {:?}", sub_res);
 
@@ -731,22 +742,21 @@ where
                         // If the submessage suceeded and no reply was asked or
                         // only on error, the call is considered successful and
                         // state change is comitted.
-                        (Ok(v), ReplyOn::Never | ReplyOn::Error) => {
+                        (Ok((data, _)), ReplyOn::Never | ReplyOn::Error) => {
                             log::debug!("Commit & Continue");
                             vm.transaction_commit()?;
-                            SubCallContinuation::Continue(v)
+                            SubCallContinuation::Continue(data)
                         }
                         // Similarly to previous case, if the submessage
                         // suceeded and we ask for a reply, the call is
                         // considered successful and we redispatch a reply to
                         // the parent contract.
-                        (Ok(v), ReplyOn::Always | ReplyOn::Success) => {
+                        (Ok((data, events)), ReplyOn::Always | ReplyOn::Success) => {
                             log::debug!("Commit & Reply");
                             vm.transaction_commit()?;
-                            let events = sub_events.clone();
                             SubCallContinuation::Reply(SubMsgResult::Ok(SubMsgResponse {
                                 events,
-                                data: v,
+                                data,
                             }))
                         }
                         // If the submessage failed and a reply is required,
@@ -767,8 +777,6 @@ where
                         }
                     };
 
-                    vm.gas_checkpoint_pop()?;
-
                     log::debug!("Submessage cont: {:?}", sub_cont);
 
                     match sub_cont {
@@ -784,15 +792,11 @@ where
                         // to execute the reply and optionally overwrite the
                         // current data with with the one yield by the reply.
                         SubCallContinuation::Reply(response) => {
-                            log::debug!("Replying");
-                            let raw_response = serde_json::to_vec(&Reply {
-                                id,
-                                result: response.clone(),
-                            })
-                            .map_err(|_| SystemError::FailedToSerialize)?;
-                            cosmwasm_system_run::<ReplyInput<VmMessageCustomOf<V>>, V>(
-                                vm,
-                                &raw_response,
+                            vm.continue_reply(
+                                Reply {
+                                    id,
+                                    result: response.clone(),
+                                },
                                 &mut event_handler,
                             )
                             .map(|v| {
@@ -852,7 +856,7 @@ where
                 msg: Binary(message),
             } => {
                 let vm_contract_addr = contract_addr.try_into()?;
-                let QueryResult(output) = vm.query_continuation(vm_contract_addr, &message)?;
+                let QueryResult(output) = vm.continue_query(vm_contract_addr, &message)?;
                 Ok(SystemResult::Ok(output))
             }
             WasmQuery::Raw {

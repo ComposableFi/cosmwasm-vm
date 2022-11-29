@@ -1,0 +1,280 @@
+use crate::{
+    vm::{Account, IbcState, State, VmError},
+    Api, Direct,
+};
+use cosmwasm_std::{
+    Env, Ibc3ChannelOpenResponse, IbcAcknowledgement, IbcChannel, IbcChannelConnectMsg,
+    IbcChannelOpenMsg, IbcEndpoint, IbcOrder, IbcPacketAckMsg, IbcPacketReceiveMsg,
+    IbcPacketTimeoutMsg, MessageInfo,
+};
+
+pub type ConnectionId = String;
+
+pub struct IbcNetwork<'a> {
+    pub state: &'a mut State,
+    pub state_counterparty: &'a mut State,
+}
+
+impl<'a> IbcNetwork<'a> {
+    pub fn new(state: &'a mut State, state_counterparty: &'a mut State) -> IbcNetwork<'a> {
+        IbcNetwork {
+            state,
+            state_counterparty,
+        }
+    }
+
+    pub fn reverse(self) -> Self {
+        Self::new(self.state_counterparty, self.state)
+    }
+
+    pub fn relay_required(&self, channel: &IbcChannel) -> Result<bool, VmError> {
+        ibc_relay_required(channel, self.state)
+    }
+
+    pub fn relay<A>(
+        &mut self,
+        channel: IbcChannel,
+        env: Env,
+        env_counterparty: Env,
+        info: MessageInfo,
+        info_counterparty: MessageInfo,
+        gas: u64,
+        a: &A,
+        a_counterparty: &A,
+        mut pre: impl FnMut(&mut State, &mut State, &A, &A),
+        mut post: impl FnMut(&mut State, &mut State, &A, &A),
+    ) -> Result<(), VmError> {
+        pre(self.state, self.state_counterparty, a, a_counterparty);
+        ibc_relay(
+            channel.clone(),
+            self.state,
+            self.state_counterparty,
+            env.clone(),
+            env_counterparty.clone(),
+            info.clone(),
+            info_counterparty.clone(),
+            gas,
+        )?;
+        post(self.state, self.state_counterparty, a, a_counterparty);
+        let mut network_reversed = IbcNetwork::new(self.state_counterparty, self.state);
+        if network_reversed.relay_required(&channel)? {
+            network_reversed.relay(
+                ibc_reverse_channel(channel),
+                env_counterparty,
+                env,
+                info_counterparty,
+                info,
+                gas,
+                a_counterparty,
+                a,
+                pre,
+                post,
+            )
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn handshake(
+        &mut self,
+        channel_id: String,
+        channel_version: String,
+        channel_ordering: IbcOrder,
+        connection_id: String,
+        env: Env,
+        env_counterparty: Env,
+        info: MessageInfo,
+        info_counterparty: MessageInfo,
+        gas: u64,
+    ) -> Result<IbcChannel, VmError> {
+        let contract = Account::try_from(env.contract.address.clone())?;
+        let contract_counterparty = Account::try_from(env_counterparty.contract.address.clone())?;
+        let mut channel = IbcChannel::new(
+            IbcEndpoint {
+                port_id: format!("{contract}"),
+                channel_id: channel_id.clone(),
+            },
+            IbcEndpoint {
+                port_id: format!("{contract_counterparty}"),
+                channel_id: channel_id.clone(),
+            },
+            channel_ordering,
+            channel_version,
+            connection_id,
+        );
+
+        // Step 1, OpenInit/Try
+        let override_version = Api::<Direct>::ibc_channel_open(
+            self.state,
+            env.clone(),
+            info.clone(),
+            gas,
+            IbcChannelOpenMsg::OpenInit {
+                channel: channel.clone(),
+            },
+        )?
+        .0
+        .into_result()
+        .map_err(VmError::IbcChannelOpenFailure)?;
+
+        // The contract may override the channel version.
+        if let Some(Ibc3ChannelOpenResponse { version }) = override_version {
+            channel.version = version
+        }
+
+        let override_version_counterparty = Api::<Direct>::ibc_channel_open(
+            self.state_counterparty,
+            env_counterparty.clone(),
+            info_counterparty.clone(),
+            gas,
+            IbcChannelOpenMsg::OpenTry {
+                channel: channel.clone(),
+                counterparty_version: channel.version.clone(),
+            },
+        )?
+        .0
+        .into_result()
+        .map_err(VmError::IbcChannelOpenFailure)?;
+
+        // The contract counterparty may override the channel version.
+        if let Some(Ibc3ChannelOpenResponse { version }) = override_version_counterparty {
+            channel.version = version
+        }
+
+        let channel_counterparty = ibc_reverse_channel(channel.clone());
+
+        // Step 2, OpenAck/Confirm
+        let result = <Api>::ibc_channel_connect(
+            self.state,
+            env,
+            info,
+            gas,
+            IbcChannelConnectMsg::OpenAck {
+                channel: channel_counterparty.clone(),
+                counterparty_version: channel_counterparty.version.clone(),
+            },
+        )?;
+        log::debug!("Handshake: {:?}", result);
+        let result = <Api>::ibc_channel_connect(
+            self.state_counterparty,
+            env_counterparty,
+            info_counterparty,
+            gas,
+            IbcChannelConnectMsg::OpenConfirm {
+                channel: channel_counterparty,
+            },
+        )?;
+        log::debug!("Handshake Counterparty: {:?}", result);
+
+        self.state
+            .db
+            .ibc
+            .insert(channel_id.clone(), IbcState::default());
+
+        self.state_counterparty
+            .db
+            .ibc
+            .insert(channel_id, IbcState::default());
+
+        Ok(channel)
+    }
+}
+
+pub fn ibc_reverse_channel(channel: IbcChannel) -> IbcChannel {
+    IbcChannel::new(
+        channel.counterparty_endpoint,
+        channel.endpoint,
+        channel.order,
+        channel.version,
+        channel.connection_id,
+    )
+}
+
+pub fn ibc_relay_required(channel: &IbcChannel, state: &State) -> Result<bool, VmError> {
+    let channel_state = state
+        .db
+        .ibc
+        .get(&channel.endpoint.channel_id)
+        .ok_or(VmError::UnknownIbcChannel)?;
+    Ok(channel_state != &IbcState::default())
+}
+
+pub fn ibc_relay(
+    channel: IbcChannel,
+    state: &mut State,
+    state_counterparty: &mut State,
+    env: Env,
+    env_counterparty: Env,
+    info: MessageInfo,
+    info_counterparty: MessageInfo,
+    gas: u64,
+) -> Result<(), VmError> {
+    let relayer = Account::try_from(info.sender.clone())?;
+    let relayer_counterparty = Account::try_from(info_counterparty.sender.clone())?;
+    let channel_state = state
+        .db
+        .ibc
+        .get_mut(&channel.endpoint.channel_id)
+        .ok_or(VmError::UnknownIbcChannel)?;
+    if channel_state.request_close {
+        for packet in channel_state.packets.drain(0..).collect::<Vec<_>>() {
+            <Api>::ibc_packet_timeout(
+                state,
+                env.clone(),
+                info.clone(),
+                gas,
+                IbcPacketTimeoutMsg::new(
+                    cosmwasm_std::IbcPacket::new(
+                        packet.data,
+                        channel.endpoint.clone(),
+                        channel.counterparty_endpoint.clone(),
+                        0,
+                        packet.timeout,
+                    ),
+                    relayer.clone().into(),
+                ),
+            )?;
+        }
+    } else {
+        for packet in channel_state.packets.drain(0..).collect::<Vec<_>>() {
+            log::info!("Relaying: {:?}", packet);
+            // TODO: check timeout after env passed as parameter to Full methods
+            let (ack, _) = <Api>::ibc_packet_receive(
+                state_counterparty,
+                env_counterparty.clone(),
+                info_counterparty.clone(),
+                gas,
+                IbcPacketReceiveMsg::new(
+                    cosmwasm_std::IbcPacket::new(
+                        packet.data.clone(),
+                        channel.endpoint.clone(),
+                        channel.counterparty_endpoint.clone(),
+                        0,
+                        packet.timeout.clone(),
+                    ),
+                    relayer_counterparty.clone().into(),
+                ),
+            )?;
+            log::info!("Packet ACK: {:?}", ack);
+            <Api>::ibc_packet_ack(
+                state,
+                env.clone(),
+                info.clone(),
+                gas,
+                IbcPacketAckMsg::new(
+                    IbcAcknowledgement::new(ack.unwrap()),
+                    cosmwasm_std::IbcPacket::new(
+                        packet.data,
+                        channel.endpoint.clone(),
+                        channel.counterparty_endpoint.clone(),
+                        0,
+                        packet.timeout,
+                    ),
+                    relayer.clone().into(),
+                ),
+            )?;
+        }
+        // TODO: handle ics20 transfers?
+    }
+    Ok(())
+}

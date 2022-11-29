@@ -414,155 +414,155 @@ pub mod ibc {
     }
 
     /// Strong type representing a call to `ibc_channel_open` export.
-    pub struct IbcChannelOpenInput;
-    impl Input for IbcChannelOpenInput {
+    pub struct IbcChannelOpenCall;
+    impl Input for IbcChannelOpenCall {
         type Output = IbcChannelOpenResult;
     }
-    impl AsFunctionName for IbcChannelOpenInput {
+    impl AsFunctionName for IbcChannelOpenCall {
         const NAME: &'static str = "ibc_channel_open";
     }
-    impl HasInfo for IbcChannelOpenInput {
+    impl HasInfo for IbcChannelOpenCall {
         const HAS_INFO: bool = false;
     }
 
     /// Strong type representing a call to `ibc_channel_connect` export.
-    pub struct IbcChannelConnectInput<T = Empty>(PhantomData<T>);
-    impl<T> Input for IbcChannelConnectInput<T> {
+    pub struct IbcChannelConnectCall<T = Empty>(PhantomData<T>);
+    impl<T> Input for IbcChannelConnectCall<T> {
         type Output = IbcChannelConnectResult<T>;
     }
-    impl<T> AsFunctionName for IbcChannelConnectInput<T> {
+    impl<T> AsFunctionName for IbcChannelConnectCall<T> {
         const NAME: &'static str = "ibc_channel_connect";
     }
-    impl<T> HasInfo for IbcChannelConnectInput<T> {
+    impl<T> HasInfo for IbcChannelConnectCall<T> {
         const HAS_INFO: bool = false;
     }
 
     /// Strong type representing a call to `ibc_channel_close` export.
-    pub struct IbcChannelCloseInput<T = Empty>(PhantomData<T>);
-    impl<T> Input for IbcChannelCloseInput<T> {
+    pub struct IbcChannelCloseCall<T = Empty>(PhantomData<T>);
+    impl<T> Input for IbcChannelCloseCall<T> {
         type Output = IbcChannelCloseResult<T>;
     }
-    impl<T> AsFunctionName for IbcChannelCloseInput<T> {
+    impl<T> AsFunctionName for IbcChannelCloseCall<T> {
         const NAME: &'static str = "ibc_channel_close";
     }
-    impl<T> HasInfo for IbcChannelCloseInput<T> {
+    impl<T> HasInfo for IbcChannelCloseCall<T> {
         const HAS_INFO: bool = false;
     }
 
     /// Strong type representing a call to `ibc_packet_receive` export.
-    pub struct IbcPacketReceiveInput<T = Empty>(PhantomData<T>);
-    impl<T> Input for IbcPacketReceiveInput<T> {
+    pub struct IbcPacketReceiveCall<T = Empty>(PhantomData<T>);
+    impl<T> Input for IbcPacketReceiveCall<T> {
         type Output = IbcPacketReceiveResult<T>;
     }
-    impl<T> AsFunctionName for IbcPacketReceiveInput<T> {
+    impl<T> AsFunctionName for IbcPacketReceiveCall<T> {
         const NAME: &'static str = "ibc_packet_receive";
     }
-    impl<T> HasInfo for IbcPacketReceiveInput<T> {
+    impl<T> HasInfo for IbcPacketReceiveCall<T> {
         const HAS_INFO: bool = false;
     }
 
     /// Strong type representing a call to `ibc_packet_ack` export.
-    pub struct IbcPacketAckInput<T = Empty>(PhantomData<T>);
-    impl<T> Input for IbcPacketAckInput<T> {
+    pub struct IbcPacketAckCall<T = Empty>(PhantomData<T>);
+    impl<T> Input for IbcPacketAckCall<T> {
         type Output = IbcPacketAckResult<T>;
     }
-    impl<T> AsFunctionName for IbcPacketAckInput<T> {
+    impl<T> AsFunctionName for IbcPacketAckCall<T> {
         const NAME: &'static str = "ibc_packet_ack";
     }
-    impl<T> HasInfo for IbcPacketAckInput<T> {
+    impl<T> HasInfo for IbcPacketAckCall<T> {
         const HAS_INFO: bool = false;
     }
 
     /// Strong type representing a call to `ibc_packet_timeout` export.
-    pub struct IbcPacketTimeoutInput<T = Empty>(PhantomData<T>);
-    impl<T> Input for IbcPacketTimeoutInput<T> {
+    pub struct IbcPacketTimeoutCall<T = Empty>(PhantomData<T>);
+    impl<T> Input for IbcPacketTimeoutCall<T> {
         type Output = IbcPacketTimeoutResult<T>;
     }
-    impl<T> AsFunctionName for IbcPacketTimeoutInput<T> {
+    impl<T> AsFunctionName for IbcPacketTimeoutCall<T> {
         const NAME: &'static str = "ibc_packet_timeout";
     }
-    impl<T> HasInfo for IbcPacketTimeoutInput<T> {
+    impl<T> HasInfo for IbcPacketTimeoutCall<T> {
         const HAS_INFO: bool = false;
     }
 }
 
 /// The type representing a call to a contract `allocate` export.
-pub struct AllocateInput<Pointer>(pub Pointer);
-impl<Pointer> Input for AllocateInput<Pointer> {
+pub struct AllocateCall<Pointer>(pub Pointer);
+impl<Pointer> Input for AllocateCall<Pointer> {
     type Output = Pointer;
 }
-impl<Pointer> AsFunctionName for AllocateInput<Pointer> {
+impl<Pointer> AsFunctionName for AllocateCall<Pointer> {
     const NAME: &'static str = "allocate";
 }
 
 pub struct Unit;
 
 /// The type representing a call to a contract `deallocate` export.
-pub struct DeallocateInput<Pointer>(pub Pointer);
-impl<Pointer> Input for DeallocateInput<Pointer> {
+pub struct DeallocateCall<Pointer>(pub Pointer);
+impl<Pointer> Input for DeallocateCall<Pointer> {
     type Output = Unit;
 }
-impl<Pointer> AsFunctionName for DeallocateInput<Pointer> {
+impl<Pointer> AsFunctionName for DeallocateCall<Pointer> {
     const NAME: &'static str = "deallocate";
 }
 
 /// The type representing a call to a contract `query` export.
-pub struct QueryInput;
-impl Input for QueryInput {
+pub struct QueryCall;
+impl Input for QueryCall {
     type Output = QueryResult;
 }
-impl AsFunctionName for QueryInput {
+impl AsFunctionName for QueryCall {
     const NAME: &'static str = "query";
 }
-impl HasInfo for QueryInput {
+impl HasInfo for QueryCall {
     const HAS_INFO: bool = false;
 }
 
 /// The type representing a call to a contract `instantiate` export.
-pub struct InstantiateInput<T = Empty>(PhantomData<T>);
-impl<T> Input for InstantiateInput<T> {
+pub struct InstantiateCall<T = Empty>(PhantomData<T>);
+impl<T> Input for InstantiateCall<T> {
     type Output = InstantiateResult<T>;
 }
-impl<T> AsFunctionName for InstantiateInput<T> {
+impl<T> AsFunctionName for InstantiateCall<T> {
     const NAME: &'static str = "instantiate";
 }
-impl<T> HasInfo for InstantiateInput<T> {
+impl<T> HasInfo for InstantiateCall<T> {
     const HAS_INFO: bool = true;
 }
 
 /// The type representing a call to a contract `execute` export.
-pub struct ExecuteInput<T = Empty>(PhantomData<T>);
-impl<T> Input for ExecuteInput<T> {
+pub struct ExecuteCall<T = Empty>(PhantomData<T>);
+impl<T> Input for ExecuteCall<T> {
     type Output = ExecuteResult<T>;
 }
-impl<T> AsFunctionName for ExecuteInput<T> {
+impl<T> AsFunctionName for ExecuteCall<T> {
     const NAME: &'static str = "execute";
 }
-impl<T> HasInfo for ExecuteInput<T> {
+impl<T> HasInfo for ExecuteCall<T> {
     const HAS_INFO: bool = true;
 }
 
 /// The type representing a call to a contract `reply` export.
-pub struct ReplyInput<T = Empty>(PhantomData<T>);
-impl<T> Input for ReplyInput<T> {
+pub struct ReplyCall<T = Empty>(PhantomData<T>);
+impl<T> Input for ReplyCall<T> {
     type Output = ReplyResult<T>;
 }
-impl<T> AsFunctionName for ReplyInput<T> {
+impl<T> AsFunctionName for ReplyCall<T> {
     const NAME: &'static str = "reply";
 }
-impl<T> HasInfo for ReplyInput<T> {
+impl<T> HasInfo for ReplyCall<T> {
     const HAS_INFO: bool = false;
 }
 
 /// The type representing a call to a contract `migrate` export.
-pub struct MigrateInput<T = Empty>(PhantomData<T>);
-impl<T> Input for MigrateInput<T> {
+pub struct MigrateCall<T = Empty>(PhantomData<T>);
+impl<T> Input for MigrateCall<T> {
     type Output = MigrateResult<T>;
 }
-impl<T> AsFunctionName for MigrateInput<T> {
+impl<T> AsFunctionName for MigrateCall<T> {
     const NAME: &'static str = "migrate";
 }
-impl<T> HasInfo for MigrateInput<T> {
+impl<T> HasInfo for MigrateCall<T> {
     const HAS_INFO: bool = false;
 }
 
@@ -674,12 +674,12 @@ impl<const K: usize> ReadLimit for ConstantReadLimit<K> {
 pub fn allocate<V, P, L>(vm: &mut V, len: L) -> Result<P, VmErrorOf<V>>
 where
     V: VM,
-    for<'x> VmInputOf<'x, V>: TryFrom<AllocateInput<P>, Error = VmErrorOf<V>>,
+    for<'x> VmInputOf<'x, V>: TryFrom<AllocateCall<P>, Error = VmErrorOf<V>>,
     P: Copy + TryFrom<L> + Debug + for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
     VmErrorOf<V>: From<ExecutorError>,
 {
     let len_value = P::try_from(len).map_err(|_| ExecutorError::AllocationWouldOverflow)?;
-    let result = vm.call(AllocateInput(len_value))?;
+    let result = vm.call(AllocateCall(len_value))?;
     log::trace!("Allocate: size={:?}, pointer={:?}", len_value, result);
     Ok(result)
 }
@@ -696,11 +696,11 @@ pub fn deallocate<V>(vm: &mut V, pointer: V::Pointer) -> Result<(), VmErrorOf<V>
 where
     V: VM + ReadWriteMemory,
     for<'x> Unit: TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
-    for<'x> VmInputOf<'x, V>: TryFrom<DeallocateInput<V::Pointer>, Error = VmErrorOf<V>>,
+    for<'x> VmInputOf<'x, V>: TryFrom<DeallocateCall<V::Pointer>, Error = VmErrorOf<V>>,
     VmErrorOf<V>: From<ExecutorError>,
 {
     log::trace!("Deallocate");
-    vm.call(DeallocateInput(pointer))?;
+    vm.call(DeallocateCall(pointer))?;
     Ok(())
 }
 
@@ -711,7 +711,7 @@ pub fn passthrough_in_to<V>(
 ) -> Result<(), VmErrorOf<V>>
 where
     V: VM + ReadWriteMemory,
-    for<'x> VmInputOf<'x, V>: TryFrom<AllocateInput<V::Pointer>, Error = VmErrorOf<V>>,
+    for<'x> VmInputOf<'x, V>: TryFrom<AllocateCall<V::Pointer>, Error = VmErrorOf<V>>,
     V::Pointer: for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
     VmErrorOf<V>:
         From<ReadableMemoryErrorOf<V>> + From<WritableMemoryErrorOf<V>> + From<ExecutorError>,
@@ -731,7 +731,7 @@ where
 pub fn passthrough_in<V, T>(vm: &mut V, data: &[u8]) -> Result<Tagged<V::Pointer, T>, VmErrorOf<V>>
 where
     V: VM + ReadWriteMemory,
-    for<'x> VmInputOf<'x, V>: TryFrom<AllocateInput<V::Pointer>, Error = VmErrorOf<V>>,
+    for<'x> VmInputOf<'x, V>: TryFrom<AllocateCall<V::Pointer>, Error = VmErrorOf<V>>,
     V::Pointer: for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
     VmErrorOf<V>:
         From<ReadableMemoryErrorOf<V>> + From<WritableMemoryErrorOf<V>> + From<ExecutorError>,
@@ -754,7 +754,7 @@ pub fn passthrough_out<V, T>(vm: &V, pointer: V::Pointer) -> Result<Vec<u8>, VmE
 where
     V: VM + ReadableMemory,
     T: ReadLimit,
-    for<'x> VmInputOf<'x, V>: TryFrom<AllocateInput<V::Pointer>, Error = VmErrorOf<V>>,
+    for<'x> VmInputOf<'x, V>: TryFrom<AllocateCall<V::Pointer>, Error = VmErrorOf<V>>,
     V::Pointer: for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
     VmErrorOf<V>: From<ReadableMemoryErrorOf<V>> + From<ExecutorError>,
 {
@@ -779,7 +779,7 @@ where
 pub fn marshall_in<V, T>(vm: &mut V, x: &T) -> Result<Tagged<V::Pointer, T>, VmErrorOf<V>>
 where
     V: VM + ReadWriteMemory,
-    for<'x> VmInputOf<'x, V>: TryFrom<AllocateInput<V::Pointer>, Error = VmErrorOf<V>>,
+    for<'x> VmInputOf<'x, V>: TryFrom<AllocateCall<V::Pointer>, Error = VmErrorOf<V>>,
     V::Pointer: for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
     VmErrorOf<V>:
         From<ReadableMemoryErrorOf<V>> + From<WritableMemoryErrorOf<V>> + From<ExecutorError>,
@@ -802,7 +802,7 @@ pub fn marshall_out<V, T>(vm: &V, pointer: V::Pointer) -> Result<T, VmErrorOf<V>
 where
     V: VM + ReadableMemory,
     T: ReadLimit,
-    for<'x> VmInputOf<'x, V>: TryFrom<AllocateInput<V::Pointer>, Error = VmErrorOf<V>>,
+    for<'x> VmInputOf<'x, V>: TryFrom<AllocateCall<V::Pointer>, Error = VmErrorOf<V>>,
     V::Pointer: for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
     VmErrorOf<V>: From<ReadableMemoryErrorOf<V>> + From<ExecutorError>,
     T: serde::de::DeserializeOwned + ReadLimit + DeserializeLimit,
@@ -827,8 +827,8 @@ where
     I::Output: DeserializeOwned + ReadLimit + DeserializeLimit,
     V::Pointer: for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
     for<'x> Unit: TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
-    for<'x> VmInputOf<'x, V>: TryFrom<AllocateInput<V::Pointer>, Error = VmErrorOf<V>>
-        + TryFrom<DeallocateInput<V::Pointer>, Error = VmErrorOf<V>>
+    for<'x> VmInputOf<'x, V>: TryFrom<AllocateCall<V::Pointer>, Error = VmErrorOf<V>>
+        + TryFrom<DeallocateCall<V::Pointer>, Error = VmErrorOf<V>>
         + TryFrom<CosmwasmCallInput<'x, V::Pointer, I>, Error = VmErrorOf<V>>
         + TryFrom<CosmwasmCallWithoutInfoInput<'x, V::Pointer, I>, Error = VmErrorOf<V>>,
     VmErrorOf<V>:
@@ -874,8 +874,8 @@ where
     I::Output: DeserializeOwned + ReadLimit + DeserializeLimit,
     V::Pointer: for<'x> TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
     for<'x> Unit: TryFrom<VmOutputOf<'x, V>, Error = VmErrorOf<V>>,
-    for<'x> VmInputOf<'x, V>: TryFrom<AllocateInput<V::Pointer>, Error = VmErrorOf<V>>
-        + TryFrom<DeallocateInput<V::Pointer>, Error = VmErrorOf<V>>
+    for<'x> VmInputOf<'x, V>: TryFrom<AllocateCall<V::Pointer>, Error = VmErrorOf<V>>
+        + TryFrom<DeallocateCall<V::Pointer>, Error = VmErrorOf<V>>
         + TryFrom<CosmwasmCallInput<'x, V::Pointer, I>, Error = VmErrorOf<V>>
         + TryFrom<CosmwasmCallWithoutInfoInput<'x, V::Pointer, I>, Error = VmErrorOf<V>>,
     VmErrorOf<V>:

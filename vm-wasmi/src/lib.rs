@@ -47,12 +47,13 @@ use core::{
 #[cfg(feature = "iterator")]
 use cosmwasm_std::Order;
 use cosmwasm_std::{
-    Addr, Binary, CanonicalAddr, Coin, ContractInfoResponse, Env, Event, MessageInfo, SystemResult,
+    Addr, Binary, CanonicalAddr, Coin, ContractInfoResponse, Env, Event, MessageInfo, Reply,
+    SystemResult,
 };
 use cosmwasm_vm::{
     executor::{
-        AllocateInput, AsFunctionName, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
-        CosmwasmQueryResult, DeallocateInput, ExecutorError, QueryResult, Unit,
+        AllocateCall, AsFunctionName, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
+        CosmwasmQueryResult, DeallocateCall, ExecutorError, QueryResult, Unit,
     },
     has::Has,
     memory::{
@@ -300,28 +301,28 @@ where
     }
 }
 
-impl<'a, T> TryFrom<AllocateInput<u32>> for WasmiInput<'a, WasmiVM<T>>
+impl<'a, T> TryFrom<AllocateCall<u32>> for WasmiInput<'a, WasmiVM<T>>
 where
     T: WasmiBaseVM,
 {
     type Error = VmErrorOf<T>;
-    fn try_from(AllocateInput(ptr): AllocateInput<u32>) -> Result<Self, Self::Error> {
+    fn try_from(AllocateCall(ptr): AllocateCall<u32>) -> Result<Self, Self::Error> {
         Ok(WasmiInput(
-            WasmiFunctionName(AllocateInput::<u32>::NAME.into()),
+            WasmiFunctionName(AllocateCall::<u32>::NAME.into()),
             (vec![RuntimeValue::I32(ptr as i32)], PhantomData),
             PhantomData,
         ))
     }
 }
 
-impl<'a, T> TryFrom<DeallocateInput<u32>> for WasmiInput<'a, WasmiVM<T>>
+impl<'a, T> TryFrom<DeallocateCall<u32>> for WasmiInput<'a, WasmiVM<T>>
 where
     T: WasmiBaseVM,
 {
     type Error = VmErrorOf<T>;
-    fn try_from(DeallocateInput(ptr): DeallocateInput<u32>) -> Result<Self, Self::Error> {
+    fn try_from(DeallocateCall(ptr): DeallocateCall<u32>) -> Result<Self, Self::Error> {
         Ok(WasmiInput(
-            WasmiFunctionName(DeallocateInput::<u32>::NAME.into()),
+            WasmiFunctionName(DeallocateCall::<u32>::NAME.into()),
             (vec![RuntimeValue::I32(ptr as i32)], PhantomData),
             PhantomData,
         ))
@@ -457,13 +458,13 @@ where
         self.0.contract_meta(address)
     }
 
-    fn query_continuation(
+    fn continue_query(
         &mut self,
         address: Self::Address,
         message: &[u8],
     ) -> Result<QueryResult, Self::Error> {
-        self.charge(VmGas::QueryContinuation)?;
-        self.0.query_continuation(address, message)
+        self.charge(VmGas::ContinueQuery)?;
+        self.0.continue_query(address, message)
     }
 
     fn continue_execute(
@@ -504,6 +505,15 @@ where
         self.0.continue_migrate(address, message, event_handler)
     }
 
+    fn continue_reply(
+        &mut self,
+        message: Reply,
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<Option<Binary>, Self::Error> {
+        self.charge(VmGas::ContinueReply)?;
+        self.0.continue_reply(message, event_handler)
+    }
+
     fn query_custom(
         &mut self,
         query: Self::QueryCustom,
@@ -528,6 +538,18 @@ where
     ) -> Result<Option<Self::StorageValue>, Self::Error> {
         self.charge(VmGas::QueryRaw)?;
         self.0.query_raw(address, key)
+    }
+
+    fn transfer_from(
+        &mut self,
+        from: &Self::Address,
+        to: &Self::Address,
+        funds: &[Coin],
+    ) -> Result<(), Self::Error> {
+        self.charge(VmGas::Transfer {
+            nb_of_coins: u32::try_from(funds.len()).map_err(|_| WasmiVMError::MaxLimitExceeded)?,
+        })?;
+        self.0.transfer_from(from, to, funds)
     }
 
     fn transfer(&mut self, to: &Self::Address, funds: &[Coin]) -> Result<(), Self::Error> {

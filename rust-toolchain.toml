@@ -7,4 +7,4 @@ components = [
   "rustfmt",
   "rust-src",
 ]
-targets = [ "thumbv7em-none-eabi", "wasm32-unknown-unknown" ]
+targets = ["thumbv7em-none-eabi", "wasm32-unknown-unknown"]

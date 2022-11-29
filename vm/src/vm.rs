@@ -36,7 +36,7 @@ use core::fmt::Debug;
 use cosmwasm_std::IbcTimeout;
 #[cfg(feature = "iterator")]
 use cosmwasm_std::Order;
-use cosmwasm_std::{Binary, Coin, ContractInfoResponse, Event, SystemResult};
+use cosmwasm_std::{Binary, Coin, ContractInfoResponse, Event, Reply, SystemResult};
 
 use serde::de::DeserializeOwned;
 
@@ -57,14 +57,16 @@ pub enum VmGas {
     SetContractMeta,
     /// Cost of `contract_meta`.
     GetContractMeta,
-    /// Cost of `query_continuation`.
-    QueryContinuation,
+    /// Cost of `continue_query`.
+    ContinueQuery,
     /// Cost of `continue_execute`.
     ContinueExecute { nb_of_coins: u32 },
     /// Cost of `continue_instantiate`.
     ContinueInstantiate { nb_of_coins: u32 },
     /// Cost of `continue_migrate`.
     ContinueMigrate,
+    /// Cost of `continue_reply`
+    ContinueReply,
     /// Cost of `query_custom`.
     QueryCustom,
     /// Cost of `message_custom`.
@@ -203,14 +205,13 @@ pub trait VMBase {
     fn contract_meta(&mut self, address: Self::Address) -> Result<Self::ContractMeta, Self::Error>;
 
     /// Continue execution by calling query at the given contract address.
-    fn query_continuation(
+    fn continue_query(
         &mut self,
         address: Self::Address,
         message: &[u8],
     ) -> Result<QueryResult, Self::Error>;
 
     /// Continue execution by calling execute at the given contract address.
-    /// Implementor must ensure that the funds are moved before executing the contract.
     fn continue_execute(
         &mut self,
         address: Self::Address,
@@ -220,7 +221,6 @@ pub trait VMBase {
     ) -> Result<Option<Binary>, Self::Error>;
 
     /// Continue execution by instantiating the given contract code_id.
-    /// Implementor must ensure that the funds are moved before executing the contract.
     fn continue_instantiate(
         &mut self,
         contract_meta: Self::ContractMeta,
@@ -230,11 +230,17 @@ pub trait VMBase {
     ) -> Result<(Self::Address, Option<Binary>), Self::Error>;
 
     /// Continue execution by calling migrate at the given contract address.
-    /// Implementor must ensure that the funds are moved before executing the contract.
     fn continue_migrate(
         &mut self,
         address: Self::Address,
         message: &[u8],
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<Option<Binary>, Self::Error>;
+
+    /// Continue execution by calling reply at the given contract address.
+    fn continue_reply(
+        &mut self,
+        message: Reply,
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error>;
 
@@ -258,7 +264,15 @@ pub trait VMBase {
         key: Self::StorageKey,
     ) -> Result<Option<Self::StorageValue>, Self::Error>;
 
-    /// Transfer `funds` from the current bank to `to`.
+    /// Transfer `funds` from `from` to `to`
+    fn transfer_from(
+        &mut self,
+        from: &Self::Address,
+        to: &Self::Address,
+        funds: &[Coin],
+    ) -> Result<(), Self::Error>;
+
+    /// Transfer `funds` from the current contract to `to`.
     fn transfer(&mut self, to: &Self::Address, funds: &[Coin]) -> Result<(), Self::Error>;
 
     /// Burn the `funds` from the current contract.
