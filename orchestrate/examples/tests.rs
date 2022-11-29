@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use cosmwasm_orchestrate::{fetcher::*, vm::Account, Api, StateBuilder, Unit};
+    use cosmwasm_orchestrate::{fetcher::*, vm::Account, Api, Direct, StateBuilder};
     use cosmwasm_std::{
         to_binary, BankMsg, BlockInfo, Coin, ContractInfo, ContractResult, CosmosMsg, Env,
         MessageInfo, Timestamp,
@@ -41,7 +41,7 @@ mod tests {
             sender: sender.clone().into(),
             funds: vec![Coin::new(400_000, "denom")],
         };
-        let (contract, _) = <Api>::instantiate_raw(
+        let (contract, _) = Api::instantiate_raw(
             &mut state,
             1,
             None,
@@ -74,7 +74,7 @@ mod tests {
         };
 
         info.funds = vec![];
-        let _ = <Api>::execute_raw(
+        let _ = Api::execute_raw(
             &mut state,
             env,
             info.clone(),
@@ -123,7 +123,7 @@ mod tests {
             sender: sender.clone().into(),
             funds: vec![],
         };
-        let (contract, res) = <Api<Unit>>::instantiate(
+        let (contract, res) = Api::<Direct>::instantiate(
             &mut state,
             1,
             None,
@@ -153,7 +153,7 @@ mod tests {
         };
         assert_matches!(res, ContractResult::Ok(_));
 
-        let _ = <Api>::execute(
+        let _ = Api::execute(
             &mut state,
             env.clone(),
             info,
@@ -166,7 +166,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            <Api<Unit>>::query_raw(
+            Api::<Direct>::query_raw(
                 &mut state,
                 env,
                 &serde_json::to_vec(&QueryMsg::Balance {

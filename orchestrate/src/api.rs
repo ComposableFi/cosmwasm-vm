@@ -20,8 +20,12 @@ use cosmwasm_vm::{
 use cosmwasm_vm_wasmi::{WasmiBaseVM, WasmiVM};
 use serde::{de::DeserializeOwned, Serialize};
 
-pub struct Api<'a, E: ExecutionType = Full, S: VmState<'a, V> = State, V: WasmiBaseVM = Context<'a>>
-where
+pub struct Api<
+    'a,
+    E: ExecutionType = Dispatch,
+    S: VmState<'a, V> = State,
+    V: WasmiBaseVM = Context<'a>,
+> where
     VmErrorOf<WasmiVM<V>>: Into<VmError>,
 {
     _m1: PhantomData<E>,
@@ -256,7 +260,7 @@ where
     }
 }
 
-impl<'a, S: VmState<'a, V>, V: WasmiBaseVM> Api<'a, Unit, S, V>
+impl<'a, S: VmState<'a, V>, V: WasmiBaseVM> Api<'a, Direct, S, V>
 where
     VmErrorOf<WasmiVM<V>>: Into<VmError>,
 {
@@ -315,10 +319,10 @@ where
     }
 }
 
-/// Calls that are made by using `Unit` type only executes a single
+/// Calls that are made by using `Direct` type only executes a single
 /// entrypoint. It does not execute proceeding sub-messages. One can
 /// use this for writing unit tests.
-pub struct Unit;
+pub struct Direct;
 
 pub trait ExecutionType {
     type Output<V: WasmiBaseVM>;
@@ -333,7 +337,7 @@ pub trait ExecutionType {
         VmErrorOf<WasmiVM<V>>: Into<VmError>;
 }
 
-impl ExecutionType for Unit {
+impl ExecutionType for Direct {
     type Output<V: WasmiBaseVM> =
         cosmwasm_std::ContractResult<cosmwasm_std::Response<VmMessageCustomOf<WasmiVM<V>>>>;
 
@@ -351,12 +355,12 @@ impl ExecutionType for Unit {
     }
 }
 
-/// Calls that are made by using `Full` type executes the whole flow.
+/// Calls that are made by using `Dispatch` type executes the whole flow.
 /// It runs the sub-messages as well. One can use this for integration
 /// tests.
-pub struct Full;
+pub struct Dispatch;
 
-impl ExecutionType for Full {
+impl ExecutionType for Dispatch {
     type Output<V: WasmiBaseVM> = (Option<Binary>, Vec<Event>);
 
     fn raw_system_call<V: WasmiBaseVM, I>(

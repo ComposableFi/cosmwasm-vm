@@ -1,6 +1,6 @@
 use crate::{
     vm::{Account, IbcState, State, VmError},
-    Api, Unit,
+    Api, Direct,
 };
 use cosmwasm_std::{
     Env, Ibc3ChannelOpenResponse, IbcAcknowledgement, IbcChannel, IbcChannelConnectMsg,
@@ -104,7 +104,7 @@ impl<'a> IbcNetwork<'a> {
         );
 
         // Step 1, OpenInit/Try
-        let override_version = <Api<Unit>>::ibc_channel_open(
+        let override_version = Api::<Direct>::ibc_channel_open(
             self.state,
             env.clone(),
             info.clone(),
@@ -123,7 +123,7 @@ impl<'a> IbcNetwork<'a> {
             None => {}
         }
 
-        let override_version_counterparty = <Api<Unit>>::ibc_channel_open(
+        let override_version_counterparty = Api::<Direct>::ibc_channel_open(
             self.state_counterparty,
             env_counterparty.clone(),
             info_counterparty.clone(),
