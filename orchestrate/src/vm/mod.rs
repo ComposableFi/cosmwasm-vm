@@ -19,7 +19,7 @@ use cosmwasm_std::{
 use cosmwasm_vm::{
     executor::{
         cosmwasm_call, CosmwasmCallInput, CosmwasmCallWithoutInfoInput, CosmwasmQueryResult,
-        DeserializeLimit, ExecuteInput, HasInfo, InstantiateInput, MigrateInput, QueryInput,
+        DeserializeLimit, ExecuteCall, HasInfo, InstantiateCall, MigrateCall, QueryCall,
         QueryResult, ReadLimit,
     },
     has::Has,
@@ -159,7 +159,7 @@ where
             info,
         );
 
-        match E::raw_system_call::<_, InstantiateInput>(&mut vm, message) {
+        match E::raw_system_call::<_, InstantiateCall>(&mut vm, message) {
             Ok(output) => Ok((contract_addr, output)),
             Err(e) => {
                 vm.0.state.db.contracts.remove(&contract_addr);
@@ -177,7 +177,7 @@ where
     ) -> Result<E::Output<Context<'a>>, VmError> {
         self.gas = Gas::new(gas);
         let mut vm = create_vm(self, env, info);
-        E::raw_system_call::<Context<'a>, ExecuteInput>(&mut vm, message)
+        E::raw_system_call::<Context<'a>, ExecuteCall>(&mut vm, message)
     }
 
     fn do_ibc<E: ExecutionType, I>(
@@ -202,7 +202,7 @@ where
         message: &[u8],
     ) -> Result<QueryResult, VmError> {
         let mut vm = create_vm(self, env, info);
-        cosmwasm_call::<QueryInput, WasmiVM<Context>>(&mut vm, message)
+        cosmwasm_call::<QueryCall, WasmiVM<Context>>(&mut vm, message)
     }
 
     fn do_direct<I>(
@@ -505,7 +505,7 @@ impl<'a> VMBase for Context<'a> {
         message: &[u8],
     ) -> Result<QueryResult, Self::Error> {
         self.load_subvm(address, vec![], |sub_vm| {
-            cosmwasm_call::<QueryInput, WasmiVM<Context>>(sub_vm, message)
+            cosmwasm_call::<QueryCall, WasmiVM<Context>>(sub_vm, message)
         })?
     }
 
@@ -522,7 +522,7 @@ impl<'a> VMBase for Context<'a> {
             address
         );
         self.load_subvm(address, funds, |sub_vm| {
-            cosmwasm_system_run::<ExecuteInput<Self::MessageCustom>, _>(
+            cosmwasm_system_run::<ExecuteCall<Self::MessageCustom>, _>(
                 sub_vm,
                 message,
                 event_handler,
@@ -550,7 +550,7 @@ impl<'a> VMBase for Context<'a> {
             .insert(address.clone(), contract_meta);
 
         self.load_subvm(address.clone(), funds, |sub_vm| {
-            cosmwasm_system_run::<InstantiateInput<Self::MessageCustom>, _>(
+            cosmwasm_system_run::<InstantiateCall<Self::MessageCustom>, _>(
                 sub_vm,
                 message,
                 event_handler,
@@ -566,7 +566,7 @@ impl<'a> VMBase for Context<'a> {
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error> {
         self.load_subvm(address, vec![], |sub_vm| {
-            cosmwasm_system_run::<MigrateInput<Self::MessageCustom>, _>(
+            cosmwasm_system_run::<MigrateCall<Self::MessageCustom>, _>(
                 sub_vm,
                 message,
                 event_handler,

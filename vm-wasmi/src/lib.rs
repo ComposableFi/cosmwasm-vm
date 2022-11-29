@@ -51,8 +51,8 @@ use cosmwasm_std::{
 };
 use cosmwasm_vm::{
     executor::{
-        AllocateInput, AsFunctionName, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
-        CosmwasmQueryResult, DeallocateInput, ExecutorError, QueryResult, Unit,
+        AllocateCall, AsFunctionName, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
+        CosmwasmQueryResult, DeallocateCall, ExecutorError, QueryResult, Unit,
     },
     has::Has,
     memory::{
@@ -300,28 +300,28 @@ where
     }
 }
 
-impl<'a, T> TryFrom<AllocateInput<u32>> for WasmiInput<'a, WasmiVM<T>>
+impl<'a, T> TryFrom<AllocateCall<u32>> for WasmiInput<'a, WasmiVM<T>>
 where
     T: WasmiBaseVM,
 {
     type Error = VmErrorOf<T>;
-    fn try_from(AllocateInput(ptr): AllocateInput<u32>) -> Result<Self, Self::Error> {
+    fn try_from(AllocateCall(ptr): AllocateCall<u32>) -> Result<Self, Self::Error> {
         Ok(WasmiInput(
-            WasmiFunctionName(AllocateInput::<u32>::NAME.into()),
+            WasmiFunctionName(AllocateCall::<u32>::NAME.into()),
             (vec![RuntimeValue::I32(ptr as i32)], PhantomData),
             PhantomData,
         ))
     }
 }
 
-impl<'a, T> TryFrom<DeallocateInput<u32>> for WasmiInput<'a, WasmiVM<T>>
+impl<'a, T> TryFrom<DeallocateCall<u32>> for WasmiInput<'a, WasmiVM<T>>
 where
     T: WasmiBaseVM,
 {
     type Error = VmErrorOf<T>;
-    fn try_from(DeallocateInput(ptr): DeallocateInput<u32>) -> Result<Self, Self::Error> {
+    fn try_from(DeallocateCall(ptr): DeallocateCall<u32>) -> Result<Self, Self::Error> {
         Ok(WasmiInput(
-            WasmiFunctionName(DeallocateInput::<u32>::NAME.into()),
+            WasmiFunctionName(DeallocateCall::<u32>::NAME.into()),
             (vec![RuntimeValue::I32(ptr as i32)], PhantomData),
             PhantomData,
         ))

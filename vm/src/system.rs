@@ -28,16 +28,16 @@
 
 #[cfg(feature = "stargate")]
 use crate::executor::ibc::{
-    IbcChannelCloseInput, IbcChannelConnectInput, IbcPacketAckInput, IbcPacketReceiveInput,
-    IbcPacketTimeoutInput,
+    IbcChannelCloseCall, IbcChannelConnectCall, IbcPacketAckCall, IbcPacketReceiveCall,
+    IbcPacketTimeoutCall,
 };
 #[cfg(feature = "stargate")]
 use crate::executor::AsFunctionName;
 use crate::{
     executor::{
-        cosmwasm_call, AllocateInput, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
-        CosmwasmQueryResult, DeallocateInput, DeserializeLimit, ExecuteInput, ExecutorError,
-        HasInfo, InstantiateInput, MigrateInput, QueryResult, ReadLimit, ReplyInput, Unit,
+        cosmwasm_call, AllocateCall, CosmwasmCallInput, CosmwasmCallWithoutInfoInput,
+        CosmwasmQueryResult, DeallocateCall, DeserializeLimit, ExecuteCall, ExecutorError, HasInfo,
+        InstantiateCall, MigrateCall, QueryResult, ReadLimit, ReplyCall, Unit,
     },
     has::Has,
     input::{Input, OutputOf},
@@ -138,15 +138,15 @@ impl Display for SystemEventType {
             SystemEventType::Sudo => "sudo",
             SystemEventType::Reply => "reply",
             #[cfg(feature = "stargate")]
-            SystemEventType::IbcChannelConnect => IbcChannelConnectInput::<Empty>::NAME,
+            SystemEventType::IbcChannelConnect => IbcChannelConnectCall::<Empty>::NAME,
             #[cfg(feature = "stargate")]
-            SystemEventType::IbcChannelClose => IbcChannelCloseInput::<Empty>::NAME,
+            SystemEventType::IbcChannelClose => IbcChannelCloseCall::<Empty>::NAME,
             #[cfg(feature = "stargate")]
-            SystemEventType::IbcPacketReceive => IbcPacketReceiveInput::<Empty>::NAME,
+            SystemEventType::IbcPacketReceive => IbcPacketReceiveCall::<Empty>::NAME,
             #[cfg(feature = "stargate")]
-            SystemEventType::IbcPacketAck => IbcPacketAckInput::<Empty>::NAME,
+            SystemEventType::IbcPacketAck => IbcPacketAckCall::<Empty>::NAME,
             #[cfg(feature = "stargate")]
-            SystemEventType::IbcPacketTimeout => IbcPacketTimeoutInput::<Empty>::NAME,
+            SystemEventType::IbcPacketTimeout => IbcPacketTimeoutCall::<Empty>::NAME,
         };
 
         write!(f, "{}", event_str)
@@ -168,44 +168,44 @@ pub trait EventHasCodeId {
     const HAS_CODE_ID: bool;
 }
 
-impl<T> EventHasCodeId for InstantiateInput<T> {
+impl<T> EventHasCodeId for InstantiateCall<T> {
     const HAS_CODE_ID: bool = true;
 }
 
-impl<T> EventHasCodeId for ExecuteInput<T> {
+impl<T> EventHasCodeId for ExecuteCall<T> {
     const HAS_CODE_ID: bool = false;
 }
 
-impl<T> EventHasCodeId for MigrateInput<T> {
+impl<T> EventHasCodeId for MigrateCall<T> {
     const HAS_CODE_ID: bool = true;
 }
 
-impl<T> EventHasCodeId for ReplyInput<T> {
+impl<T> EventHasCodeId for ReplyCall<T> {
     const HAS_CODE_ID: bool = false;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventHasCodeId for IbcChannelConnectInput<T> {
+impl<T> EventHasCodeId for IbcChannelConnectCall<T> {
     const HAS_CODE_ID: bool = false;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventHasCodeId for IbcChannelCloseInput<T> {
+impl<T> EventHasCodeId for IbcChannelCloseCall<T> {
     const HAS_CODE_ID: bool = false;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventHasCodeId for IbcPacketReceiveInput<T> {
+impl<T> EventHasCodeId for IbcPacketReceiveCall<T> {
     const HAS_CODE_ID: bool = false;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventHasCodeId for IbcPacketAckInput<T> {
+impl<T> EventHasCodeId for IbcPacketAckCall<T> {
     const HAS_CODE_ID: bool = false;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventHasCodeId for IbcPacketTimeoutInput<T> {
+impl<T> EventHasCodeId for IbcPacketTimeoutCall<T> {
     const HAS_CODE_ID: bool = false;
 }
 
@@ -213,44 +213,44 @@ pub trait EventIsTyped {
     const TYPE: SystemEventType;
 }
 
-impl<T> EventIsTyped for InstantiateInput<T> {
+impl<T> EventIsTyped for InstantiateCall<T> {
     const TYPE: SystemEventType = SystemEventType::Instantiate;
 }
 
-impl<T> EventIsTyped for ExecuteInput<T> {
+impl<T> EventIsTyped for ExecuteCall<T> {
     const TYPE: SystemEventType = SystemEventType::Execute;
 }
 
-impl<T> EventIsTyped for MigrateInput<T> {
+impl<T> EventIsTyped for MigrateCall<T> {
     const TYPE: SystemEventType = SystemEventType::Migrate;
 }
 
-impl<T> EventIsTyped for ReplyInput<T> {
+impl<T> EventIsTyped for ReplyCall<T> {
     const TYPE: SystemEventType = SystemEventType::Reply;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventIsTyped for IbcChannelConnectInput<T> {
+impl<T> EventIsTyped for IbcChannelConnectCall<T> {
     const TYPE: SystemEventType = SystemEventType::IbcChannelConnect;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventIsTyped for IbcChannelCloseInput<T> {
+impl<T> EventIsTyped for IbcChannelCloseCall<T> {
     const TYPE: SystemEventType = SystemEventType::IbcChannelClose;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventIsTyped for IbcPacketReceiveInput<T> {
+impl<T> EventIsTyped for IbcPacketReceiveCall<T> {
     const TYPE: SystemEventType = SystemEventType::IbcPacketReceive;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventIsTyped for IbcPacketAckInput<T> {
+impl<T> EventIsTyped for IbcPacketAckCall<T> {
     const TYPE: SystemEventType = SystemEventType::IbcPacketAck;
 }
 
 #[cfg(feature = "stargate")]
-impl<T> EventIsTyped for IbcPacketTimeoutInput<T> {
+impl<T> EventIsTyped for IbcPacketTimeoutCall<T> {
     const TYPE: SystemEventType = SystemEventType::IbcPacketTimeout;
 }
 
@@ -335,31 +335,27 @@ where
         + From<SystemError>
         + From<TransactionalErrorOf<Self>>
         + Debug,
-    for<'x> VmInputOf<'x, Self>: TryFrom<AllocateInput<PointerOf<Self>>, Error = VmErrorOf<Self>>,
+    for<'x> VmInputOf<'x, Self>: TryFrom<AllocateCall<PointerOf<Self>>, Error = VmErrorOf<Self>>,
     PointerOf<Self>: for<'x> TryFrom<VmOutputOf<'x, Self>, Error = VmErrorOf<Self>>;
 
 pub trait CosmwasmCallVM<I> = CosmwasmBaseVM
 where
     for<'x> Unit: TryFrom<VmOutputOf<'x, Self>, Error = VmErrorOf<Self>>,
-    for<'x> VmInputOf<'x, Self>: TryFrom<DeallocateInput<PointerOf<Self>>, Error = VmErrorOf<Self>>
+    for<'x> VmInputOf<'x, Self>: TryFrom<DeallocateCall<PointerOf<Self>>, Error = VmErrorOf<Self>>
         + TryFrom<
-            CosmwasmCallInput<'x, PointerOf<Self>, InstantiateInput<VmMessageCustomOf<Self>>>,
+            CosmwasmCallInput<'x, PointerOf<Self>, InstantiateCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<
-            CosmwasmCallInput<'x, PointerOf<Self>, ExecuteInput<VmMessageCustomOf<Self>>>,
+            CosmwasmCallInput<'x, PointerOf<Self>, ExecuteCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<
-            CosmwasmCallInput<'x, PointerOf<Self>, ReplyInput<VmMessageCustomOf<Self>>>,
+            CosmwasmCallInput<'x, PointerOf<Self>, ReplyCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<
-            CosmwasmCallWithoutInfoInput<'x, PointerOf<Self>, ReplyInput<VmMessageCustomOf<Self>>>,
+            CosmwasmCallWithoutInfoInput<'x, PointerOf<Self>, ReplyCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<
-            CosmwasmCallWithoutInfoInput<
-                'x,
-                PointerOf<Self>,
-                MigrateInput<VmMessageCustomOf<Self>>,
-            >,
+            CosmwasmCallWithoutInfoInput<'x, PointerOf<Self>, MigrateCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<CosmwasmCallInput<'x, PointerOf<Self>, I>, Error = VmErrorOf<Self>>
         + TryFrom<CosmwasmCallWithoutInfoInput<'x, PointerOf<Self>, I>, Error = VmErrorOf<Self>>,
@@ -374,19 +370,19 @@ where
 pub trait StargateCosmwasmCallVM = CosmwasmBaseVM
 where
     for<'x> VmInputOf<'x, Self>: TryFrom<
-            CosmwasmCallInput<'x, PointerOf<Self>, IbcChannelConnectInput<VmMessageCustomOf<Self>>>,
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcChannelConnectCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<
-            CosmwasmCallInput<'x, PointerOf<Self>, IbcChannelCloseInput<VmMessageCustomOf<Self>>>,
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcChannelCloseCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<
-            CosmwasmCallInput<'x, PointerOf<Self>, IbcPacketReceiveInput<VmMessageCustomOf<Self>>>,
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcPacketReceiveCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<
-            CosmwasmCallInput<'x, PointerOf<Self>, IbcPacketAckInput<VmMessageCustomOf<Self>>>,
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcPacketAckCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<
-            CosmwasmCallInput<'x, PointerOf<Self>, IbcPacketTimeoutInput<VmMessageCustomOf<Self>>>,
+            CosmwasmCallInput<'x, PointerOf<Self>, IbcPacketTimeoutCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         >;
 
@@ -802,7 +798,7 @@ where
                                 result: response.clone(),
                             })
                             .map_err(|_| SystemError::FailedToSerialize)?;
-                            cosmwasm_system_run::<ReplyInput<VmMessageCustomOf<V>>, V>(
+                            cosmwasm_system_run::<ReplyCall<VmMessageCustomOf<V>>, V>(
                                 vm,
                                 &raw_response,
                                 &mut event_handler,

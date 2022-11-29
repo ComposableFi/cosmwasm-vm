@@ -10,8 +10,8 @@ use cosmwasm_vm::{
     executor::{
         cosmwasm_call,
         ibc::{
-            IbcChannelConnectInput, IbcChannelOpenInput, IbcChannelOpenResult, IbcPacketAckInput,
-            IbcPacketReceiveInput, IbcPacketTimeoutInput,
+            IbcChannelConnectCall, IbcChannelOpenCall, IbcChannelOpenResult, IbcPacketAckCall,
+            IbcPacketReceiveCall, IbcPacketTimeoutCall,
         },
         QueryResult,
     },
@@ -198,7 +198,7 @@ where
         message: IbcChannelConnectMsg,
     ) -> Result<E::Output<V>, VmError> {
         let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotDeserialize)?;
-        vm_state.do_ibc::<E, IbcChannelConnectInput<VmMessageCustomOf<V>>>(env, info, gas, &message)
+        vm_state.do_ibc::<E, IbcChannelConnectCall<VmMessageCustomOf<V>>>(env, info, gas, &message)
     }
 
     /// Receive an IBC packet.
@@ -217,7 +217,7 @@ where
         message: IbcPacketReceiveMsg,
     ) -> Result<E::Output<V>, VmError> {
         let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotDeserialize)?;
-        vm_state.do_ibc::<E, IbcPacketReceiveInput<VmMessageCustomOf<V>>>(env, info, gas, &message)
+        vm_state.do_ibc::<E, IbcPacketReceiveCall<VmMessageCustomOf<V>>>(env, info, gas, &message)
     }
 
     /// Receive an IBC packet acknowledgement.
@@ -236,7 +236,7 @@ where
         message: IbcPacketAckMsg,
     ) -> Result<E::Output<V>, VmError> {
         let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotDeserialize)?;
-        vm_state.do_ibc::<E, IbcPacketAckInput<VmMessageCustomOf<V>>>(env, info, gas, &message)
+        vm_state.do_ibc::<E, IbcPacketAckCall<VmMessageCustomOf<V>>>(env, info, gas, &message)
     }
 
     /// Receive an IBC packet timeout.
@@ -255,7 +255,7 @@ where
         message: IbcPacketTimeoutMsg,
     ) -> Result<E::Output<V>, VmError> {
         let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotDeserialize)?;
-        vm_state.do_ibc::<E, IbcPacketTimeoutInput<VmMessageCustomOf<V>>>(env, info, gas, &message)
+        vm_state.do_ibc::<E, IbcPacketTimeoutCall<VmMessageCustomOf<V>>>(env, info, gas, &message)
     }
 }
 
@@ -307,7 +307,7 @@ where
         message: IbcChannelOpenMsg,
     ) -> Result<IbcChannelOpenResult, VmError> {
         let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotDeserialize)?;
-        vm_state.do_direct::<IbcChannelOpenInput>(env, info, gas, &message)
+        vm_state.do_direct::<IbcChannelOpenCall>(env, info, gas, &message)
     }
 }
 
