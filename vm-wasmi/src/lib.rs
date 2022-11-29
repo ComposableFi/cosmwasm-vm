@@ -458,13 +458,13 @@ where
         self.0.contract_meta(address)
     }
 
-    fn query_continuation(
+    fn continue_query(
         &mut self,
         address: Self::Address,
         message: &[u8],
     ) -> Result<QueryResult, Self::Error> {
-        self.charge(VmGas::QueryContinuation)?;
-        self.0.query_continuation(address, message)
+        self.charge(VmGas::ContinueQuery)?;
+        self.0.continue_query(address, message)
     }
 
     fn continue_execute(

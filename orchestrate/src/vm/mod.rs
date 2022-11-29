@@ -294,7 +294,7 @@ impl<'a> VMBase for Context<'a> {
             .cloned()
     }
 
-    fn query_continuation(
+    fn continue_query(
         &mut self,
         address: Self::Address,
         message: &[u8],

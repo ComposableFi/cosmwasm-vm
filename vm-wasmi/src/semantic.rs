@@ -346,7 +346,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
             .cloned()
     }
 
-    fn query_continuation(
+    fn continue_query(
         &mut self,
         address: Self::Address,
         message: &[u8],

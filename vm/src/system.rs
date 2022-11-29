@@ -856,7 +856,7 @@ where
                 msg: Binary(message),
             } => {
                 let vm_contract_addr = contract_addr.try_into()?;
-                let QueryResult(output) = vm.query_continuation(vm_contract_addr, &message)?;
+                let QueryResult(output) = vm.continue_query(vm_contract_addr, &message)?;
                 Ok(SystemResult::Ok(output))
             }
             WasmQuery::Raw {

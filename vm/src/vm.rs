@@ -57,8 +57,8 @@ pub enum VmGas {
     SetContractMeta,
     /// Cost of `contract_meta`.
     GetContractMeta,
-    /// Cost of `query_continuation`.
-    QueryContinuation,
+    /// Cost of `continue_query`.
+    ContinueQuery,
     /// Cost of `continue_execute`.
     ContinueExecute { nb_of_coins: u32 },
     /// Cost of `continue_instantiate`.
@@ -205,7 +205,7 @@ pub trait VMBase {
     fn contract_meta(&mut self, address: Self::Address) -> Result<Self::ContractMeta, Self::Error>;
 
     /// Continue execution by calling query at the given contract address.
-    fn query_continuation(
+    fn continue_query(
         &mut self,
         address: Self::Address,
         message: &[u8],
