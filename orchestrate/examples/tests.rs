@@ -41,7 +41,7 @@ mod tests {
             sender: sender.clone().into(),
             funds: vec![Coin::new(400_000, "denom")],
         };
-        let (contract, _) = Api::instantiate_raw(
+        let (contract, _) = <Api>::instantiate_raw(
             &mut state,
             1,
             None,
@@ -74,7 +74,7 @@ mod tests {
         };
 
         info.funds = vec![];
-        let _ = Api::execute_raw(
+        let _ = <Api>::execute_raw(
             &mut state,
             env,
             info.clone(),
@@ -153,7 +153,7 @@ mod tests {
         };
         assert_matches!(res, ContractResult::Ok(_));
 
-        let _ = Api::execute(
+        let _ = <Api>::execute(
             &mut state,
             env.clone(),
             info,

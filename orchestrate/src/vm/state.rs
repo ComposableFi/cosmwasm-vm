@@ -1,9 +1,10 @@
 use super::{
     bank::{self, Bank},
-    Account, Context, Db, ExecutionType, Gas, IbcChannelId, IbcState, VmError,
+    Account, Context, CustomHandler, Db, ExecutionType, Gas, IbcChannelId, IbcState, VmError,
 };
 use alloc::collections::{BTreeMap, VecDeque};
 use core::fmt::Debug;
+use core::marker::PhantomData;
 use cosmwasm_std::{BlockInfo, Coin, ContractInfo, Env, MessageInfo, TransactionInfo};
 use cosmwasm_vm::{
     executor::{
@@ -13,7 +14,7 @@ use cosmwasm_vm::{
     input::Input,
     memory::PointerOf,
     system::{CosmwasmCallVM, CosmwasmCodeId, CosmwasmContractMeta, StargateCosmwasmCallVM},
-    vm::{VmErrorOf, VmInputOf},
+    vm::{VmErrorOf, VmInputOf, VmMessageCustomOf},
 };
 use cosmwasm_vm_wasmi::{host_functions, new_wasmi_vm, WasmiBaseVM, WasmiImportResolver, WasmiVM};
 use serde::de::DeserializeOwned;
@@ -94,9 +95,9 @@ pub struct State {
     pub gas: Gas,
 }
 
-impl<'a> VmState<'a, Context<'a>> for State
+impl<'a, CH: CustomHandler> VmState<'a, Context<'a, CH>> for State
 where
-    VmErrorOf<WasmiVM<Context<'a>>>: Into<VmError>,
+    VmErrorOf<WasmiVM<Context<'a, CH>>>: Into<VmError>,
 {
     fn do_instantiate<E: ExecutionType>(
         &'a mut self,
@@ -108,7 +109,7 @@ where
         info: MessageInfo,
         gas: u64,
         message: &[u8],
-    ) -> Result<(Account, E::Output<Context<'a>>), VmError> {
+    ) -> Result<(Account, E::Output<Context<'a, CH>>), VmError> {
         let contract_addr = if let Some(contract) = contract {
             contract
         } else {
@@ -142,7 +143,9 @@ where
             info,
         );
 
-        match E::raw_system_call::<_, InstantiateCall>(&mut vm, message) {
+        match E::raw_system_call::<_, InstantiateCall<VmMessageCustomOf<WasmiVM<Context<'a, CH>>>>>(
+            &mut vm, message,
+        ) {
             Ok(output) => Ok((contract_addr, output)),
             Err(e) => {
                 vm.0.state.db.contracts.remove(&contract_addr);
@@ -157,10 +160,12 @@ where
         info: MessageInfo,
         gas: u64,
         message: &[u8],
-    ) -> Result<E::Output<Context<'a>>, VmError> {
+    ) -> Result<E::Output<Context<'a, CH>>, VmError> {
         self.gas = Gas::new(gas);
         let mut vm = create_vm(self, env, info);
-        E::raw_system_call::<Context<'a>, ExecuteCall>(&mut vm, message)
+        E::raw_system_call::<_, ExecuteCall<VmMessageCustomOf<WasmiVM<Context<'a, CH>>>>>(
+            &mut vm, message,
+        )
     }
 
     fn do_ibc<E: ExecutionType, I>(
@@ -169,13 +174,13 @@ where
         info: MessageInfo,
         gas: u64,
         message: &[u8],
-    ) -> Result<E::Output<Context<'a>>, VmError>
+    ) -> Result<E::Output<Context<'a, CH>>, VmError>
     where
-        WasmiVM<Context<'a>>: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
+        WasmiVM<Context<'a, CH>>: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
     {
         self.gas = Gas::new(gas);
         let mut vm = create_vm(self, env, info);
-        E::raw_system_call::<Context<'a>, I>(&mut vm, message)
+        E::raw_system_call::<Context<'a, CH>, I>(&mut vm, message)
     }
 
     fn do_query(
@@ -185,7 +190,7 @@ where
         message: &[u8],
     ) -> Result<QueryResult, VmError> {
         let mut vm = create_vm(self, env, info);
-        cosmwasm_call::<QueryCall, WasmiVM<Context>>(&mut vm, message)
+        cosmwasm_call::<QueryCall, WasmiVM<Context<CH>>>(&mut vm, message)
     }
 
     fn do_direct<I>(
@@ -198,17 +203,17 @@ where
     where
         I: Input + HasInfo,
         I::Output: DeserializeOwned + ReadLimit + DeserializeLimit,
-        for<'x> VmInputOf<'x, WasmiVM<Context<'a>>>: TryFrom<
-                CosmwasmCallInput<'x, PointerOf<WasmiVM<Context<'x>>>, I>,
-                Error = VmErrorOf<WasmiVM<Context<'a>>>,
+        for<'x> VmInputOf<'x, WasmiVM<Context<'a, CH>>>: TryFrom<
+                CosmwasmCallInput<'x, PointerOf<WasmiVM<Context<'x, CH>>>, I>,
+                Error = VmErrorOf<WasmiVM<Context<'a, CH>>>,
             > + TryFrom<
-                CosmwasmCallWithoutInfoInput<'x, PointerOf<WasmiVM<Context<'x>>>, I>,
-                Error = VmErrorOf<WasmiVM<Context<'a>>>,
+                CosmwasmCallWithoutInfoInput<'x, PointerOf<WasmiVM<Context<'x, CH>>>, I>,
+                Error = VmErrorOf<WasmiVM<Context<'a, CH>>>,
             >,
     {
         self.gas = Gas::new(gas);
         let mut vm = create_vm(self, env, info);
-        cosmwasm_call::<I, WasmiVM<Context<'a>>>(&mut vm, message)
+        cosmwasm_call::<I, WasmiVM<Context<'a, CH>>>(&mut vm, message)
     }
 }
 
@@ -274,7 +279,11 @@ impl State {
     }
 }
 
-fn create_vm(extension: &mut State, env: Env, info: MessageInfo) -> WasmiVM<Context> {
+fn create_vm<CH: CustomHandler>(
+    extension: &mut State,
+    env: Env,
+    info: MessageInfo,
+) -> WasmiVM<Context<CH>> {
     let code = extension
         .codes
         .get(
@@ -305,5 +314,6 @@ fn create_vm(extension: &mut State, env: Env, info: MessageInfo) -> WasmiVM<Cont
         env,
         info,
         state: extension,
+        _marker: PhantomData,
     })
 }

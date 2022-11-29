@@ -1,7 +1,7 @@
 use crate::vm::{Account, Context, IbcChannelId, State, VmError, VmState};
 use core::marker::PhantomData;
 use cosmwasm_std::{
-    from_binary, Addr, Binary, BlockInfo, Coin, Env, Event, IbcChannelConnectMsg,
+    from_binary, Addr, Binary, BlockInfo, Coin, Empty, Env, Event, IbcChannelConnectMsg,
     IbcChannelOpenMsg, IbcPacketAckMsg, IbcPacketReceiveMsg, IbcPacketTimeoutMsg, MessageInfo,
     TransactionInfo,
 };
@@ -24,7 +24,7 @@ pub struct Api<
     'a,
     E: ExecutionType = Dispatch,
     S: VmState<'a, V> = State,
-    V: WasmiBaseVM = Context<'a>,
+    V: WasmiBaseVM = Context<'a, Empty>,
 > where
     VmErrorOf<WasmiVM<V>>: Into<VmError>,
 {
