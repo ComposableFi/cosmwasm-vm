@@ -1,6 +1,6 @@
 use cosmwasm_orchestrate::{
     vm::{Account, State},
-    Api, StateBuilder, Unit,
+    Api, Direct, StateBuilder,
 };
 use cosmwasm_std::{from_binary, Binary, BlockInfo, ContractInfo, Env, MessageInfo, Timestamp};
 use serde::{Deserialize, Serialize};
@@ -58,7 +58,7 @@ fn setup() -> (Account, State) {
     let wasm_code = include_bytes!("../../fixtures/crypto_verify.wasm");
     let mut state = StateBuilder::new().add_code(wasm_code).build();
 
-    let (addr, _) = <Api<Unit>>::instantiate_raw(
+    let (addr, _) = <Api<Direct>>::instantiate_raw(
         &mut state,
         1,
         None,
@@ -100,7 +100,7 @@ fn cosmos_signature_verify_works() {
         Binary(public_key)
     );
 
-    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
+    let res = <Api<Direct>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -134,7 +134,7 @@ fn cosmos_signature_verify_fails() {
         Binary(public_key)
     );
 
-    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
+    let res = <Api<Direct>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -166,7 +166,7 @@ fn ethereum_signature_verify_works() {
         signer_address,
     );
 
-    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
+    let res = <Api<Direct>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -198,7 +198,7 @@ fn ethereum_signature_verify_fails_for_corrupted_message() {
         signer_address,
     );
 
-    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
+    let res = <Api<Direct>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -231,7 +231,7 @@ fn ethereum_signature_verify_fails_for_corrupted_signature() {
         signer_address,
     );
 
-    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
+    let res = <Api<Direct>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -307,7 +307,7 @@ fn verify_ethereum_transaction_works() {
         v
     );
 
-    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
+    let res = <Api<Direct>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -339,7 +339,7 @@ fn tendermint_signature_verify_works() {
         Binary(public_key)
     );
 
-    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
+    let res = <Api<Direct>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -372,7 +372,7 @@ fn tendermint_signature_verify_fails() {
         Binary(public_key)
     );
 
-    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
+    let res = <Api<Direct>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -411,7 +411,7 @@ fn tendermint_signatures_batch_verify_works() {
         messages, signatures, public_keys,
     );
 
-    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
+    let res = <Api<Direct>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -453,7 +453,7 @@ fn tendermint_signatures_batch_verify_message_multisig_works() {
         messages, signatures, public_keys,
     );
 
-    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
+    let res = <Api<Direct>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -496,7 +496,7 @@ fn tendermint_signatures_batch_verify_single_public_key_works() {
         messages, signatures, public_keys,
     );
 
-    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
+    let res = <Api<Direct>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
@@ -535,7 +535,7 @@ fn tendermint_signatures_batch_verify_fails() {
         messages, signatures, public_keys,
     );
 
-    let res = <Api<Unit>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
+    let res = <Api<Direct>>::query_raw(&mut state, get_env(&addr), verify_msg.as_bytes())
         .unwrap()
         .0
         .into_result()
