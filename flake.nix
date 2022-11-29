@@ -44,7 +44,12 @@
         };
 
         # Default args to crane
-        common-args = { inherit src; buildInputs = [ pkgs.pkg-config pkgs.openssl ]; };
+        common-args = {
+          inherit src;
+          buildInputs = [ pkgs.pkg-config pkgs.openssl ]
+            ++ (pkgs.lib.optionals pkgs.stdenv.isDarwin
+              (with pkgs.darwin.apple_sdk.frameworks; [ Security ]));
+        };
 
         # Common dependencies used for caching
         common-deps = crane-nightly.buildDepsOnly common-args;
