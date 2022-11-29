@@ -1,8 +1,7 @@
-use crate::vm::VmState;
-use crate::vm::{Account, Context, State, VmError};
+use crate::vm::{Account, Context, IbcChannelId, State, VmError, VmState};
 use core::marker::PhantomData;
 use cosmwasm_std::{
-    from_binary, Addr, Binary, BlockInfo, ContractInfo, Env, Event, IbcChannelConnectMsg,
+    from_binary, Addr, Binary, BlockInfo, Coin, ContractInfo, Env, Event, IbcChannelConnectMsg,
     IbcChannelOpenMsg, IbcPacketAckMsg, IbcPacketReceiveMsg, IbcPacketTimeoutMsg, MessageInfo,
     Timestamp, TransactionInfo,
 };
@@ -377,5 +376,47 @@ impl ExecutionType for Full {
         VmErrorOf<WasmiVM<V>>: Into<VmError>,
     {
         cosmwasm_system_entrypoint::<I, _>(vm, message).map_err(Into::into)
+    }
+}
+
+#[derive(Default)]
+pub struct StateBuilder {
+    codes: Vec<Vec<u8>>,
+    balances: Vec<(Account, Coin)>,
+    ibc_channels: Vec<IbcChannelId>,
+}
+
+impl StateBuilder {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn add_code(mut self, code: &[u8]) -> Self {
+        self.codes.push(code.into());
+        self
+    }
+
+    pub fn add_channel(mut self, channel_id: IbcChannelId) -> Self {
+        self.ibc_channels.push(channel_id);
+        self
+    }
+
+    pub fn add_balance(mut self, account: Account, coin: Coin) -> Self {
+        self.balances.push((account, coin));
+        self
+    }
+
+    pub fn add_codes(mut self, codes: Vec<&[u8]>) -> Self {
+        self.codes.extend(codes.into_iter().map(Into::into));
+        self
+    }
+
+    pub fn add_balances(mut self, balances: Vec<(Account, Coin)>) -> Self {
+        self.balances.extend(balances.into_iter().map(Into::into));
+        self
+    }
+
+    pub fn build(self) -> State {
+        State::new(self.codes, self.balances, self.ibc_channels)
     }
 }

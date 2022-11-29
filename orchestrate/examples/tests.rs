@@ -2,11 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use cosmwasm_orchestrate::{
-        fetcher::*,
-        vm::{Account, StateBuilder},
-        Api, Unit,
-    };
+    use cosmwasm_orchestrate::{fetcher::*, vm::Account, Api, StateBuilder, Unit};
     use cosmwasm_std::{
         to_binary, BankMsg, BlockInfo, Coin, ContractInfo, ContractResult, CosmosMsg, Env,
         MessageInfo, Timestamp,
