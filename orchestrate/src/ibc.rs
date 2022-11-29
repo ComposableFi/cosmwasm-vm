@@ -99,7 +99,7 @@ impl<'a> IbcNetwork<'a> {
                 channel_id: channel_id.clone(),
             },
             channel_ordering,
-            channel_version.clone(),
+            channel_version,
             connection_id,
         );
 
@@ -115,12 +115,11 @@ impl<'a> IbcNetwork<'a> {
         )?
         .0
         .into_result()
-        .map_err(|x| VmError::IbcChannelOpenFailure(x))?;
+        .map_err(VmError::IbcChannelOpenFailure)?;
 
         // The contract may override the channel version.
-        match override_version {
-            Some(Ibc3ChannelOpenResponse { version }) => channel.version = version,
-            None => {}
+        if let Some(Ibc3ChannelOpenResponse { version }) = override_version {
+            channel.version = version
         }
 
         let override_version_counterparty = Api::<Direct>::ibc_channel_open(
@@ -135,12 +134,11 @@ impl<'a> IbcNetwork<'a> {
         )?
         .0
         .into_result()
-        .map_err(|x| VmError::IbcChannelOpenFailure(x))?;
+        .map_err(VmError::IbcChannelOpenFailure)?;
 
         // The contract counterparty may override the channel version.
-        match override_version_counterparty {
-            Some(Ibc3ChannelOpenResponse { version }) => channel.version = version,
-            None => {}
+        if let Some(Ibc3ChannelOpenResponse { version }) = override_version_counterparty {
+            channel.version = version
         }
 
         let channel_counterparty = ibc_reverse_channel(channel.clone());
@@ -163,7 +161,7 @@ impl<'a> IbcNetwork<'a> {
             info_counterparty,
             gas,
             IbcChannelConnectMsg::OpenConfirm {
-                channel: channel_counterparty.clone(),
+                channel: channel_counterparty,
             },
         )?;
         log::debug!("Handshake Counterparty: {:?}", result);
@@ -176,7 +174,7 @@ impl<'a> IbcNetwork<'a> {
         self.state_counterparty
             .db
             .ibc
-            .insert(channel_id.clone(), IbcState::default());
+            .insert(channel_id, IbcState::default());
 
         Ok(channel)
     }
