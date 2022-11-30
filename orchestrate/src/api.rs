@@ -1,4 +1,4 @@
-use crate::vm::{Account, Context, IbcChannelId, State, VmError, VmState};
+use crate::vm::{Account, Context, IbcChannelId, State, VmError, VmState, WasmAddressHandler};
 use core::marker::PhantomData;
 use cosmwasm_std::{
     from_binary, Addr, Binary, BlockInfo, Coin, Empty, Env, Event, IbcChannelConnectMsg,
@@ -24,7 +24,7 @@ pub struct Api<
     'a,
     E: ExecutionType = Dispatch,
     S: VmState<'a, V> = State,
-    V: WasmiBaseVM = Context<'a, Empty>,
+    V: WasmiBaseVM = Context<'a, Empty, WasmAddressHandler>,
 > where
     VmErrorOf<WasmiVM<V>>: Into<VmError>,
 {

@@ -32,6 +32,8 @@ pub enum VmError {
     UnknownIbcChannel,
     IbcChannelOpenFailure(String),
     Generic(String),
+    EncodingFailure,
+    DecodingFailure,
 }
 
 impl From<wasmi::Error> for VmError {

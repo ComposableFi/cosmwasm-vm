@@ -1,9 +1,11 @@
 mod account;
+mod address;
 mod bank;
 mod error;
 mod state;
 
 pub use account::*;
+pub use address::*;
 pub use error::*;
 pub use state::*;
 
@@ -200,16 +202,17 @@ impl Debug for Db {
     }
 }
 
-pub struct Context<'a, CH: CustomHandler> {
+pub struct Context<'a, CH: CustomHandler, AH: AddressHandler> {
     pub host_functions: BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<Self>>,
     pub executing_module: WasmiModule,
     pub env: Env,
     pub info: MessageInfo,
     pub state: &'a mut State,
-    _marker: PhantomData<CH>,
+    _m1: PhantomData<CH>,
+    _m2: PhantomData<AH>,
 }
 
-impl<'a, CH: CustomHandler> WasmiModuleExecutor for Context<'a, CH> {
+impl<'a, CH: CustomHandler, AH: AddressHandler> WasmiModuleExecutor for Context<'a, CH, AH> {
     fn executing_module(&self) -> WasmiModule {
         self.executing_module.clone()
     }
@@ -218,11 +221,11 @@ impl<'a, CH: CustomHandler> WasmiModuleExecutor for Context<'a, CH> {
     }
 }
 
-impl<'a, CH: CustomHandler> Pointable for Context<'a, CH> {
+impl<'a, CH: CustomHandler, AH: AddressHandler> Pointable for Context<'a, CH, AH> {
     type Pointer = u32;
 }
 
-impl<'a, CH: CustomHandler> ReadableMemory for Context<'a, CH> {
+impl<'a, CH: CustomHandler, AH: AddressHandler> ReadableMemory for Context<'a, CH, AH> {
     type Error = VmErrorOf<Self>;
     fn read(&self, offset: Self::Pointer, buffer: &mut [u8]) -> Result<(), Self::Error> {
         self.executing_module
@@ -232,7 +235,7 @@ impl<'a, CH: CustomHandler> ReadableMemory for Context<'a, CH> {
     }
 }
 
-impl<'a, CH: CustomHandler> WritableMemory for Context<'a, CH> {
+impl<'a, CH: CustomHandler, AH: AddressHandler> WritableMemory for Context<'a, CH, AH> {
     type Error = VmErrorOf<Self>;
     fn write(&self, offset: Self::Pointer, buffer: &[u8]) -> Result<(), Self::Error> {
         self.executing_module
@@ -242,14 +245,14 @@ impl<'a, CH: CustomHandler> WritableMemory for Context<'a, CH> {
     }
 }
 
-impl<'a, CH: CustomHandler> ReadWriteMemory for Context<'a, CH> {}
+impl<'a, CH: CustomHandler, AH: AddressHandler> ReadWriteMemory for Context<'a, CH, AH> {}
 
-impl<'a, CH: CustomHandler> Context<'a, CH> {
+impl<'a, CH: CustomHandler, AH: AddressHandler> Context<'a, CH, AH> {
     fn load_subvm<R>(
         &mut self,
         address: <Self as VMBase>::Address,
         funds: Vec<Coin>,
-        f: impl FnOnce(&mut WasmiVM<Context<CH>>) -> R,
+        f: impl FnOnce(&mut WasmiVM<Context<CH, AH>>) -> R,
     ) -> Result<R, VmErrorOf<Self>> {
         log::debug!(
             "Loading sub-vm {:?} => {:?}",
@@ -270,9 +273,9 @@ impl<'a, CH: CustomHandler> Context<'a, CH> {
             .ok_or(VmError::CodeNotFound(code_id))
             .cloned()?;
         let host_functions_definitions =
-            WasmiImportResolver(host_functions::definitions::<Context<CH>>());
+            WasmiImportResolver(host_functions::definitions::<Context<CH, AH>>());
         let module = new_wasmi_vm(&host_functions_definitions, &code.1)?;
-        let mut sub_vm: WasmiVM<Context<CH>> = WasmiVM(Context {
+        let mut sub_vm: WasmiVM<Context<CH, AH>> = WasmiVM(Context {
             host_functions: host_functions_definitions
                 .0
                 .into_iter()
@@ -291,13 +294,14 @@ impl<'a, CH: CustomHandler> Context<'a, CH> {
                 funds,
             },
             state: self.state,
-            _marker: PhantomData,
+            _m1: PhantomData,
+            _m2: PhantomData,
         });
         Ok(f(&mut sub_vm))
     }
 }
 
-impl<'a, CH: CustomHandler> VMBase for Context<'a, CH> {
+impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
     type Input<'x> = WasmiInput<'x, WasmiVM<Self>>;
     type Output<'x> = WasmiOutput<'x, WasmiVM<Self>>;
     type QueryCustom = QueryCustomOf<CH>;
@@ -351,7 +355,7 @@ impl<'a, CH: CustomHandler> VMBase for Context<'a, CH> {
         message: &[u8],
     ) -> Result<QueryResult, Self::Error> {
         self.load_subvm(address, vec![], |sub_vm| {
-            cosmwasm_call::<QueryCall, WasmiVM<Context<CH>>>(sub_vm, message)
+            cosmwasm_call::<QueryCall, WasmiVM<Context<CH, AH>>>(sub_vm, message)
         })?
     }
 
@@ -793,18 +797,18 @@ impl<'a, CH: CustomHandler> VMBase for Context<'a, CH> {
     }
 }
 
-impl<'a, CH: CustomHandler> Has<Env> for Context<'a, CH> {
+impl<'a, CH: CustomHandler, AH: AddressHandler> Has<Env> for Context<'a, CH, AH> {
     fn get(&self) -> Env {
         self.env.clone()
     }
 }
-impl<'a, CH: CustomHandler> Has<MessageInfo> for Context<'a, CH> {
+impl<'a, CH: CustomHandler, AH: AddressHandler> Has<MessageInfo> for Context<'a, CH, AH> {
     fn get(&self) -> MessageInfo {
         self.info.clone()
     }
 }
 
-impl<'a, CH: CustomHandler> Transactional for Context<'a, CH> {
+impl<'a, CH: CustomHandler, AH: AddressHandler> Transactional for Context<'a, CH, AH> {
     type Error = VmError;
     fn transaction_begin(&mut self) -> Result<(), Self::Error> {
         self.state.transactions.push_back(self.state.db.clone());

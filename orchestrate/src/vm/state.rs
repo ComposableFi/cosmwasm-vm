@@ -1,6 +1,7 @@
 use super::{
     bank::{self, Bank},
-    Account, Context, CustomHandler, Db, ExecutionType, Gas, IbcChannelId, IbcState, VmError,
+    Account, AddressHandler, Context, CustomHandler, Db, ExecutionType, Gas, IbcChannelId,
+    IbcState, VmError,
 };
 use alloc::collections::{BTreeMap, VecDeque};
 use core::fmt::Debug;
@@ -95,9 +96,9 @@ pub struct State {
     pub gas: Gas,
 }
 
-impl<'a, CH: CustomHandler> VmState<'a, Context<'a, CH>> for State
+impl<'a, CH: CustomHandler, AH: AddressHandler> VmState<'a, Context<'a, CH, AH>> for State
 where
-    VmErrorOf<WasmiVM<Context<'a, CH>>>: Into<VmError>,
+    VmErrorOf<WasmiVM<Context<'a, CH, AH>>>: Into<VmError>,
 {
     fn do_instantiate<E: ExecutionType>(
         &'a mut self,
@@ -109,7 +110,7 @@ where
         info: MessageInfo,
         gas: u64,
         message: &[u8],
-    ) -> Result<(Account, E::Output<Context<'a, CH>>), VmError> {
+    ) -> Result<(Account, E::Output<Context<'a, CH, AH>>), VmError> {
         let contract_addr = if let Some(contract) = contract {
             contract
         } else {
@@ -143,9 +144,11 @@ where
             info,
         );
 
-        match E::raw_system_call::<_, InstantiateCall<VmMessageCustomOf<WasmiVM<Context<'a, CH>>>>>(
-            &mut vm, message,
-        ) {
+        match E::raw_system_call::<
+            _,
+            InstantiateCall<VmMessageCustomOf<WasmiVM<Context<'a, CH, AH>>>>,
+        >(&mut vm, message)
+        {
             Ok(output) => Ok((contract_addr, output)),
             Err(e) => {
                 vm.0.state.db.contracts.remove(&contract_addr);
@@ -160,10 +163,10 @@ where
         info: MessageInfo,
         gas: u64,
         message: &[u8],
-    ) -> Result<E::Output<Context<'a, CH>>, VmError> {
+    ) -> Result<E::Output<Context<'a, CH, AH>>, VmError> {
         self.gas = Gas::new(gas);
         let mut vm = create_vm(self, env, info);
-        E::raw_system_call::<_, ExecuteCall<VmMessageCustomOf<WasmiVM<Context<'a, CH>>>>>(
+        E::raw_system_call::<_, ExecuteCall<VmMessageCustomOf<WasmiVM<Context<'a, CH, AH>>>>>(
             &mut vm, message,
         )
     }
@@ -174,13 +177,13 @@ where
         info: MessageInfo,
         gas: u64,
         message: &[u8],
-    ) -> Result<E::Output<Context<'a, CH>>, VmError>
+    ) -> Result<E::Output<Context<'a, CH, AH>>, VmError>
     where
-        WasmiVM<Context<'a, CH>>: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
+        WasmiVM<Context<'a, CH, AH>>: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
     {
         self.gas = Gas::new(gas);
         let mut vm = create_vm(self, env, info);
-        E::raw_system_call::<Context<'a, CH>, I>(&mut vm, message)
+        E::raw_system_call::<Context<'a, CH, AH>, I>(&mut vm, message)
     }
 
     fn do_query(
@@ -190,7 +193,7 @@ where
         message: &[u8],
     ) -> Result<QueryResult, VmError> {
         let mut vm = create_vm(self, env, info);
-        cosmwasm_call::<QueryCall, WasmiVM<Context<CH>>>(&mut vm, message)
+        cosmwasm_call::<QueryCall, WasmiVM<Context<CH, AH>>>(&mut vm, message)
     }
 
     fn do_direct<I>(
@@ -203,17 +206,17 @@ where
     where
         I: Input + HasInfo,
         I::Output: DeserializeOwned + ReadLimit + DeserializeLimit,
-        for<'x> VmInputOf<'x, WasmiVM<Context<'a, CH>>>: TryFrom<
-                CosmwasmCallInput<'x, PointerOf<WasmiVM<Context<'x, CH>>>, I>,
-                Error = VmErrorOf<WasmiVM<Context<'a, CH>>>,
+        for<'x> VmInputOf<'x, WasmiVM<Context<'a, CH, AH>>>: TryFrom<
+                CosmwasmCallInput<'x, PointerOf<WasmiVM<Context<'x, CH, AH>>>, I>,
+                Error = VmErrorOf<WasmiVM<Context<'a, CH, AH>>>,
             > + TryFrom<
-                CosmwasmCallWithoutInfoInput<'x, PointerOf<WasmiVM<Context<'x, CH>>>, I>,
-                Error = VmErrorOf<WasmiVM<Context<'a, CH>>>,
+                CosmwasmCallWithoutInfoInput<'x, PointerOf<WasmiVM<Context<'x, CH, AH>>>, I>,
+                Error = VmErrorOf<WasmiVM<Context<'a, CH, AH>>>,
             >,
     {
         self.gas = Gas::new(gas);
         let mut vm = create_vm(self, env, info);
-        cosmwasm_call::<I, WasmiVM<Context<'a, CH>>>(&mut vm, message)
+        cosmwasm_call::<I, WasmiVM<Context<'a, CH, AH>>>(&mut vm, message)
     }
 }
 
@@ -279,11 +282,11 @@ impl State {
     }
 }
 
-fn create_vm<CH: CustomHandler>(
+fn create_vm<CH: CustomHandler, AH: AddressHandler>(
     extension: &mut State,
     env: Env,
     info: MessageInfo,
-) -> WasmiVM<Context<CH>> {
+) -> WasmiVM<Context<CH, AH>> {
     let code = extension
         .codes
         .get(
@@ -314,6 +317,7 @@ fn create_vm<CH: CustomHandler>(
         env,
         info,
         state: extension,
-        _marker: PhantomData,
+        _m1: PhantomData,
+        _m2: PhantomData,
     })
 }
