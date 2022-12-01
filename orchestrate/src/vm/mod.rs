@@ -100,45 +100,35 @@ pub trait CustomHandler {
     type QueryCustom: DeserializeOwned + Debug;
     type MessageCustom: DeserializeOwned + Debug;
 
-    fn handle_message<V: VMBase>(
-        vm: &mut V,
+    fn handle_message<CH: CustomHandler, AH: AddressHandler>(
+        vm: &mut Context<CH, AH>,
         message: Self::MessageCustom,
         event_handler: &mut dyn FnMut(Event),
-    ) -> Result<Option<Binary>, VmErrorOf<V>>
-    where
-        for<'x> VmErrorOf<V>: From<VmError>;
+    ) -> Result<Option<Binary>, VmError>;
 
-    fn handle_query<V: VMBase>(
-        vm: &mut V,
+    fn handle_query<CH: CustomHandler, AH: AddressHandler>(
+        vm: &mut Context<CH, AH>,
         query: Self::QueryCustom,
-    ) -> Result<SystemResult<CosmwasmQueryResult>, VmErrorOf<V>>
-    where
-        for<'x> VmErrorOf<V>: From<VmError>;
+    ) -> Result<SystemResult<CosmwasmQueryResult>, VmError>;
 }
 
 impl CustomHandler for Empty {
     type QueryCustom = Empty;
     type MessageCustom = Empty;
 
-    fn handle_message<V: VMBase>(
-        _: &mut V,
+    fn handle_message<CH: CustomHandler, AH: AddressHandler>(
+        _: &mut Context<CH, AH>,
         _: Self::MessageCustom,
         _: &mut dyn FnMut(Event),
-    ) -> Result<Option<Binary>, VmErrorOf<V>>
-    where
-        for<'x> VmErrorOf<V>: From<VmError>,
-    {
-        Err(VmError::NoCustomMessage.into())
+    ) -> Result<Option<Binary>, VmError> {
+        Err(VmError::NoCustomMessage)
     }
 
-    fn handle_query<V: VMBase>(
-        _: &mut V,
+    fn handle_query<CH: CustomHandler, AH: AddressHandler>(
+        _: &mut Context<CH, AH>,
         _: Self::QueryCustom,
-    ) -> Result<SystemResult<CosmwasmQueryResult>, VmErrorOf<V>>
-    where
-        for<'x> VmErrorOf<V>: From<VmError>,
-    {
-        Err(VmError::NoCustomQuery.into())
+    ) -> Result<SystemResult<CosmwasmQueryResult>, VmError> {
+        Err(VmError::NoCustomQuery)
     }
 }
 
