@@ -1,8 +1,6 @@
-use core::fmt::Display;
-
-use super::VmError;
-use alloc::format;
+use super::{AddressHandler, VmError};
 use alloc::vec::Vec;
+use core::fmt::Display;
 use cosmwasm_std::{Addr, Binary, CanonicalAddr};
 use sha1::{Digest, Sha1};
 
@@ -59,6 +57,12 @@ impl From<Account> for Addr {
     }
 }
 
+impl From<Account> for String {
+    fn from(account: Account) -> Self {
+        account.0.into_string()
+    }
+}
+
 impl Account {
     pub fn unchecked<A: Into<String>>(addr: A) -> Self {
         Account(Addr::unchecked(addr))
@@ -71,12 +75,9 @@ impl Account {
     ///
     /// The address is generated with the algorithm: `Sha1(code_hash + message)`
     #[must_use]
-    pub fn generate(code_hash: &[u8], message: &[u8]) -> Self {
-        let hash = Sha1::new()
-            .chain_update(code_hash)
-            .chain_update(message)
-            .finalize();
-        Account(Addr::unchecked(format!("{hash:x}")))
+    pub fn generate<AH: AddressHandler>(code_hash: &[u8], message: &[u8]) -> Result<Self, VmError> {
+        let addr = AH::addr_generate([code_hash, message])?;
+        Ok(Self::unchecked(addr))
     }
 
     /// Generates an `Account` based on `code` and `message`
@@ -90,8 +91,18 @@ impl Account {
     /// execution.
     /// See [`Self::generate`] for the generation algorithm
     #[must_use]
-    pub fn generate_by_code(code: &[u8], message: &[u8]) -> Self {
+    pub fn generate_by_code<AH: AddressHandler>(
+        code: &[u8],
+        message: &[u8],
+    ) -> Result<Self, VmError> {
         let code_hash = Sha1::new().chain_update(code).finalize();
-        Self::generate(&code_hash[..], message)
+        Self::generate::<AH>(&code_hash[..], message)
+    }
+
+    /// Generates an `Account` based on the provided `seed`
+    #[must_use]
+    pub fn generate_from_seed<AH: AddressHandler>(seed: &str) -> Result<Self, VmError> {
+        let addr = AH::addr_generate([seed.as_ref()])?;
+        Ok(Self::unchecked(addr))
     }
 }

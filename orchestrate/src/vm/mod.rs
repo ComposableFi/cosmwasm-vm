@@ -10,7 +10,7 @@ pub use error::*;
 pub use state::*;
 
 use super::ExecutionType;
-use alloc::{collections::BTreeMap, string::ToString};
+use alloc::collections::BTreeMap;
 use bank::Bank;
 use core::marker::PhantomData;
 use core::{fmt::Debug, num::NonZeroU32};
@@ -392,7 +392,7 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
             .codes
             .get(&contract_meta.code_id)
             .ok_or(VmError::CodeNotFound(contract_meta.code_id))?;
-        let address = Account::generate(code_hash, message);
+        let address = Account::generate::<AH>(code_hash, message)?;
 
         self.state
             .db
@@ -623,42 +623,27 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
     }
 
     fn addr_validate(&mut self, input: &str) -> Result<Result<(), Self::Error>, Self::Error> {
-        // We only make sure that `addr_humanize(addr_canonicalize(address)) == address`
-        let canonical = match self.addr_canonicalize(input)? {
-            Ok(canonical) => canonical,
-            Err(e) => return Ok(Err(e)),
-        };
-        let normalized = match self.addr_humanize(&canonical)? {
-            Ok(canonical) => canonical,
-            Err(e) => return Ok(Err(e)),
-        };
-        let account = Account::try_from(input.to_string())?;
-        Ok(if account == normalized {
-            Ok(())
-        } else {
-            Err(VmError::InvalidAddress)
-        })
+        Ok(AH::addr_validate(input))
     }
 
     fn addr_canonicalize(
         &mut self,
         input: &str,
     ) -> Result<Result<Self::CanonicalAddress, Self::Error>, Self::Error> {
-        // We don't care about the content of the address
-        if input.is_empty() {
-            return Ok(Err(VmError::InvalidAddress));
+        match AH::addr_canonicalize(input) {
+            Ok(canonical) => Ok(canonical.try_into()),
+            Err(e) => Ok(Err(e)),
         }
-        Ok(Ok(Vec::from(input.to_lowercase()).try_into()?))
     }
 
     fn addr_humanize(
         &mut self,
         addr: &Self::CanonicalAddress,
     ) -> Result<Result<Self::Address, Self::Error>, Self::Error> {
-        let Ok(human) = String::from_utf8(addr.clone().into()) else {
-            return Ok(Err(VmError::InvalidAddress));
-        };
-        Ok(Account::try_from(human).map_err(|_| VmError::InvalidAddress))
+        match AH::addr_humanize(addr.0.as_ref()) {
+            Ok(addr) => Ok(addr.try_into()),
+            Err(e) => Ok(Err(e)),
+        }
     }
 
     fn db_read(

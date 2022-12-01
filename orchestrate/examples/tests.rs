@@ -2,7 +2,11 @@
 
 #[cfg(test)]
 mod tests {
-    use cosmwasm_orchestrate::{fetcher::*, vm::Account, Api, Direct, StateBuilder};
+    use cosmwasm_orchestrate::{
+        fetcher::*,
+        vm::{Account, WasmAddressHandler},
+        Api, Direct, StateBuilder,
+    };
     use cosmwasm_std::{
         to_binary, BankMsg, BlockInfo, Coin, ContractInfo, ContractResult, CosmosMsg, Env,
         MessageInfo, Timestamp,
@@ -27,7 +31,7 @@ mod tests {
     async fn bank() {
         initialize();
         let code = FileFetcher::from_url(REFLECT_URL).await.unwrap();
-        let sender = Account::unchecked("sender");
+        let sender = Account::generate_from_seed::<WasmAddressHandler>("sender").unwrap();
         let mut state = StateBuilder::new()
             .add_code(&code)
             .add_balance(sender.clone(), Coin::new(10_000_000, "denom"))
@@ -111,7 +115,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let sender = Account::unchecked("sender");
+        let sender = Account::generate_from_seed::<WasmAddressHandler>("sender").unwrap();
 
         let mut state = StateBuilder::new().add_code(&code).build();
         let block = BlockInfo {
@@ -159,7 +163,9 @@ mod tests {
             info,
             100_000_000,
             ExecuteMsg::Transfer {
-                recipient: "receiver".into(),
+                recipient: Account::generate_from_seed::<WasmAddressHandler>("receiver")
+                    .unwrap()
+                    .into(),
                 amount: 10_000_u128.into(),
             },
         )
@@ -170,7 +176,9 @@ mod tests {
                 &mut state,
                 env,
                 &serde_json::to_vec(&QueryMsg::Balance {
-                    address: "receiver".into()
+                    address: Account::generate_from_seed::<WasmAddressHandler>("receiver")
+                        .unwrap()
+                        .into(),
                 })
                 .unwrap()
             )
