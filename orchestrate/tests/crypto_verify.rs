@@ -1,6 +1,6 @@
 use cosmwasm_orchestrate::{
-    vm::{Account, State},
-    Api, Direct, StateBuilder,
+    vm::{Account, State, WasmAddressHandler},
+    Direct, StateBuilder, WasmApi as Api,
 };
 use cosmwasm_std::{from_binary, Binary, BlockInfo, ContractInfo, Env, MessageInfo, Timestamp};
 use serde::{Deserialize, Serialize};
@@ -54,7 +54,7 @@ fn message_info(sender: &Account) -> MessageInfo {
     }
 }
 
-fn setup() -> (Account, State) {
+fn setup() -> (Account, State<(), WasmAddressHandler>) {
     let wasm_code = include_bytes!("../../fixtures/crypto_verify.wasm");
     let mut state = StateBuilder::new().add_code(wasm_code).build();
 

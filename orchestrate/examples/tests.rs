@@ -4,8 +4,8 @@
 mod tests {
     use cosmwasm_orchestrate::{
         fetcher::*,
-        vm::{Account, WasmAddressHandler},
-        Api, Direct, StateBuilder,
+        vm::{Account, JunoAddressHandler, WasmAddressHandler},
+        *,
     };
     use cosmwasm_std::{
         to_binary, BankMsg, BlockInfo, Coin, ContractInfo, ContractResult, CosmosMsg, Env,
@@ -32,24 +32,19 @@ mod tests {
         initialize();
         let code = FileFetcher::from_url(REFLECT_URL).await.unwrap();
         let sender = Account::generate_from_seed::<WasmAddressHandler>("sender").unwrap();
-        let mut state = StateBuilder::new()
+        let mut state = StateBuilder::<WasmAddressHandler>::new()
             .add_code(&code)
             .add_balance(sender.clone(), Coin::new(10_000_000, "denom"))
             .build();
-        let block = BlockInfo {
-            height: 1,
-            time: Timestamp::from_seconds(100),
-            chain_id: "asd".into(),
-        };
         let mut info = MessageInfo {
             sender: sender.clone().into(),
             funds: vec![Coin::new(400_000, "denom")],
         };
-        let (contract, _) = <Api>::instantiate_raw(
+        let (contract, _) = <WasmApi>::instantiate_raw(
             &mut state,
             1,
             None,
-            block.clone(),
+            block(),
             None,
             info.clone(),
             100_000_000,
@@ -69,18 +64,10 @@ mod tests {
             .into(),
         ];
 
-        let env = Env {
-            block: block.clone(),
-            transaction: None,
-            contract: ContractInfo {
-                address: contract.clone().into(),
-            },
-        };
-
         info.funds = vec![];
-        let _ = <Api>::execute_raw(
+        let _ = <WasmApi>::execute_raw(
             &mut state,
-            env,
+            env(&contract),
             info.clone(),
             100_000_000,
             format!(
@@ -115,25 +102,19 @@ mod tests {
         )
         .await
         .unwrap();
-        let sender = Account::generate_from_seed::<WasmAddressHandler>("sender").unwrap();
+        let sender = Account::generate_from_seed::<JunoAddressHandler>("sender").unwrap();
 
-        let mut state = StateBuilder::new().add_code(&code).build();
-        let block = BlockInfo {
-            height: 1,
-            time: Timestamp::from_seconds(100),
-            chain_id: "asd".into(),
-        };
-        let info = MessageInfo {
-            sender: sender.clone().into(),
-            funds: vec![],
-        };
-        let (contract, res) = Api::<Direct>::instantiate(
+        let mut state = StateBuilder::<JunoAddressHandler>::new()
+            .add_code(&code)
+            .build();
+
+        let (contract, res) = JunoApi::<Direct>::instantiate(
             &mut state,
             1,
             None,
-            block.clone(),
+            block(),
             None,
-            info.clone(),
+            info(&sender),
             100_000_000,
             InstantiateMsg {
                 name: "Picasso".into(),
@@ -148,22 +129,15 @@ mod tests {
             },
         )
         .unwrap();
-        let env = Env {
-            block: block.clone(),
-            transaction: None,
-            contract: ContractInfo {
-                address: contract.into(),
-            },
-        };
         assert_matches!(res, ContractResult::Ok(_));
 
-        let _ = <Api>::execute(
+        let _ = <JunoApi>::execute(
             &mut state,
-            env.clone(),
-            info,
+            env(&contract),
+            info(&sender),
             100_000_000,
             ExecuteMsg::Transfer {
-                recipient: Account::generate_from_seed::<WasmAddressHandler>("receiver")
+                recipient: Account::generate_from_seed::<JunoAddressHandler>("receiver")
                     .unwrap()
                     .into(),
                 amount: 10_000_u128.into(),
@@ -172,11 +146,11 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            Api::<Direct>::query_raw(
+            JunoApi::<Direct>::query_raw(
                 &mut state,
-                env,
+                env(&contract),
                 &serde_json::to_vec(&QueryMsg::Balance {
-                    address: Account::generate_from_seed::<WasmAddressHandler>("receiver")
+                    address: Account::generate_from_seed::<JunoAddressHandler>("receiver")
                         .unwrap()
                         .into(),
                 })

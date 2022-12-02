@@ -12,11 +12,10 @@ pub use state::*;
 use super::ExecutionType;
 use alloc::collections::BTreeMap;
 use bank::Bank;
-use core::marker::PhantomData;
 use core::{fmt::Debug, num::NonZeroU32};
 use cosmwasm_std::{
-    Binary, Coin, ContractInfo, ContractInfoResponse, Empty, Env, Event, IbcTimeout, MessageInfo,
-    Order, Reply, SystemResult,
+    Binary, Coin, ContractInfo, ContractInfoResponse, Env, Event, IbcTimeout, MessageInfo, Order,
+    Reply, SystemResult,
 };
 use cosmwasm_vm::{
     executor::{
@@ -96,36 +95,36 @@ impl Gas {
 pub type QueryCustomOf<T> = <T as CustomHandler>::QueryCustom;
 pub type MessageCustomOf<T> = <T as CustomHandler>::MessageCustom;
 
-pub trait CustomHandler {
+pub trait CustomHandler: Sized {
     type QueryCustom: DeserializeOwned + Debug;
     type MessageCustom: DeserializeOwned + Debug;
 
-    fn handle_message<CH: CustomHandler, AH: AddressHandler>(
-        vm: &mut Context<CH, AH>,
+    fn handle_message<AH: AddressHandler>(
+        vm: &mut Context<Self, AH>,
         message: Self::MessageCustom,
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, VmError>;
 
-    fn handle_query<CH: CustomHandler, AH: AddressHandler>(
-        vm: &mut Context<CH, AH>,
+    fn handle_query<AH: AddressHandler>(
+        vm: &mut Context<Self, AH>,
         query: Self::QueryCustom,
     ) -> Result<SystemResult<CosmwasmQueryResult>, VmError>;
 }
 
-impl CustomHandler for Empty {
-    type QueryCustom = Empty;
-    type MessageCustom = Empty;
+impl CustomHandler for () {
+    type QueryCustom = ();
+    type MessageCustom = ();
 
-    fn handle_message<CH: CustomHandler, AH: AddressHandler>(
-        _: &mut Context<CH, AH>,
+    fn handle_message<AH: AddressHandler>(
+        _: &mut Context<Self, AH>,
         _: Self::MessageCustom,
         _: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, VmError> {
         Err(VmError::NoCustomMessage)
     }
 
-    fn handle_query<CH: CustomHandler, AH: AddressHandler>(
-        _: &mut Context<CH, AH>,
+    fn handle_query<AH: AddressHandler>(
+        _: &mut Context<Self, AH>,
         _: Self::QueryCustom,
     ) -> Result<SystemResult<CosmwasmQueryResult>, VmError> {
         Err(VmError::NoCustomQuery)
@@ -197,9 +196,7 @@ pub struct Context<'a, CH: CustomHandler, AH: AddressHandler> {
     pub executing_module: WasmiModule,
     pub env: Env,
     pub info: MessageInfo,
-    pub state: &'a mut State,
-    _m1: PhantomData<CH>,
-    _m2: PhantomData<AH>,
+    pub state: &'a mut State<CH, AH>,
 }
 
 impl<'a, CH: CustomHandler, AH: AddressHandler> WasmiModuleExecutor for Context<'a, CH, AH> {
@@ -284,8 +281,6 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> Context<'a, CH, AH> {
                 funds,
             },
             state: self.state,
-            _m1: PhantomData,
-            _m2: PhantomData,
         });
         Ok(f(&mut sub_vm))
     }

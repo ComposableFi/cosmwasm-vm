@@ -88,15 +88,17 @@ where
             >;
 }
 
-#[derive(Default, Clone)]
-pub struct State {
+#[derive(Clone)]
+pub struct State<CH: CustomHandler, AH: AddressHandler> {
     pub transactions: VecDeque<Db>,
     pub db: Db,
     pub codes: BTreeMap<CosmwasmCodeId, (Vec<u8>, Vec<u8>)>,
     pub gas: Gas,
+    pub custom_handler: CH,
+    _marker: PhantomData<AH>,
 }
 
-impl<'a, CH: CustomHandler, AH: AddressHandler> VmState<'a, Context<'a, CH, AH>> for State
+impl<'a, CH: CustomHandler, AH: AddressHandler> VmState<'a, Context<'a, CH, AH>> for State<CH, AH>
 where
     VmErrorOf<WasmiVM<Context<'a, CH, AH>>>: Into<VmError>,
 {
@@ -220,7 +222,7 @@ where
     }
 }
 
-impl Debug for State {
+impl<CH: CustomHandler, AH: AddressHandler> Debug for State<CH, AH> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("State")
             .field("db", &self.db)
@@ -229,12 +231,13 @@ impl Debug for State {
     }
 }
 
-impl State {
+impl<CH: CustomHandler, AH: AddressHandler> State<CH, AH> {
     #[must_use]
     pub fn new(
         codes: Vec<Vec<u8>>,
         initial_balances: Vec<(Account, Coin)>,
         ibc_channels: Vec<IbcChannelId>,
+        custom_handler: CH,
     ) -> Self {
         let mut code_id = 0;
         Self {
@@ -278,12 +281,14 @@ impl State {
                 ..Default::default()
             },
             transactions: VecDeque::default(),
+            custom_handler,
+            _marker: PhantomData,
         }
     }
 }
 
 fn create_vm<CH: CustomHandler, AH: AddressHandler>(
-    extension: &mut State,
+    extension: &mut State<CH, AH>,
     env: Env,
     info: MessageInfo,
 ) -> WasmiVM<Context<CH, AH>> {
@@ -317,7 +322,5 @@ fn create_vm<CH: CustomHandler, AH: AddressHandler>(
         env,
         info,
         state: extension,
-        _m1: PhantomData,
-        _m2: PhantomData,
     })
 }
