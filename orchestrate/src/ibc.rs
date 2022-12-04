@@ -11,7 +11,7 @@ use cosmwasm_std::{
 pub type ConnectionId = String;
 
 #[allow(clippy::module_name_repetitions)]
-pub struct IbcNetwork<'a, CH: CustomHandler, AH: AddressHandler> {
+pub struct IbcNetwork<'a, CH, AH> {
     pub state: &'a mut State<CH, AH>,
     pub state_counterparty: &'a mut State<CH, AH>,
 }
