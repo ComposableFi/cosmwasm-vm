@@ -89,16 +89,16 @@ where
 }
 
 #[derive(Clone)]
-pub struct State<CH: CustomHandler, AH: AddressHandler> {
-    pub transactions: VecDeque<Db>,
-    pub db: Db,
+pub struct State<CH, AH> {
+    pub transactions: VecDeque<Db<CH>>,
+    pub db: Db<CH>,
     pub codes: BTreeMap<CosmwasmCodeId, (Vec<u8>, Vec<u8>)>,
     pub gas: Gas,
-    pub custom_handler: CH,
     _marker: PhantomData<AH>,
 }
 
-impl<'a, CH: CustomHandler, AH: AddressHandler> VmState<'a, Context<'a, CH, AH>> for State<CH, AH>
+impl<'a, CH: CustomHandler + Clone, AH: AddressHandler> VmState<'a, Context<'a, CH, AH>>
+    for State<CH, AH>
 where
     VmErrorOf<WasmiVM<Context<'a, CH, AH>>>: Into<VmError>,
 {
@@ -278,10 +278,10 @@ impl<CH: CustomHandler, AH: AddressHandler> State<CH, AH> {
                     .into_iter()
                     .map(|x| (x, IbcState::default()))
                     .collect(),
+                custom_handler,
                 ..Default::default()
             },
             transactions: VecDeque::default(),
-            custom_handler,
             _marker: PhantomData,
         }
     }

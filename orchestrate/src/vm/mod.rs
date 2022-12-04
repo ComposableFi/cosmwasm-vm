@@ -95,7 +95,7 @@ impl Gas {
 pub type QueryCustomOf<T> = <T as CustomHandler>::QueryCustom;
 pub type MessageCustomOf<T> = <T as CustomHandler>::MessageCustom;
 
-pub trait CustomHandler: Sized {
+pub trait CustomHandler: Sized + Clone + Default {
     type QueryCustom: DeserializeOwned + Debug;
     type MessageCustom: DeserializeOwned + Debug;
 
@@ -174,14 +174,15 @@ impl IbcState {
 pub type IbcChannelId = String;
 
 #[derive(Default, Clone)]
-pub struct Db {
+pub struct Db<CH> {
     pub ibc: BTreeMap<IbcChannelId, IbcState>,
     pub contracts: BTreeMap<Account, CosmwasmContractMeta<Account>>,
     pub storage: BTreeMap<Account, Storage>,
     pub bank: Bank,
+    pub custom_handler: CH,
 }
 
-impl Debug for Db {
+impl<CH: CustomHandler> Debug for Db<CH> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Db")
             .field("ibc", &self.ibc)
