@@ -7,10 +7,7 @@ mod tests {
         vm::{Account, JunoAddressHandler, WasmAddressHandler},
         *,
     };
-    use cosmwasm_std::{
-        to_binary, BankMsg, BlockInfo, Coin, ContractInfo, ContractResult, CosmosMsg, Env,
-        MessageInfo, Timestamp,
-    };
+    use cosmwasm_std::{to_binary, BankMsg, Coin, ContractResult, CosmosMsg, MessageInfo};
     use cosmwasm_vm::executor::{CosmwasmQueryResult, QueryResult};
     use cw20::{BalanceResponse, Cw20Coin};
     use cw20_base::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
