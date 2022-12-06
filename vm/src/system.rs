@@ -434,6 +434,25 @@ where
     }
 }
 
+pub fn migrate<V: CosmwasmBaseVM>(
+    vm: &mut V,
+    sender: VmAddressOf<V>,
+    contract_addr: VmAddressOf<V>,
+    new_code_id: CosmwasmCodeId,
+) -> Result<(), VmErrorOf<V>> {
+    let CosmwasmContractMeta { admin, label, .. } = vm.contract_meta(contract_addr.clone())?;
+    ensure_admin::<V>(&sender.into(), admin.clone())?;
+    vm.set_contract_meta(
+        contract_addr,
+        CosmwasmContractMeta {
+            code_id: new_code_id,
+            admin,
+            label,
+        },
+    )?;
+    Ok(())
+}
+
 /// Set `new_admin` as the new admin of the contract `contract_addr`
 ///
 /// Fails if the caller is not currently admin of the target contract.
@@ -571,19 +590,10 @@ where
                 new_code_id,
                 msg: Binary(msg),
             } => {
-                let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
-                let CosmwasmContractMeta { admin, label, .. } =
-                    vm.contract_meta(vm_contract_addr.clone())?;
-                ensure_admin::<V>(&info.sender, admin.clone())?;
-                vm.set_contract_meta(
-                    vm_contract_addr.clone(),
-                    CosmwasmContractMeta {
-                        code_id: new_code_id,
-                        admin,
-                        label,
-                    },
-                )?;
-                vm.continue_migrate(vm_contract_addr, &msg, &mut sub_event_handler)
+                let contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
+                let sender = VmAddressOf::<V>::try_from(info.sender.clone().into_string())?;
+                migrate::<V>(vm, sender, contract_addr.clone(), new_code_id)?;
+                vm.continue_migrate(contract_addr, &msg, &mut sub_event_handler)
             }
             WasmMsg::UpdateAdmin {
                 contract_addr,
