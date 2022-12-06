@@ -434,6 +434,9 @@ where
     }
 }
 
+/// Set `new_code_id` as the code id of the contract `contract_addr`
+///
+/// Fails if the caller is not the admin of the contract
 pub fn migrate<V: CosmwasmBaseVM>(
     vm: &mut V,
     sender: VmAddressOf<V>,
