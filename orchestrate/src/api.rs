@@ -217,6 +217,75 @@ where
         Self::execute_raw(vm_state, env, info, gas, &message)
     }
 
+    /// Migrate a contract.
+    ///
+    /// * `vm_state`: Shared VM state.
+    /// * `env`: `Env` to be passed to contract.
+    /// * `info`: `MessageInfo` to be passed to contract.
+    /// * `gas`: Gas limit of this call.
+    /// * `message`: Raw JSON-encoded `ExecuteMsg`.
+    pub fn migrate_raw(
+        vm_state: &'a mut S,
+        code_id: CosmwasmCodeId,
+        env: Env,
+        info: MessageInfo,
+        gas: u64,
+        message: &[u8],
+    ) -> Result<E::Output<V>, VmError> {
+        vm_state.do_migrate::<E>(code_id, env, info, gas, message)
+    }
+
+    /// Migrate a contract.
+    ///
+    /// * `vm_state`: Shared VM state.
+    /// * `code_id`: Id of the code to migrate to.
+    /// * `env`: `Env` to be passed to contract.
+    /// * `info`: `MessageInfo` to be passed to contract.
+    /// * `gas`: Gas limit of this call.
+    /// * `message`: Typed message. Possibly `ExecuteMsg` from a contract.
+    pub fn migrate<M: Serialize>(
+        vm_state: &'a mut S,
+        code_id: CosmwasmCodeId,
+        env: Env,
+        info: MessageInfo,
+        gas: u64,
+        message: M,
+    ) -> Result<E::Output<V>, VmError> {
+        let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotSerialize)?;
+        Self::migrate_raw(vm_state, code_id, env, info, gas, &message)
+    }
+
+    /// Update admin of a contract.
+    ///
+    /// * `vm_state`: Shared VM state.
+    /// * `sender`: Caller of this endpoint.
+    /// * `contract`: Contract to update admin.
+    /// * `new_admin`: New admin to update to.
+    pub fn update_admin(
+        vm_state: &'a mut S,
+        sender: &Account,
+        contract_addr: &Account,
+        new_admin: Account,
+        gas: u64,
+    ) -> Result<(), VmError> {
+        vm_state.do_update_admin(sender, contract_addr, Some(new_admin), gas)
+    }
+
+    /// Clear admin of a contract.
+    ///
+    /// * `vm_state`: Shared VM state.
+    /// * `sender`: Caller of this endpoint.
+    /// * `contract`: Contract to update admin.
+    /// * `new_admin`: New admin to update to.
+    pub fn clear_admin(
+        vm_state: &'a mut S,
+        sender: &Account,
+        contract_addr: &Account,
+        gas: u64,
+    ) -> Result<(), VmError> {
+        vm_state.do_update_admin(sender, contract_addr, None, gas)
+    }
+
     /// Initiate an IBC channel handshake.
     ///
     /// * `vm_state`: Shared VM state.

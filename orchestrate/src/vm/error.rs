@@ -34,6 +34,7 @@ pub enum VmError {
     Generic(String),
     EncodingFailure,
     DecodingFailure,
+    NotAuthorized,
 }
 
 impl From<wasmi::Error> for VmError {

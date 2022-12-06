@@ -6,7 +6,7 @@ use super::{
 use alloc::collections::{BTreeMap, VecDeque};
 use core::fmt::Debug;
 use core::marker::PhantomData;
-use cosmwasm_std::{BlockInfo, Coin, ContractInfo, Env, MessageInfo, TransactionInfo};
+use cosmwasm_std::{BlockInfo, Coin, ContractInfo, Env, MessageInfo, Timestamp, TransactionInfo};
 use cosmwasm_vm::{
     executor::{
         cosmwasm_call, CosmwasmCallInput, CosmwasmCallWithoutInfoInput, DeserializeLimit,
@@ -14,7 +14,7 @@ use cosmwasm_vm::{
     },
     input::Input,
     memory::PointerOf,
-    system::{CosmwasmCallVM, CosmwasmCodeId, CosmwasmContractMeta, StargateCosmwasmCallVM},
+    system::{self, CosmwasmCallVM, CosmwasmCodeId, CosmwasmContractMeta, StargateCosmwasmCallVM},
     vm::{VmErrorOf, VmInputOf, VmMessageCustomOf},
 };
 use cosmwasm_vm_wasmi::{host_functions, new_wasmi_vm, WasmiBaseVM, WasmiImportResolver, WasmiVM};
@@ -48,6 +48,25 @@ where
         gas: u64,
         message: &[u8],
     ) -> Result<E::Output<VM>, VmError>;
+
+    /// Migrate a contract
+    fn do_migrate<E: ExecutionType>(
+        &'a mut self,
+        code_id: CosmwasmCodeId,
+        env: Env,
+        info: MessageInfo,
+        gas: u64,
+        message: &[u8],
+    ) -> Result<E::Output<VM>, VmError>;
+
+    /// Update admin of a contract
+    fn do_update_admin(
+        &'a mut self,
+        sender: &Account,
+        contract_addr: &Account,
+        new_admin: Option<Account>,
+        gas: u64,
+    ) -> Result<(), VmError>;
 
     /// Query a contract
     fn do_query(
@@ -171,6 +190,62 @@ where
         E::raw_system_call::<_, ExecuteCall<VmMessageCustomOf<WasmiVM<Context<'a, CH, AH>>>>>(
             &mut vm, message,
         )
+    }
+
+    fn do_migrate<E: ExecutionType>(
+        &'a mut self,
+        code_id: CosmwasmCodeId,
+        env: Env,
+        info: MessageInfo,
+        gas: u64,
+        message: &[u8],
+    ) -> Result<E::Output<Context<'a, CH, AH>>, VmError> {
+        self.gas = Gas::new(gas);
+
+        let contract: Account = env.contract.address.clone().try_into()?;
+        let sender: Account = info.sender.clone().try_into()?;
+        let mut vm = create_vm(self, env, info);
+
+        let mut meta = vm.contract_meta(contract.clone())?;
+        // Only admin can call this entrypoint
+        if meta.admin != Some(sender) {
+            return Err(VmError::NotAuthorized);
+        }
+        // Update the `code_id` if necessary
+        if meta.code_id != code_id {
+            meta.code_id = code_id;
+            vm.set_contract_meta(contract, meta)?;
+        }
+        E::raw_system_call::<_, ExecuteCall<VmMessageCustomOf<WasmiVM<Context<'a, CH, AH>>>>>(
+            &mut vm, message,
+        )
+    }
+
+    fn do_update_admin(
+        &'a mut self,
+        sender: &Account,
+        contract_addr: &Account,
+        new_admin: Option<Account>,
+        gas: u64,
+    ) -> Result<(), VmError> {
+        self.gas = Gas::new(gas);
+        let env = Env {
+            block: BlockInfo {
+                height: 0,
+                time: Timestamp::from_seconds(1),
+                chain_id: "".into(),
+            },
+            transaction: None,
+            contract: ContractInfo {
+                address: contract_addr.clone().into(),
+            },
+        };
+        let info = MessageInfo {
+            sender: sender.clone().into(),
+            funds: vec![],
+        };
+        let mut vm = create_vm(self, env, info.clone());
+        system::update_admin(&mut vm, &info.sender, contract_addr.clone(), new_admin)
     }
 
     fn do_ibc<E: ExecutionType, I>(
