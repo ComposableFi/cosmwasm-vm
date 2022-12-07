@@ -1,0 +1,11 @@
+default_job = "clippy"
+
+[jobs.clippy]
+command = [
+    "cargo", "clippy",
+    "--tests",
+    "--color", "always",
+    "--",
+    "-Wclippy::pedantic",
+]
+need_stdout = false
