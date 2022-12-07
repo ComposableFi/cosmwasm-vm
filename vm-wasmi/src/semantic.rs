@@ -13,8 +13,8 @@ use core::{assert_matches::assert_matches, num::NonZeroU32, str::FromStr};
 #[cfg(feature = "iterator")]
 use cosmwasm_std::Order;
 use cosmwasm_std::{
-    Addr, Attribute, Binary, BlockInfo, Coin, ContractInfo, ContractResult, Empty, Env, Event,
-    MessageInfo, Timestamp,
+    Addr, Attribute, Binary, BlockInfo, Coin, ContractInfo, Empty, Env, Event, MessageInfo,
+    Timestamp,
 };
 #[cfg(feature = "stargate")]
 use cosmwasm_std::{IbcChannel, IbcChannelOpenMsg, IbcEndpoint, IbcOrder, IbcTimeout};
@@ -1256,29 +1256,34 @@ fn test_reply() {
 
 #[cfg(feature = "stargate")]
 mod cw20_ics20 {
-    use super::{
-        code_gen, cosmwasm_call, cosmwasm_call_serialize, cosmwasm_system_entrypoint,
-        cosmwasm_system_run, create_simple_vm, create_vm, digit_sum, format, host_functions,
-        initialize, instrument_contract, new_wasmi_vm, riffle_shuffle, std, vec, vec, Addr,
-        Attribute, BTreeMap, BankAccount, Binary, BlockInfo, Box, CanResume, CanonicalAddr,
-        CanonicalAddress, Coin, ConstantCostRules, ContractInfo, ContractInfoResponse,
-        ContractResult, CosmwasmCodeId, CosmwasmContractMeta, CosmwasmExecutionResult,
-        CosmwasmQueryResult, Debug, Debug, Display, Empty, Env, Error, Event, ExecuteCall,
-        ExecuteResult, ExecutorError, FromStr, Gas, Has, IbcChannel, IbcChannelConnectCall,
-        IbcChannelOpenCall, IbcChannelOpenMsg, IbcChannelOpenResult, IbcEndpoint, IbcOrder,
-        IbcTimeout, InstantiateCall, InstantiateResult, Iter, MemoryReadError, MemoryWriteError,
-        MessageInfo, MigrateCall, NonZeroU32, Order, Pointable, QueryCall, QueryResult,
-        ReadWriteMemory, ReadableMemory, Reply, ReplyCall, Rules, SimpleIBCPacket, SimpleIBCState,
-        SimpleVMError, SimpleWasmiVM, SimpleWasmiVMExtension, SimpleWasmiVMStorage, String,
-        SystemError, SystemResult, Timestamp, ToString, Transactional, VMBase, Vec, VmErrorOf,
-        VmGas, VmGasCheckpoint, WasmiHostFunction, WasmiHostFunctionIndex, WasmiImportResolver,
-        WasmiInput, WasmiModule, WasmiModuleExecutor, WasmiOutput, WasmiVM, WasmiVMError,
-        WritableMemory, CANONICAL_LENGTH, SHUFFLES_DECODE, SHUFFLES_ENCODE,
+    use crate::{
+        semantic::{
+            create_vm, instrument_contract, BankAccount, Gas, SimpleIBCPacket, SimpleIBCState,
+            SimpleWasmiVM, SimpleWasmiVMExtension,
+        },
+        WasmiVM,
     };
+
+    use super::{assert_matches, format, vec};
     use ::cw20_ics20::ibc::{Ics20Ack, Ics20Packet};
-    use cosmwasm_std::{IbcChannelConnectMsg, IbcPacket, IbcPacketReceiveMsg, Uint128};
+    use alloc::{collections::BTreeMap, string::String, vec::Vec};
+    use cosmwasm_std::{
+        Addr, Binary, BlockInfo, Coin, ContractInfo, ContractResult, Env, IbcChannel,
+        IbcChannelConnectMsg, IbcChannelOpenMsg, IbcEndpoint, IbcOrder, IbcPacket,
+        IbcPacketReceiveMsg, MessageInfo, Timestamp, Uint128,
+    };
     use cosmwasm_vm::{
-        executor::ibc::IbcPacketReceiveCall, system::cosmwasm_system_entrypoint_serialize,
+        executor::{
+            cosmwasm_call_serialize,
+            ibc::{
+                IbcChannelConnectCall, IbcChannelOpenCall, IbcChannelOpenResult,
+                IbcPacketReceiveCall,
+            },
+            ExecuteCall, InstantiateCall,
+        },
+        system::{
+            cosmwasm_system_entrypoint, cosmwasm_system_entrypoint_serialize, CosmwasmContractMeta,
+        },
     };
 
     const DEFAULT_TIMEOUT: u64 = 3600;
@@ -1302,7 +1307,7 @@ mod cw20_ics20 {
             },
             IbcEndpoint {
                 port_id: REMOTE_PORT.into(),
-                channel_id: channel_id.to_string(),
+                channel_id: channel_id.into(),
             },
             IbcOrder::Unordered,
             ICS20_VERSION,
