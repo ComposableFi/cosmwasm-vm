@@ -25,14 +25,14 @@
         };
       in let
         # Nightly rust used for wasm runtime compilation
-        rust-nightly =
+        rust-stable =
           pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 
         # Crane lib instantiated with current nixpkgs
         crane-lib = crane.mkLib pkgs;
 
         # Crane pinned to nightly Rust
-        crane-nightly = crane-lib.overrideToolchain rust-nightly;
+        crane-stable = crane-lib.overrideToolchain rust-stable;
 
         src = pkgs.lib.cleanSourceWith {
           filter = pkgs.lib.cleanSourceFilter;
@@ -52,25 +52,25 @@
         };
 
         # Common dependencies used for caching
-        common-deps = crane-nightly.buildDepsOnly common-args;
+        common-deps = crane-stable.buildDepsOnly common-args;
 
         common-cached-args = common-args // { cargoArtifacts = common-deps; };
 
       in rec {
         packages = rec {
-          cosmwasm-vm = crane-nightly.buildPackage common-cached-args;
+          cosmwasm-vm = crane-stable.buildPackage common-cached-args;
           default = cosmwasm-vm;
         };
         checks = {
           package = packages.default;
-          clippy = crane-nightly.cargoClippy (common-cached-args // {
+          clippy = crane-stable.cargoClippy (common-cached-args // {
             cargoClippyExtraArgs = "-- --deny warnings";
           });
-          fmt = crane-nightly.cargoFmt common-args;
+          fmt = crane-stable.cargoFmt common-args;
         };
         devShell = pkgs.mkShell {
-          buildInputs = [ rust-nightly ]
-            ++ (with pkgs; [ openssl openssl.dev pkgconfig taplo nixfmt ]);
+          buildInputs = [ rust-stable ]
+            ++ (with pkgs; [ openssl openssl.dev pkgconfig taplo nixfmt bacon ]);
         };
       });
 }
