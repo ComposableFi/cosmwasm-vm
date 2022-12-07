@@ -1,5 +1,3 @@
-#![feature(assert_matches)]
-
 #[cfg(test)]
 mod tests {
     use cosmwasm_orchestrate::{
@@ -7,11 +5,9 @@ mod tests {
         vm::{Account, JunoAddressHandler, WasmAddressHandler},
         *,
     };
-    use cosmwasm_std::{to_binary, BankMsg, Coin, ContractResult, CosmosMsg, MessageInfo};
-    use cosmwasm_vm::executor::{CosmwasmQueryResult, QueryResult};
+    use cosmwasm_std::{BankMsg, Coin, CosmosMsg, MessageInfo};
     use cw20::{BalanceResponse, Cw20Coin};
     use cw20_base::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
-    use std::assert_matches::assert_matches;
 
     const REFLECT_URL: &'static str =
         "https://github.com/CosmWasm/cosmwasm/releases/download/v1.1.8/reflect.wasm";
@@ -93,25 +89,31 @@ mod tests {
     #[tokio::test]
     async fn cw20() {
         initialize();
+
+        // Fetch the wasm binary of the given contract from a remote chain.
         let code = CosmosFetcher::from_contract_addr(
             "https://juno-api.polkachu.com",
             "juno19rqljkh95gh40s7qdx40ksx3zq5tm4qsmsrdz9smw668x9zdr3lqtg33mf",
         )
         .await
         .unwrap();
+
+        // Generate a Juno compatible address
         let sender = Account::generate_from_seed::<JunoAddressHandler>("sender").unwrap();
 
-        let mut state = StateBuilder::<JunoAddressHandler>::new()
-            .add_code(&code)
-            .build();
+        // Create a VM state by providing the codes that will be executed.
+        let mut state = StateBuilder::new().add_code(&code).build();
 
-        let (contract, res) = JunoApi::<Direct>::instantiate(
+        let info = info(&sender);
+
+        // Instantiate the cw20 contract
+        let (contract, _) = <JunoApi>::instantiate(
             &mut state,
             1,
             None,
             block(),
             None,
-            info(&sender),
+            info.clone(),
             100_000_000,
             InstantiateMsg {
                 name: "Picasso".into(),
@@ -119,19 +121,19 @@ mod tests {
                 decimals: 12,
                 initial_balances: vec![Cw20Coin {
                     amount: 10000000_u128.into(),
-                    address: sender.0.clone().into_string(),
+                    address: sender.into(),
                 }],
                 mint: None,
                 marketing: None,
             },
         )
         .unwrap();
-        assert_matches!(res, ContractResult::Ok(_));
 
+        // Transfer 10_000 PICA to the "receiver"
         let _ = <JunoApi>::execute(
             &mut state,
             env(&contract),
-            info(&sender),
+            info,
             100_000_000,
             ExecuteMsg::Transfer {
                 recipient: Account::generate_from_seed::<JunoAddressHandler>("receiver")
@@ -142,25 +144,19 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(
-            JunoApi::<Direct>::query_raw(
-                &mut state,
-                env(&contract),
-                &serde_json::to_vec(&QueryMsg::Balance {
-                    address: Account::generate_from_seed::<JunoAddressHandler>("receiver")
-                        .unwrap()
-                        .into(),
-                })
-                .unwrap()
-            )
-            .unwrap(),
-            QueryResult(CosmwasmQueryResult::Ok(
-                to_binary(&BalanceResponse {
-                    balance: 10_000_u128.into()
-                })
-                .unwrap()
-            ))
-        );
+        // Read the balance by using query. Note that the raw storage can be read here as well.
+        let balance_response: BalanceResponse = JunoApi::<Direct>::query(
+            &mut state,
+            env(&contract),
+            QueryMsg::Balance {
+                address: Account::generate_from_seed::<JunoAddressHandler>("receiver")
+                    .unwrap()
+                    .into(),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(Into::<u128>::into(balance_response.balance), 10_000_u128);
     }
 }
 

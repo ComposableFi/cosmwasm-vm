@@ -2,7 +2,7 @@ use super::{AddressHandler, VmError};
 use alloc::vec::Vec;
 use core::fmt::Display;
 use cosmwasm_std::{Addr, Binary, CanonicalAddr};
-use sha1::{Digest, Sha1};
+use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone)]
 #[allow(clippy::module_name_repetitions)]
@@ -95,7 +95,7 @@ impl Account {
         code: &[u8],
         message: &[u8],
     ) -> Result<Self, VmError> {
-        let code_hash = Sha1::new().chain_update(code).finalize();
+        let code_hash = Sha256::new().chain_update(code).finalize();
         Self::generate::<AH>(&code_hash[..], message)
     }
 

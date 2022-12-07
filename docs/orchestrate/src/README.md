@@ -25,7 +25,7 @@ Enough talking and let's check out a very basic usage of our framework. Here you
 All in just few lines.
 
 ```rust
-/// Fetch the wasm binary of the given contract from a remote chain.
+// Fetch the wasm binary of the given contract from a remote chain.
 let code = CosmosFetcher::from_contract_addr(
     "https://juno-api.polkachu.com",
     "juno19rqljkh95gh40s7qdx40ksx3zq5tm4qsmsrdz9smw668x9zdr3lqtg33mf",
@@ -33,20 +33,20 @@ let code = CosmosFetcher::from_contract_addr(
 .await
 .unwrap();
 
-/// Generate a Juno compatible address
+// Generate a Juno compatible address
 let sender = Account::generate_from_seed::<JunoAddressHandler>("sender").unwrap();
 
-/// Create a VM state by providing the codes that will be executed.
+// Create a VM state by providing the codes that will be executed.
 let mut state = StateBuilder::new().add_code(&code).build();
 
-let info = dummy_info(&sender);
+let info = info(&sender);
 
-/// Instantiate the cw20 contract
-let (contract, _) = <Api>::instantiate(
+// Instantiate the cw20 contract
+let (contract, _) = <JunoApi>::instantiate(
     &mut state,
     1,
     None,
-    dummy_block(),
+    block(),
     None,
     info.clone(),
     100_000_000,
@@ -64,10 +64,10 @@ let (contract, _) = <Api>::instantiate(
 )
 .unwrap();
 
-/// Transfer 10_000 PICA to the "receiver"
-let _ = <Api>::execute(
+// Transfer 10_000 PICA to the "receiver"
+let _ = <JunoApi>::execute(
     &mut state,
-    dummy_env(contract.into()),
+    env(&contract),
     info,
     100_000_000,
     ExecuteMsg::Transfer {
@@ -79,16 +79,17 @@ let _ = <Api>::execute(
 )
 .unwrap();
 
-/// Read the balance by using query. Note that the raw storage can be read here as well.
-let balance_response: BalanceResponse = 
-    Api::<Direct>::query(  
-      &mut state, 
-      dummy_env(contract.into()), 
-      QueryMsg::Balance {
-          address: Account::generate_from_seed::<JunoAddressHandler>("receiver")
-              .unwrap()
-              .into(),
-      }).unwrap();
+// Read the balance by using query. Note that the raw storage can be read here as well.
+let balance_response: BalanceResponse = JunoApi::<Direct>::query(
+    &mut state,
+    env(&contract),
+    QueryMsg::Balance {
+        address: Account::generate_from_seed::<JunoAddressHandler>("receiver")
+            .unwrap()
+            .into(),
+    },
+)
+.unwrap();
 
-assert_eq!(balance_response.balance, 10_000_u128.into());
+assert_eq!(Into::<u128>::into(balance_response.balance), 10_000_u128);
 ```

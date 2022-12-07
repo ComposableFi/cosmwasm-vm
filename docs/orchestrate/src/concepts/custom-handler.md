@@ -13,12 +13,14 @@ type needs to implement `Clone` because it will get reverted if the transaction 
 ```rust
 /// Type that implements the CustomHandler
 #[derive(Default, Clone)]
-pub struct MyCustomHandler;
+pub struct MyCustomHandler {}
 
 /// Custom message type
+#[derive(Debug, Deserialize)]
 pub struct MyCustomMessage;
 
-/// Custom query type 
+/// Custom query type
+#[derive(Debug, Deserialize)]
 pub struct MyCustomQuery;
 
 impl CustomHandler for MyCustomHandler {
@@ -28,16 +30,21 @@ impl CustomHandler for MyCustomHandler {
     fn handle_message<AH: AddressHandler>(
         vm: &mut Context<Self, AH>,
         message: MyCustomMessage,
-        event_handler: &mut dyn FnMut(Event),
+        _event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, VmError> {
-        self.state.db.custom_handler.do_something_with_message(message);
+        vm.state
+            .db
+            .custom_handler
+            .do_something_with_message(message);
+        Ok(None)
     }
 
     fn handle_query<AH: AddressHandler>(
         vm: &mut Context<Self, AH>,
         query: MyCustomQuery,
     ) -> Result<SystemResult<CosmwasmQueryResult>, VmError> {
-        self.state.db.custom_handler.do_something_with_query(query);
+        vm.state.db.custom_handler.do_something_with_query(query);
+        Ok(SystemResult::Ok(CosmwasmQueryResult::Ok(vec![].into())))
     }
 }
 ```
@@ -57,8 +64,8 @@ pub type CustomJunoApi<'a, E = Dispatch> = Api<
 One more thing is, you need to provide `MyCustomHandler` to the `StateBuilder`.
 
 ```rust
-let state = StateBuilder::<JunoAddressHandler>::new()
+let mut state = StateBuilder::<JunoAddressHandler, MyCustomHandler>::new()
     .add_code(&code)
-    .set_custom_handler(MyCustomHandler)
+    .set_custom_handler(MyCustomHandler {})
     .build();
 ```

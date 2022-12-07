@@ -213,14 +213,12 @@ dependencies = [
  "cosmwasm-vm-wasmi",
  "cw20 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "cw20-base",
- "cw20-ics20",
  "env_logger 0.10.0",
  "hex",
  "log",
  "reqwest",
  "serde",
  "serde_json",
- "sha1",
  "sha2 0.10.6",
  "tokio",
  "wasm-instrument",
@@ -1554,17 +1552,6 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
-]
-
-[[package]]
-name = "sha1"
-version = "0.10.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f04293dc80c3993519f2d7f6f511707ee7094fe0c6d3406feb330cdb3540eba3"
-dependencies = [
- "cfg-if",
- "cpufeatures",
- "digest 0.10.5",
 ]
 
 [[package]]

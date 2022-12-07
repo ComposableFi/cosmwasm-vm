@@ -54,19 +54,19 @@ You can also implement an address handler from scratch by implementing `AddressH
 Let's implement a dummy address handler which works with `String` addresses without any restrictions.
 
 ```rust
-pub struct DummyAddressHandler;
+struct DummyAddressHandler;
 
-impl AddressHandler for CoolAddressHandler {
+impl AddressHandler for DummyAddressHandler {
     fn addr_canonicalize(input: &str) -> Result<Vec<u8>, VmError> {
         // We just convert the address into binary
-        Ok(input.as_bytes())
+        Ok(input.as_bytes().into())
     }
 
     fn addr_humanize(addr: &[u8]) -> Result<String, VmError> {
         String::from_utf8(addr.into()).map_err(|_| VmError::InvalidAddress)
     }
 
-    fn addr_generate<'a, I: IntoIterator<Item = &'a [u8]>>(iter: I) -> Result<String, VmError> {       
+    fn addr_generate<'a, I: IntoIterator<Item = &'a [u8]>>(iter: I) -> Result<String, VmError> {
         // Just hash the inputs
         let mut hash = Sha256::new();
         for data in iter {
