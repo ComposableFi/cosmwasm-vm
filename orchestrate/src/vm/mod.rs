@@ -42,13 +42,13 @@ pub struct Gas {
 }
 
 impl Gas {
-    pub fn new(initial_value: u64) -> Self {
+    #[must_use] pub fn new(initial_value: u64) -> Self {
         Gas {
             checkpoints: vec![initial_value],
         }
     }
 
-    pub fn current(&self) -> &u64 {
+    #[must_use] pub fn current(&self) -> &u64 {
         self.checkpoints.last().expect("impossible")
     }
 
@@ -690,7 +690,7 @@ impl<'a> VMBase for Context<'a> {
 
     fn charge(&mut self, value: VmGas) -> Result<(), Self::Error> {
         let gas_to_charge = match value {
-            VmGas::Instrumentation { metered } => metered as u64,
+            VmGas::Instrumentation { metered } => u64::from(metered),
             x => {
                 log::debug!("Charging gas: {:?}", x);
                 1u64

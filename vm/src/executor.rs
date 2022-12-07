@@ -56,24 +56,24 @@ pub mod read_limits {
     pub const RESULT_REPLY: usize = 64 * MI;
     /// Max length (in bytes) of the result data from a query call.
     pub const RESULT_QUERY: usize = 64 * MI;
-    /// Max length (in bytes) of the query data from a query_chain call.
+    /// Max length (in bytes) of the query data from a `query_chain` call.
     pub const REQUEST_QUERY: usize = 64 * MI;
-    /// Max length (in bytes) of the result data from a ibc_channel_open call.
+    /// Max length (in bytes) of the result data from a `ibc_channel_open` call.
     #[cfg(feature = "stargate")]
     pub const RESULT_IBC_CHANNEL_OPEN: usize = 64 * MI;
-    /// Max length (in bytes) of the result data from a ibc_channel_connect call.
+    /// Max length (in bytes) of the result data from a `ibc_channel_connect` call.
     #[cfg(feature = "stargate")]
     pub const RESULT_IBC_CHANNEL_CONNECT: usize = 64 * MI;
-    /// Max length (in bytes) of the result data from a ibc_channel_close call.
+    /// Max length (in bytes) of the result data from a `ibc_channel_close` call.
     #[cfg(feature = "stargate")]
     pub const RESULT_IBC_CHANNEL_CLOSE: usize = 64 * MI;
-    /// Max length (in bytes) of the result data from a ibc_packet_receive call.
+    /// Max length (in bytes) of the result data from a `ibc_packet_receive` call.
     #[cfg(feature = "stargate")]
     pub const RESULT_IBC_PACKET_RECEIVE: usize = 64 * MI;
-    /// Max length (in bytes) of the result data from a ibc_packet_ack call.
+    /// Max length (in bytes) of the result data from a `ibc_packet_ack` call.
     #[cfg(feature = "stargate")]
     pub const RESULT_IBC_PACKET_ACK: usize = 64 * MI;
-    /// Max length (in bytes) of the result data from a ibc_packet_timeout call.
+    /// Max length (in bytes) of the result data from a `ibc_packet_timeout` call.
     #[cfg(feature = "stargate")]
     pub const RESULT_IBC_PACKET_TIMEOUT: usize = 64 * MI;
 }
@@ -97,24 +97,24 @@ pub mod deserialization_limits {
     pub const RESULT_REPLY: usize = 256 * KI;
     /// Max length (in bytes) of the result data from a query call.
     pub const RESULT_QUERY: usize = 256 * KI;
-    /// Max length (in bytes) of the query data from a query_chain call.
+    /// Max length (in bytes) of the query data from a `query_chain` call.
     pub const REQUEST_QUERY: usize = 256 * KI;
-    /// Max length (in bytes) of the result data from a ibc_channel_open call.
+    /// Max length (in bytes) of the result data from a `ibc_channel_open` call.
     #[cfg(feature = "stargate")]
     pub const RESULT_IBC_CHANNEL_OPEN: usize = 256 * KI;
-    /// Max length (in bytes) of the result data from a ibc_channel_connect call.
+    /// Max length (in bytes) of the result data from a `ibc_channel_connect` call.
     #[cfg(feature = "stargate")]
     pub const RESULT_IBC_CHANNEL_CONNECT: usize = 256 * KI;
-    /// Max length (in bytes) of the result data from a ibc_channel_close call.
+    /// Max length (in bytes) of the result data from a `ibc_channel_close` call.
     #[cfg(feature = "stargate")]
     pub const RESULT_IBC_CHANNEL_CLOSE: usize = 256 * KI;
-    /// Max length (in bytes) of the result data from a ibc_packet_receive call.
+    /// Max length (in bytes) of the result data from a `ibc_packet_receive` call.
     #[cfg(feature = "stargate")]
     pub const RESULT_IBC_PACKET_RECEIVE: usize = 256 * KI;
-    /// Max length (in bytes) of the result data from a ibc_packet_ack call.
+    /// Max length (in bytes) of the result data from a `ibc_packet_ack` call.
     #[cfg(feature = "stargate")]
     pub const RESULT_IBC_PACKET_ACK: usize = 256 * KI;
-    /// Max length (in bytes) of the result data from a ibc_packet_timeout call.
+    /// Max length (in bytes) of the result data from a `ibc_packet_timeout` call.
     #[cfg(feature = "stargate")]
     pub const RESULT_IBC_PACKET_TIMEOUT: usize = 256 * KI;
 }
@@ -234,7 +234,7 @@ impl<T> From<MigrateResult<T>> for ContractResult<Response<T>> {
 pub mod ibc {
     #![cfg(feature = "stargate")]
 
-    use super::*;
+    use super::{AsFunctionName, ContractResult, Debug, Deserialize, DeserializeLimit, Empty, HasInfo, Input, PhantomData, ReadLimit, Response, Serialize, deserialization_limits, read_limits};
     use cosmwasm_std::{Ibc3ChannelOpenResponse, IbcBasicResponse, IbcReceiveResponse};
 
     /// Response to the low level `ibc_channel_open` call.
@@ -618,12 +618,12 @@ pub mod constants {
     pub const KI: usize = 1024;
     /// A mibi (mega binary)
     pub const MI: usize = 1024 * 1024;
-    /// Max key length for db_write/db_read/db_remove/db_scan (when VM reads the key argument from Wasm
+    /// Max key length for `db_write/db_read/db_remove/db_scan` (when VM reads the key argument from Wasm
     /// memory)
     pub const MAX_LENGTH_DB_KEY: usize = 64 * KI;
-    /// Max value length for db_write (when VM reads the value argument from Wasm memory)
+    /// Max value length for `db_write` (when VM reads the value argument from Wasm memory)
     pub const MAX_LENGTH_DB_VALUE: usize = 128 * KI;
-    /// Typically 20 (Cosmos SDK, Ethereum), 32 (Nano, Substrate) or 54 (MockApi)
+    /// Typically 20 (Cosmos SDK, Ethereum), 32 (Nano, Substrate) or 54 (`MockApi`)
     pub const MAX_LENGTH_CANONICAL_ADDRESS: usize = 64;
     /// The max length of human address inputs (in bytes).
     /// The maximum allowed size for [bech32](https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki#bech32)
@@ -636,7 +636,7 @@ pub mod constants {
     /// This is an arbitrary value, for performance / memory contraints. If you need to verify larger
     /// messages, let us know.
     pub const MAX_LENGTH_ED25519_MESSAGE: usize = 128 * 1024;
-    /// Max number of batch Ed25519 messages / signatures / public_keys.
+    /// Max number of batch Ed25519 messages / signatures / `public_keys`.
     /// This is an arbitrary value, for performance / memory contraints. If you need to batch-verify a
     /// larger number of signatures, let us know.
     pub const MAX_COUNT_ED25519_BATCH: usize = 256;
@@ -817,7 +817,7 @@ where
 /// # Arguments
 ///
 /// * `vm` - the virtual machine.
-/// * `message` - the contract message passed to the export, usually specific to the contract (InstantiateMsg, ExecuteMsg etc...).
+/// * `message` - the contract message passed to the export, usually specific to the contract (`InstantiateMsg`, `ExecuteMsg` etc...).
 ///
 /// Returns either the associated `I::Output` or a `VmErrorOf<V>`.
 pub fn cosmwasm_call<I, V>(vm: &mut V, message: &[u8]) -> Result<I::Output, VmErrorOf<V>>
@@ -863,7 +863,7 @@ where
 /// # Arguments
 ///
 /// * `vm` - the virtual machine.
-/// * `message` - the contract message passed to the export, usually specific to the contract (InstantiateMsg, ExecuteMsg etc...).
+/// * `message` - the contract message passed to the export, usually specific to the contract (`InstantiateMsg`, `ExecuteMsg` etc...).
 ///
 /// Returns either the associated `I::Output` or a `VmErrorOf<V>`.
 pub fn cosmwasm_call_serialize<I, V, M>(vm: &mut V, message: &M) -> Result<I::Output, VmErrorOf<V>>

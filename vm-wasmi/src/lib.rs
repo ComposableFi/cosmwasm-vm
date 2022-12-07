@@ -62,7 +62,7 @@ use cosmwasm_vm::{
     system::{CosmwasmContractMeta, SystemError},
     tagged::Tagged,
     transaction::{Transactional, TransactionalErrorOf},
-    vm::*,
+    vm::{VM, VMBase, VmAddressOf, VmCanonicalAddressOf, VmContracMetaOf, VmErrorOf, VmGas, VmGasCheckpoint, VmMessageCustomOf, VmQueryCustomOf, VmStorageKeyOf, VmStorageValueOf},
 };
 use either::Either;
 use wasmi::{CanResume, Externals, FuncInstance, ImportResolver, NopExternals, RuntimeValue};
@@ -804,9 +804,9 @@ impl<T> ReadWriteMemory for WasmiVM<T> where T: WasmiBaseVM {}
 /// ```ignore
 /// section1 || section1_len || section2 || section2_len || section3 || section3_len || …
 /// ```
-pub fn encode_sections(sections: &[Vec<u8>]) -> Option<Vec<u8>> {
+#[must_use] pub fn encode_sections(sections: &[Vec<u8>]) -> Option<Vec<u8>> {
     let out_len: usize =
-        sections.iter().map(|section| section.len()).sum::<usize>() + 4 * sections.len();
+        sections.iter().map(alloc::vec::Vec::len).sum::<usize>() + 4 * sections.len();
     sections
         .iter()
         .fold(Some(Vec::with_capacity(out_len)), |acc, section| {
@@ -827,7 +827,7 @@ pub fn encode_sections(sections: &[Vec<u8>]) -> Option<Vec<u8>> {
 /// Each encoded section is suffixed by a section length, encoded as big endian uint32.
 ///
 /// See also: `encode_section`.
-pub fn decode_sections(data: &[u8]) -> Vec<&[u8]> {
+#[must_use] pub fn decode_sections(data: &[u8]) -> Vec<&[u8]> {
     let mut result: Vec<&[u8]> = vec![];
     let mut remaining_len = data.len();
     while remaining_len >= 4 {
@@ -846,7 +846,7 @@ pub fn decode_sections(data: &[u8]) -> Vec<&[u8]> {
 
 #[allow(dead_code)]
 pub mod host_functions {
-    use super::*;
+    use super::{BTreeMap, RuntimeValue, String, Tagged, ToOwned, VMBase, Vec, VmErrorOf, VmGas, VmQueryCustomOf, WasmiBaseVM, WasmiFunctionName, WasmiHostFunction, WasmiHostFunctionIndex, WasmiHostModule, WasmiModuleName, WasmiVM, WasmiVMError, decode_sections, encode_sections, format};
     #[cfg(feature = "iterator")]
     use cosmwasm_std::Order;
     use cosmwasm_std::QueryRequest;
@@ -858,7 +858,7 @@ pub mod host_functions {
         system::cosmwasm_system_query_raw,
     };
 
-    pub fn definitions<T>() -> BTreeMap<WasmiModuleName, WasmiHostModule<T>>
+    #[must_use] pub fn definitions<T>() -> BTreeMap<WasmiModuleName, WasmiHostModule<T>>
     where
         T: WasmiBaseVM,
     {
@@ -1258,7 +1258,7 @@ pub mod host_functions {
 
                 let result = vm.secp256k1_verify(&message_hash, &signature, &public_key)?;
 
-                Ok(Some(RuntimeValue::I32(!result as i32)))
+                Ok(Some(RuntimeValue::I32(i32::from(!result))))
             }
             _ => Err(WasmiVMError::InvalidHostSignature.into()),
         }
@@ -1295,7 +1295,7 @@ pub mod host_functions {
                     Ok(pubkey) => {
                         let Tagged(value_pointer, _) =
                             passthrough_in::<WasmiVM<T>, ()>(vm, &pubkey)?;
-                        Ok(Some(RuntimeValue::I64(value_pointer as i64)))
+                        Ok(Some(RuntimeValue::I64(i64::from(value_pointer))))
                     }
                     Err(_) => {
                         const GENERIC_ERROR_CODE: i64 = 10;
@@ -1332,7 +1332,7 @@ pub mod host_functions {
                 >(vm, *public_key_ptr as u32)?;
 
                 vm.ed25519_verify(&message, &signature, &public_key)
-                    .map(|result| Some(RuntimeValue::I32(!result as i32)))
+                    .map(|result| Some(RuntimeValue::I32(i32::from(!result))))
             }
             _ => Err(WasmiVMError::InvalidHostSignature.into()),
         }
@@ -1386,7 +1386,7 @@ pub mod host_functions {
                 );
 
                 vm.ed25519_batch_verify(&messages, &signatures, &public_keys)
-                    .map(|result| Some(RuntimeValue::I32(!result as i32)))
+                    .map(|result| Some(RuntimeValue::I32(i32::from(!result))))
             }
             _ => Err(WasmiVMError::InvalidHostSignature.into()),
         }

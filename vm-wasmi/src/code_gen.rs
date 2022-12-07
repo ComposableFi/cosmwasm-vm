@@ -70,7 +70,7 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn instructions(&self) -> &Instructions {
+    #[must_use] pub fn instructions(&self) -> &Instructions {
         self.definition.code()
     }
 }
@@ -87,26 +87,26 @@ impl FunctionBuilder {
         })
     }
 
-    pub fn param(mut self, param: ValueType) -> Self {
+    #[must_use] pub fn param(mut self, param: ValueType) -> Self {
         self.0.params.push(param);
         self
     }
 
-    pub fn result(mut self, result: ValueType) -> Self {
+    #[must_use] pub fn result(mut self, result: ValueType) -> Self {
         self.0.result = Some(result);
         self
     }
 
-    pub fn definition(mut self, func_body: FuncBody) -> Self {
+    #[must_use] pub fn definition(mut self, func_body: FuncBody) -> Self {
         self.0.definition = func_body;
         self
     }
 
-    pub fn build(self) -> Function {
+    #[must_use] pub fn build(self) -> Function {
         self.0
     }
 
-    pub fn local(mut self, count: u32, value_type: ValueType) -> Self {
+    #[must_use] pub fn local(mut self, count: u32, value_type: ValueType) -> Self {
         self.0
             .definition
             .locals_mut()
@@ -114,7 +114,7 @@ impl FunctionBuilder {
         self
     }
 
-    pub fn instructions(mut self, instructions: Vec<Instruction>) -> Self {
+    #[must_use] pub fn instructions(mut self, instructions: Vec<Instruction>) -> Self {
         *self.0.definition.code_mut() = Instructions::new(instructions);
         self
     }

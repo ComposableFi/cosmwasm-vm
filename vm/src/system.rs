@@ -366,7 +366,7 @@ where
         + Into<ContractResult<Response<VmMessageCustomOf<Self>>>>;
 
 #[cfg(feature = "stargate")]
-/// Extra constraints required by stargate enabled CosmWasm VM (a.k.a. IBC capable).
+/// Extra constraints required by stargate enabled `CosmWasm` VM (a.k.a. IBC capable).
 pub trait StargateCosmwasmCallVM = CosmwasmBaseVM
 where
     for<'x> VmInputOf<'x, Self>: TryFrom<
@@ -404,7 +404,7 @@ where
     )
 }
 
-/// High level dispatch for a CosmWasm VM.
+/// High level dispatch for a `CosmWasm` VM.
 /// This call will manage and handle subcall as well as the transactions etc...
 /// The implementation must be semantically valid w.r.t https://github.com/CosmWasm/cosmwasm/blob/main/SEMANTICS.md
 ///
@@ -816,7 +816,7 @@ where
     }
 }
 
-/// High level query for a CosmWasm VM.
+/// High level query for a `CosmWasm` VM.
 ///
 /// Returns either the value returned by the contract `query` export or a `VmErrorOf<V>`
 pub fn cosmwasm_system_query<V>(
@@ -884,7 +884,7 @@ where
     }
 }
 
-/// High level query for a CosmWasm VM with remarshalling for contract execution continuation.
+/// High level query for a `CosmWasm` VM with remarshalling for contract execution continuation.
 ///
 /// Returns either the JSON serialized value returned by the contract `query` export or a `VmErrorOf<V>`
 pub fn cosmwasm_system_query_raw<V>(

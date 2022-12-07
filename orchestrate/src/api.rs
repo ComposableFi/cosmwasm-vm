@@ -384,21 +384,21 @@ pub struct StateBuilder {
 }
 
 impl StateBuilder {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Default::default()
     }
 
-    pub fn add_code(mut self, code: &[u8]) -> Self {
+    #[must_use] pub fn add_code(mut self, code: &[u8]) -> Self {
         self.codes.push(code.into());
         self
     }
 
-    pub fn add_channel(mut self, channel_id: IbcChannelId) -> Self {
+    #[must_use] pub fn add_channel(mut self, channel_id: IbcChannelId) -> Self {
         self.ibc_channels.push(channel_id);
         self
     }
 
-    pub fn add_balance(mut self, account: Account, coin: Coin) -> Self {
+    #[must_use] pub fn add_balance(mut self, account: Account, coin: Coin) -> Self {
         self.balances.push((account, coin));
         self
     }
@@ -413,7 +413,7 @@ impl StateBuilder {
         self
     }
 
-    pub fn build(self) -> State {
+    #[must_use] pub fn build(self) -> State {
         State::new(self.codes, self.balances, self.ibc_channels)
     }
 }

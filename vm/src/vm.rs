@@ -151,7 +151,7 @@ pub trait VM: VMBase {
         O: for<'x> TryFrom<Self::Output<'x>, Error = Self::Error>;
 }
 
-/// Base functions required to be implemented by a VM to run CosmWasm contracts.
+/// Base functions required to be implemented by a VM to run `CosmWasm` contracts.
 pub trait VMBase {
     /// Input type, abstract type representing function inputs.
     type Input<'a>;
@@ -220,7 +220,7 @@ pub trait VMBase {
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error>;
 
-    /// Continue execution by instantiating the given contract code_id.
+    /// Continue execution by instantiating the given contract `code_id`.
     fn continue_instantiate(
         &mut self,
         contract_meta: Self::ContractMeta,
@@ -244,13 +244,13 @@ pub trait VMBase {
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error>;
 
-    /// Custom CosmWasm query. Usually a host extension.
+    /// Custom `CosmWasm` query. Usually a host extension.
     fn query_custom(
         &mut self,
         query: Self::QueryCustom,
     ) -> Result<SystemResult<CosmwasmQueryResult>, Self::Error>;
 
-    /// Custom CosmWasm message. Usually a host extension.
+    /// Custom `CosmWasm` message. Usually a host extension.
     fn message_custom(
         &mut self,
         message: Self::MessageCustom,
@@ -350,7 +350,7 @@ pub trait VMBase {
     /// Recovers a public key from a message hash and a signature.
     ///
     /// Returns the recovered pubkey in compressed form, which can be used
-    /// in secp256k1_verify directly. Any errors related to recovering the
+    /// in `secp256k1_verify` directly. Any errors related to recovering the
     /// public key should result in `Ok(Err(()))`
     fn secp256k1_recover_pubkey(
         &mut self,

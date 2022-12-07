@@ -222,7 +222,7 @@ impl Debug for State {
 }
 
 impl State {
-    pub fn new(
+    #[must_use] pub fn new(
         codes: Vec<Vec<u8>>,
         initial_balances: Vec<(Account, Coin)>,
         ibc_channels: Vec<IbcChannelId>,
@@ -239,7 +239,7 @@ impl State {
                 bank: if !initial_balances.is_empty() {
                     let mut supply = bank::Supply::new();
                     let mut balances = bank::Balances::new();
-                    initial_balances.into_iter().for_each(|(account, coin)| {
+                    for (account, coin) in initial_balances {
                         supply
                             .entry(coin.denom.clone())
                             .and_modify(|amount| *amount += Into::<u128>::into(coin.amount))
@@ -253,7 +253,7 @@ impl State {
                                     .or_insert_with(|| (coin.amount.into()));
                             })
                             .or_insert_with(|| [(coin.denom, coin.amount.into())].into());
-                    });
+                    }
                     Bank::new(supply, balances)
                 } else {
                     Default::default()
