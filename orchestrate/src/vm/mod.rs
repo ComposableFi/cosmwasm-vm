@@ -42,13 +42,15 @@ pub struct Gas {
 }
 
 impl Gas {
-    #[must_use] pub fn new(initial_value: u64) -> Self {
+    #[must_use]
+    pub fn new(initial_value: u64) -> Self {
         Gas {
             checkpoints: vec![initial_value],
         }
     }
 
-    #[must_use] pub fn current(&self) -> &u64 {
+    #[must_use]
+    pub fn current(&self) -> &u64 {
         self.checkpoints.last().expect("impossible")
     }
 

@@ -68,7 +68,8 @@ impl Account {
     /// * `message` - Raw instantiate message
     ///
     /// The address is generated with the algorithm: `Sha1(code_hash + message)`
-    #[must_use] pub fn generate(code_hash: &[u8], message: &[u8]) -> Self {
+    #[must_use]
+    pub fn generate(code_hash: &[u8], message: &[u8]) -> Self {
         let hash = Sha1::new()
             .chain_update(code_hash)
             .chain_update(message)
@@ -86,7 +87,8 @@ impl Account {
     /// that by using this function, one can generate the `Account` prior to
     /// execution.
     /// See [`Self::generate`] for the generation algorithm
-    #[must_use] pub fn generate_by_code(code: &[u8], message: &[u8]) -> Self {
+    #[must_use]
+    pub fn generate_by_code(code: &[u8], message: &[u8]) -> Self {
         let code_hash = Sha1::new().chain_update(code).finalize();
         Self::generate(&code_hash[..], message)
     }

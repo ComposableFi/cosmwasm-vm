@@ -23,7 +23,8 @@ impl<'a> IbcNetwork<'a> {
         }
     }
 
-    #[must_use] pub fn reverse(self) -> Self {
+    #[must_use]
+    pub fn reverse(self) -> Self {
         Self::new(self.state_counterparty, self.state)
     }
 
@@ -180,7 +181,8 @@ impl<'a> IbcNetwork<'a> {
     }
 }
 
-#[must_use] pub fn ibc_reverse_channel(channel: IbcChannel) -> IbcChannel {
+#[must_use]
+pub fn ibc_reverse_channel(channel: IbcChannel) -> IbcChannel {
     IbcChannel::new(
         channel.counterparty_endpoint,
         channel.endpoint,

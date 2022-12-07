@@ -234,7 +234,10 @@ impl<T> From<MigrateResult<T>> for ContractResult<Response<T>> {
 pub mod ibc {
     #![cfg(feature = "stargate")]
 
-    use super::{AsFunctionName, ContractResult, Debug, Deserialize, DeserializeLimit, Empty, HasInfo, Input, PhantomData, ReadLimit, Response, Serialize, deserialization_limits, read_limits};
+    use super::{
+        deserialization_limits, read_limits, AsFunctionName, ContractResult, Debug, Deserialize,
+        DeserializeLimit, Empty, HasInfo, Input, PhantomData, ReadLimit, Response, Serialize,
+    };
     use cosmwasm_std::{Ibc3ChannelOpenResponse, IbcBasicResponse, IbcReceiveResponse};
 
     /// Response to the low level `ibc_channel_open` call.

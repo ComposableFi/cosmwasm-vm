@@ -1449,11 +1449,7 @@ mod cw20_ics20 {
         let (_next_seq, packets_to_dispatch) = extension.ibc.iter().fold(
             (
                 0u64,
-                Vec::with_capacity(
-                    extension
-                        .ibc.values().map(|x| x.packets_sent.len())
-                        .sum(),
-                ),
+                Vec::with_capacity(extension.ibc.values().map(|x| x.packets_sent.len()).sum()),
             ),
             |(next_seq, mut packets_to_dispatch), (_, SimpleIBCState { packets_sent })| {
                 packets_sent.iter().enumerate().for_each(

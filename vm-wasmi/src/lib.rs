@@ -62,7 +62,10 @@ use cosmwasm_vm::{
     system::{CosmwasmContractMeta, SystemError},
     tagged::Tagged,
     transaction::{Transactional, TransactionalErrorOf},
-    vm::{VM, VMBase, VmAddressOf, VmCanonicalAddressOf, VmContracMetaOf, VmErrorOf, VmGas, VmGasCheckpoint, VmMessageCustomOf, VmQueryCustomOf, VmStorageKeyOf, VmStorageValueOf},
+    vm::{
+        VMBase, VmAddressOf, VmCanonicalAddressOf, VmContracMetaOf, VmErrorOf, VmGas,
+        VmGasCheckpoint, VmMessageCustomOf, VmQueryCustomOf, VmStorageKeyOf, VmStorageValueOf, VM,
+    },
 };
 use either::Either;
 use wasmi::{CanResume, Externals, FuncInstance, ImportResolver, NopExternals, RuntimeValue};
@@ -804,7 +807,8 @@ impl<T> ReadWriteMemory for WasmiVM<T> where T: WasmiBaseVM {}
 /// ```ignore
 /// section1 || section1_len || section2 || section2_len || section3 || section3_len || …
 /// ```
-#[must_use] pub fn encode_sections(sections: &[Vec<u8>]) -> Option<Vec<u8>> {
+#[must_use]
+pub fn encode_sections(sections: &[Vec<u8>]) -> Option<Vec<u8>> {
     let out_len: usize =
         sections.iter().map(alloc::vec::Vec::len).sum::<usize>() + 4 * sections.len();
     sections
@@ -827,7 +831,8 @@ impl<T> ReadWriteMemory for WasmiVM<T> where T: WasmiBaseVM {}
 /// Each encoded section is suffixed by a section length, encoded as big endian uint32.
 ///
 /// See also: `encode_section`.
-#[must_use] pub fn decode_sections(data: &[u8]) -> Vec<&[u8]> {
+#[must_use]
+pub fn decode_sections(data: &[u8]) -> Vec<&[u8]> {
     let mut result: Vec<&[u8]> = vec![];
     let mut remaining_len = data.len();
     while remaining_len >= 4 {
@@ -846,7 +851,12 @@ impl<T> ReadWriteMemory for WasmiVM<T> where T: WasmiBaseVM {}
 
 #[allow(dead_code)]
 pub mod host_functions {
-    use super::{BTreeMap, RuntimeValue, String, Tagged, ToOwned, VMBase, Vec, VmErrorOf, VmGas, VmQueryCustomOf, WasmiBaseVM, WasmiFunctionName, WasmiHostFunction, WasmiHostFunctionIndex, WasmiHostModule, WasmiModuleName, WasmiVM, WasmiVMError, decode_sections, encode_sections, format};
+    use super::{
+        decode_sections, encode_sections, format, BTreeMap, RuntimeValue, String, Tagged, ToOwned,
+        VMBase, Vec, VmErrorOf, VmGas, VmQueryCustomOf, WasmiBaseVM, WasmiFunctionName,
+        WasmiHostFunction, WasmiHostFunctionIndex, WasmiHostModule, WasmiModuleName, WasmiVM,
+        WasmiVMError,
+    };
     #[cfg(feature = "iterator")]
     use cosmwasm_std::Order;
     use cosmwasm_std::QueryRequest;
@@ -858,7 +868,8 @@ pub mod host_functions {
         system::cosmwasm_system_query_raw,
     };
 
-    #[must_use] pub fn definitions<T>() -> BTreeMap<WasmiModuleName, WasmiHostModule<T>>
+    #[must_use]
+    pub fn definitions<T>() -> BTreeMap<WasmiModuleName, WasmiHostModule<T>>
     where
         T: WasmiBaseVM,
     {

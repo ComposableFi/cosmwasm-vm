@@ -222,7 +222,8 @@ impl Debug for State {
 }
 
 impl State {
-    #[must_use] pub fn new(
+    #[must_use]
+    pub fn new(
         codes: Vec<Vec<u8>>,
         initial_balances: Vec<(Account, Coin)>,
         ibc_channels: Vec<IbcChannelId>,
