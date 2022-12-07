@@ -8,5 +8,6 @@ command = [
     "--",
     "-Wclippy::pedantic",
     "-A", "clippy::missing_errors_doc", # temporarily allowed until we close XCVM-240
+    "-A", "clippy::missing_panics_doc", # temporarily allowed until we close XCVM-240
 ]
 need_stdout = false

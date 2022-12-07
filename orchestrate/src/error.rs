@@ -1,6 +1,7 @@
 use core::fmt::Display;
 
 #[derive(Debug)]
+#[allow(clippy::module_name_repetitions)]
 pub enum Error {
     Network,
     CannotDecode,

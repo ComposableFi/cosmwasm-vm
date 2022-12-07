@@ -2,6 +2,7 @@ use crate::error::Error;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+#[allow(clippy::module_name_repetitions)]
 pub struct FileFetcher;
 
 impl FileFetcher {
@@ -58,6 +59,7 @@ pub trait CosmosApi {
     }
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub struct CosmosFetcher;
 
 #[async_trait]

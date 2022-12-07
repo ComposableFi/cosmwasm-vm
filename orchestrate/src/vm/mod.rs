@@ -579,11 +579,11 @@ impl<'a> VMBase for Context<'a> {
             Err(e) => return Ok(Err(e)),
         };
         let account = Account::try_from(input.to_string())?;
-        if account != normalized {
-            Ok(Err(VmError::InvalidAddress))
+        Ok(if account == normalized {
+            Ok(())
         } else {
-            Ok(Ok(()))
-        }
+            Err(VmError::InvalidAddress)
+        })
     }
 
     fn addr_canonicalize(

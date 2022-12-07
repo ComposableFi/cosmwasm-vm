@@ -1160,7 +1160,7 @@ fn test_reply() {
     let hackatom_address = BankAccount(10_001);
     let funds = vec![];
     let mut extension = SimpleWasmiVMExtension {
-        storage: Default::default(),
+        storage: BTreeMap::default(),
         codes: BTreeMap::from([(0x1337, code), (0x1338, code_hackatom)]),
         contracts: BTreeMap::from([
             (
@@ -1345,6 +1345,7 @@ mod cw20_ics20 {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn test_ics20_ibc_orchestration() {
         // State setup
         let code = instrument_contract(include_bytes!("../../fixtures/cw20_ics20.wasm"));
@@ -1367,7 +1368,7 @@ mod cw20_ics20 {
             funds,
         };
         let mut extension = SimpleWasmiVMExtension {
-            storage: Default::default(),
+            storage: BTreeMap::default(),
             codes: BTreeMap::from([(0x1337, code)]),
             contracts: BTreeMap::from([(
                 contract,
@@ -1477,7 +1478,7 @@ mod cw20_ics20 {
                             channel.endpoint.clone(),
                             next_seq + i as u64,
                             timeout.clone(),
-                        ))
+                        ));
                     },
                 );
                 (next_seq + packets_sent.len() as u64, packets_to_dispatch)
@@ -1489,7 +1490,7 @@ mod cw20_ics20 {
         let make_receive_msg = |packet| IbcPacketReceiveMsg::new(packet, Addr::unchecked("1337"));
         #[cfg(not(feature = "ibc3"))]
         let make_receive_msg = |packet| IbcPacketReceiveMsg::new(packet);
-        for packet in packets_to_dispatch.into_iter() {
+        for packet in packets_to_dispatch {
             let (acknowledgment, _events) = cosmwasm_system_entrypoint_serialize::<
                 IbcPacketReceiveCall,
                 WasmiVM<SimpleWasmiVM>,
