@@ -72,7 +72,7 @@ impl Gas {
                 self.checkpoints.push(limit);
                 Ok(())
             }
-            _ => Err(VmError::OutOfGas),
+            VmGasCheckpoint::Limited(_) => Err(VmError::OutOfGas),
         }
     }
 
@@ -633,10 +633,7 @@ impl<'a> VMBase for Context<'a> {
         // Remove NULL bytes (i.e. the padding)
         let trimmed = tmp.into_iter().filter(|&x| x != 0x00).collect();
         // decode UTF-8 bytes into string
-        let human = match String::from_utf8(trimmed) {
-            Ok(trimmed) => trimmed,
-            Err(_) => return Ok(Err(VmError::InvalidAddress)),
-        };
+        let Ok(human) = String::from_utf8(trimmed) else { return Ok(Err(VmError::InvalidAddress)) };
         Ok(Account::try_from(human).map_err(|_| VmError::InvalidAddress))
     }
 

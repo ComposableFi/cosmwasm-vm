@@ -292,6 +292,7 @@ where
 
 /// Errors likely to happen while a VM is executing.
 #[derive(Clone, PartialEq, Eq, Debug)]
+#[allow(clippy::module_name_repetitions)]
 pub enum SystemError {
     UnsupportedMessage,
     FailedToSerialize,
@@ -511,6 +512,7 @@ fn sanitize_custom_attributes(
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn dispatch_submessage<V, I>(
     vm: &mut V,
     info: &MessageInfo,
@@ -657,6 +659,7 @@ where
     sub_result.map(|data| (data, sub_events))
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn cosmwasm_system_run<I, V>(
     vm: &mut V,
     message: &[u8],

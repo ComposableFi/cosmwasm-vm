@@ -7,6 +7,7 @@ use cosmwasm_std::{Addr, Binary, CanonicalAddr};
 use sha1::{Digest, Sha1};
 
 #[derive(Debug, Clone)]
+#[allow(clippy::module_name_repetitions)]
 pub struct CanonicalAccount(pub CanonicalAddr);
 
 impl TryFrom<Vec<u8>> for CanonicalAccount {
@@ -29,6 +30,7 @@ impl From<CanonicalAccount> for CanonicalAddr {
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[allow(clippy::module_name_repetitions)]
 pub struct Account(pub Addr);
 
 impl Display for Account {

@@ -95,7 +95,7 @@ where
         } else {
             let mut t: T = unsafe { core::mem::zeroed() };
             let buffer = unsafe {
-                core::slice::from_raw_parts_mut(core::ptr::addr_of_mut!(t) as *mut u8, size)
+                core::slice::from_raw_parts_mut(core::ptr::addr_of_mut!(t).cast::<u8>(), size)
             };
             memory.read(offset, buffer)?;
             Ok(FromMemory(t))

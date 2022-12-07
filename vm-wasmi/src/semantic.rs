@@ -918,7 +918,7 @@ fn create_simple_vm(
         extension,
         Env {
             block: BlockInfo {
-                height: 0xDEADC0DE,
+                height: 0xDEAD_C0DE,
                 time: Timestamp::from_seconds(10000),
                 chain_id: "abstract-test".into(),
             },
@@ -1328,7 +1328,7 @@ mod cw20_ics20 {
         let funds = vec![];
         let env = Env {
             block: BlockInfo {
-                height: 0xDEADC0DE,
+                height: 0xDEAD_C0DE,
                 time: Timestamp::from_seconds(10000),
                 chain_id: "abstract-test".into(),
             },

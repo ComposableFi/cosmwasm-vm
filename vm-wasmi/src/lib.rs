@@ -270,7 +270,7 @@ where
     fn try_from(WasmiOutput(value, _): WasmiOutput<'a, WasmiVM<T>>) -> Result<Self, Self::Error> {
         match value {
             Either::Right((_, rt_value)) => Ok(rt_value),
-            _ => Err(WasmiVMError::UnexpectedUnit.into()),
+            Either::Left(_) => Err(WasmiVMError::UnexpectedUnit.into()),
         }
     }
 }
@@ -283,7 +283,7 @@ where
     fn try_from(WasmiOutput(value, _): WasmiOutput<'a, WasmiVM<T>>) -> Result<Self, Self::Error> {
         match value {
             Either::Left(_) => Ok(Unit),
-            _ => Err(WasmiVMError::ExpectedUnit.into()),
+            Either::Right(_) => Err(WasmiVMError::ExpectedUnit.into()),
         }
     }
 }
@@ -294,9 +294,15 @@ where
 {
     type Error = VmErrorOf<T>;
     fn try_from(WasmiOutput(value, _): WasmiOutput<'a, WasmiVM<T>>) -> Result<Self, Self::Error> {
+        // we target wasm32 so this will not truncate
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_possible_wrap,
+            clippy::cast_sign_loss
+        )]
         match value {
             Either::Right((_, RuntimeValue::I32(rt_value))) => Ok(rt_value as u32),
-            _ => Err(WasmiVMError::ExpectedPointer.into()),
+            Either::Left(_) | Either::Right(_) => Err(WasmiVMError::ExpectedPointer.into()),
         }
     }
 }
@@ -306,6 +312,8 @@ where
     T: WasmiBaseVM,
 {
     type Error = VmErrorOf<T>;
+    // we target wasm32 so this will not truncate
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     fn try_from(AllocateCall(ptr): AllocateCall<u32>) -> Result<Self, Self::Error> {
         Ok(WasmiInput(
             WasmiFunctionName(AllocateCall::<u32>::NAME.into()),
@@ -320,6 +328,7 @@ where
     T: WasmiBaseVM,
 {
     type Error = VmErrorOf<T>;
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     fn try_from(DeallocateCall(ptr): DeallocateCall<u32>) -> Result<Self, Self::Error> {
         Ok(WasmiInput(
             WasmiFunctionName(DeallocateCall::<u32>::NAME.into()),
@@ -335,6 +344,11 @@ where
     I: AsFunctionName,
 {
     type Error = VmErrorOf<T>;
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss
+    )]
     fn try_from(
         CosmwasmCallInput(Tagged(env_ptr, _), Tagged(info_ptr, _), Tagged(msg_ptr, _), _): CosmwasmCallInput<'a, u32, I>,
     ) -> Result<Self, Self::Error> {
@@ -359,6 +373,11 @@ where
     I: AsFunctionName,
 {
     type Error = VmErrorOf<T>;
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss
+    )]
     fn try_from(
         CosmwasmCallWithoutInfoInput(Tagged(env_ptr, _), Tagged(msg_ptr, _), _): CosmwasmCallWithoutInfoInput<
             'a,
@@ -849,6 +868,13 @@ pub fn decode_sections(data: &[u8]) -> Vec<&[u8]> {
     result
 }
 
+// Our casts are generally OK.
+// uszie will not truncate, as we target wasm32.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
 #[allow(dead_code)]
 pub mod host_functions {
     use super::{
@@ -1295,23 +1321,17 @@ pub mod host_functions {
                     ConstantReadLimit<{ constants::EDCSA_SIGNATURE_LENGTH }>,
                 >(vm, *signature_ptr as u32)?;
 
-                match vm.secp256k1_recover_pubkey(
-                    &message_hash,
-                    &signature,
-                    *recovery_param as u8,
-                )? {
+                if let Ok(pubkey) =
+                    vm.secp256k1_recover_pubkey(&message_hash, &signature, *recovery_param as u8)?
+                {
                     // Note that if the call is success, the pointer is written to the lower
                     // 4-bytes. On failure, the error code is written to the upper 4-bytes, and
                     // we don't return an error.
-                    Ok(pubkey) => {
-                        let Tagged(value_pointer, _) =
-                            passthrough_in::<WasmiVM<T>, ()>(vm, &pubkey)?;
-                        Ok(Some(RuntimeValue::I64(i64::from(value_pointer))))
-                    }
-                    Err(_) => {
-                        const GENERIC_ERROR_CODE: i64 = 10;
-                        Ok(Some(RuntimeValue::I64(1_i64 << 32)))
-                    }
+                    let Tagged(value_pointer, _) = passthrough_in::<WasmiVM<T>, ()>(vm, &pubkey)?;
+                    Ok(Some(RuntimeValue::I64(i64::from(value_pointer))))
+                } else {
+                    const GENERIC_ERROR_CODE: i64 = 10;
+                    Ok(Some(RuntimeValue::I64(1_i64 << 32)))
                 }
             }
             _ => Err(WasmiVMError::InvalidHostSignature.into()),

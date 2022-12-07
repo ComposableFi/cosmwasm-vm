@@ -237,7 +237,9 @@ impl State {
             })),
             gas: Gas::new(100_000_000),
             db: Db {
-                bank: if !initial_balances.is_empty() {
+                bank: if initial_balances.is_empty() {
+                    Default::default()
+                } else {
                     let mut supply = bank::Supply::new();
                     let mut balances = bank::Balances::new();
                     for (account, coin) in initial_balances {
@@ -256,8 +258,6 @@ impl State {
                             .or_insert_with(|| [(coin.denom, coin.amount.into())].into());
                     }
                     Bank::new(supply, balances)
-                } else {
-                    Default::default()
                 },
                 ibc: ibc_channels
                     .into_iter()

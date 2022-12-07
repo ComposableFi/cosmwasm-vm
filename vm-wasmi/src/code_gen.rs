@@ -140,6 +140,8 @@ trait EntrypointCall {
         let instructions = vec![
             vec![
                 // Allocate space for the response
+                // we target wasm32 so this will not truncate
+                #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
                 Instruction::I32Const(result.len() as i32),
                 Instruction::Call(0),
                 // we save the ptr
@@ -148,6 +150,8 @@ trait EntrypointCall {
                 // now we should set the length to response.len()
                 Instruction::I32Const(8),
                 Instruction::I32Add,
+                // we target wasm32 so this will not truncate
+                #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
                 Instruction::I32Const(result.len() as i32),
                 Instruction::I32Store(0, 0),
                 Instruction::GetLocal(msg_ptr_index + 1),
@@ -250,6 +254,7 @@ impl QueryCall {
 }
 
 impl From<ModuleDefinition> for WasmModule {
+    #[allow(clippy::too_many_lines)]
     fn from(def: ModuleDefinition) -> Self {
         let mut contract = builder::module()
             // Generate memory
@@ -375,6 +380,8 @@ impl From<ModuleDefinition> for WasmModule {
             function_definitions.push(function);
         }
 
+        // we target wasm32 so this will not truncate
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
         for (i, func) in function_definitions.into_iter().enumerate() {
             let mut signature_builder = contract.function().signature();
             if !func.params.is_empty() {
@@ -383,6 +390,7 @@ impl From<ModuleDefinition> for WasmModule {
             if let Some(result) = func.result {
                 signature_builder = signature_builder.with_result(result);
             }
+
             contract = signature_builder
                 .build()
                 .with_body(func.definition)
