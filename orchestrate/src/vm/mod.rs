@@ -58,7 +58,7 @@ impl Gas {
         self.checkpoints.last_mut().expect("impossible")
     }
 
-    pub fn push(&mut self, checkpoint: VmGasCheckpoint) -> Result<(), VmError> {
+    pub fn push(&mut self, checkpoint: &VmGasCheckpoint) -> Result<(), VmError> {
         match checkpoint {
             VmGasCheckpoint::Unlimited => {
                 let parent = self.current_mut();
@@ -67,9 +67,9 @@ impl Gas {
                 self.checkpoints.push(value);
                 Ok(())
             }
-            VmGasCheckpoint::Limited(limit) if limit <= *self.current() => {
+            VmGasCheckpoint::Limited(limit) if limit <= self.current() => {
                 *self.current_mut() -= limit;
-                self.checkpoints.push(limit);
+                self.checkpoints.push(*limit);
                 Ok(())
             }
             VmGasCheckpoint::Limited(_) => Err(VmError::OutOfGas),
@@ -414,7 +414,7 @@ impl<'a> VMBase for Context<'a> {
             .db
             .storage
             .get(&address)
-            .unwrap_or(&Default::default())
+            .unwrap_or(&Storage::default())
             .data
             .get(&key)
             .cloned())
@@ -523,7 +523,7 @@ impl<'a> VMBase for Context<'a> {
             Ok(iterator.data[position].clone())
         } else {
             // Empty data works like `None` in rust iterators
-            Ok((Default::default(), Default::default()))
+            Ok((Vec::default(), Vec::default()))
         }
     }
 
@@ -701,7 +701,7 @@ impl<'a> VMBase for Context<'a> {
 
     fn gas_checkpoint_push(&mut self, checkpoint: VmGasCheckpoint) -> Result<(), Self::Error> {
         log::debug!("> Gas before: {:?}", self.state.gas);
-        self.state.gas.push(checkpoint)?;
+        self.state.gas.push(&checkpoint)?;
         log::debug!("> Gas after: {:?}", self.state.gas);
         Ok(())
     }

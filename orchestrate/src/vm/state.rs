@@ -242,7 +242,7 @@ impl State {
             gas: Gas::new(100_000_000),
             db: Db {
                 bank: if initial_balances.is_empty() {
-                    Default::default()
+                    Bank::default()
                 } else {
                     let mut supply = bank::Supply::new();
                     let mut balances = bank::Balances::new();
@@ -269,7 +269,7 @@ impl State {
                     .collect(),
                 ..Default::default()
             },
-            transactions: Default::default(),
+            transactions: VecDeque::default(),
         }
     }
 }
