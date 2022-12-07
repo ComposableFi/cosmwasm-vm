@@ -876,11 +876,11 @@ fn instrument_contract(code: &[u8]) -> Vec<u8> {
     instrumented_module.into_bytes().expect("impossible")
 }
 
-fn create_vm<'a>(
-    extension: &'a mut SimpleWasmiVMExtension,
+fn create_vm(
+    extension: &mut SimpleWasmiVMExtension,
     env: Env,
     info: MessageInfo,
-) -> WasmiVM<SimpleWasmiVM<'a>> {
+) -> WasmiVM<SimpleWasmiVM> {
     initialize();
     let code = extension
         .codes
@@ -908,12 +908,12 @@ fn create_vm<'a>(
     })
 }
 
-fn create_simple_vm<'a>(
+fn create_simple_vm(
     sender: BankAccount,
     contract: BankAccount,
     funds: Vec<Coin>,
-    extension: &'a mut SimpleWasmiVMExtension,
-) -> WasmiVM<SimpleWasmiVM<'a>> {
+    extension: &mut SimpleWasmiVMExtension,
+) -> WasmiVM<SimpleWasmiVM> {
     create_vm(
         extension,
         Env {
@@ -1264,18 +1264,6 @@ mod cw20_ics20 {
     const REMOTE_PORT: &str = "transfer";
     const CONNECTION_ID: &str = "connection-2";
     const ICS20_VERSION: &str = "ics20-1";
-
-    fn forward(x: u64, env: Env) -> Env {
-        Env {
-            block: BlockInfo {
-                height: env.block.height + x,
-                time: env.block.time,
-                chain_id: env.block.chain_id,
-            },
-            transaction: env.transaction,
-            contract: env.contract,
-        }
-    }
 
     fn funded(funds: Vec<Coin>, info: MessageInfo) -> MessageInfo {
         MessageInfo {
