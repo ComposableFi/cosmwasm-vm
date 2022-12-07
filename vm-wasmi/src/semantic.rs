@@ -10,20 +10,18 @@ use super::{
 };
 use alloc::{boxed::Box, string::ToString};
 use core::{assert_matches::assert_matches, num::NonZeroU32, str::FromStr};
+#[cfg(feature = "stargate")]
+use cosmwasm_std::IbcTimeout;
 #[cfg(feature = "iterator")]
 use cosmwasm_std::Order;
 use cosmwasm_std::{
     Addr, Attribute, Binary, BlockInfo, Coin, ContractInfo, Empty, Env, Event, MessageInfo,
     Timestamp,
 };
-#[cfg(feature = "stargate")]
-use cosmwasm_std::{IbcChannel, IbcChannelOpenMsg, IbcEndpoint, IbcOrder, IbcTimeout};
-#[cfg(feature = "stargate")]
-use cosmwasm_vm::executor::ibc::{IbcChannelConnectCall, IbcChannelOpenCall, IbcChannelOpenResult};
 use cosmwasm_vm::{
     executor::{
-        cosmwasm_call, cosmwasm_call_serialize, CosmwasmExecutionResult, ExecuteCall,
-        ExecuteResult, InstantiateCall, InstantiateResult, MigrateCall, QueryCall, ReplyCall,
+        cosmwasm_call, CosmwasmExecutionResult, ExecuteCall, ExecuteResult, InstantiateCall,
+        InstantiateResult, MigrateCall, QueryCall, ReplyCall,
     },
     system::{
         cosmwasm_system_entrypoint, cosmwasm_system_run, CosmwasmCodeId, CosmwasmContractMeta,
