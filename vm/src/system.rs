@@ -149,7 +149,7 @@ impl Display for SystemEventType {
             SystemEventType::IbcPacketTimeout => IbcPacketTimeoutCall::<Empty>::NAME,
         };
 
-        write!(f, "{}", event_str)
+        write!(f, "{event_str}")
     }
 }
 
@@ -272,7 +272,7 @@ where
                 addr_attr,
                 SystemAttribute {
                     key: SystemAttributeKey::CodeID,
-                    value: format!("{}", code_id),
+                    value: format!("{code_id}"),
                 },
             ]
         } else {
@@ -707,7 +707,7 @@ where
                     env.contract.address.clone().into_string(),
                 )?;
                 event_handler(
-                    Event::new(format!("{}{}", CUSTOM_CONTRACT_EVENT_PREFIX, ty))
+                    Event::new(format!("{CUSTOM_CONTRACT_EVENT_PREFIX}{ty}"))
                         .add_attributes(attributes),
                 );
             }
@@ -766,7 +766,7 @@ where
                         (Err(e), ReplyOn::Always | ReplyOn::Error) => {
                             log::debug!("Rollback & Reply");
                             vm.transaction_rollback()?;
-                            SubCallContinuation::Reply(SubMsgResult::Err(format!("{:?}", e)))
+                            SubCallContinuation::Reply(SubMsgResult::Err(format!("{e:?}")))
                         }
                         // If an error happen and we did not expected it, abort
                         // the whole transaction.
