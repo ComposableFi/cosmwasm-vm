@@ -895,6 +895,7 @@ pub mod host_functions {
     };
 
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn definitions<T>() -> BTreeMap<WasmiModuleName, WasmiHostModule<T>>
     where
         T: WasmiBaseVM,
