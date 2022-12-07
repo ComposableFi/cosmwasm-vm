@@ -27,7 +27,6 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![no_std]
-#![feature(generic_associated_types)]
 #![feature(trait_alias)]
 
 extern crate alloc;

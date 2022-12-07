@@ -70,7 +70,7 @@
         };
         devShell = pkgs.mkShell {
           buildInputs = [ rust-nightly ]
-            ++ (with pkgs; [ openssl openssl.dev pkgconfig taplo nixfmt ]);
+            ++ (with pkgs; [ openssl openssl.dev pkgconfig taplo nixfmt bacon ]);
         };
       });
 }

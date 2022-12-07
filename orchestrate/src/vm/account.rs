@@ -7,6 +7,7 @@ use cosmwasm_std::{Addr, Binary, CanonicalAddr};
 use sha1::{Digest, Sha1};
 
 #[derive(Debug, Clone)]
+#[allow(clippy::module_name_repetitions)]
 pub struct CanonicalAccount(pub CanonicalAddr);
 
 impl TryFrom<Vec<u8>> for CanonicalAccount {
@@ -29,6 +30,7 @@ impl From<CanonicalAccount> for CanonicalAddr {
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[allow(clippy::module_name_repetitions)]
 pub struct Account(pub Addr);
 
 impl Display for Account {
@@ -68,12 +70,13 @@ impl Account {
     /// * `message` - Raw instantiate message
     ///
     /// The address is generated with the algorithm: `Sha1(code_hash + message)`
+    #[must_use]
     pub fn generate(code_hash: &[u8], message: &[u8]) -> Self {
         let hash = Sha1::new()
             .chain_update(code_hash)
             .chain_update(message)
             .finalize();
-        Account(Addr::unchecked(format!("{:x}", hash)))
+        Account(Addr::unchecked(format!("{hash:x}")))
     }
 
     /// Generates an `Account` based on `code` and `message`
@@ -86,6 +89,7 @@ impl Account {
     /// that by using this function, one can generate the `Account` prior to
     /// execution.
     /// See [`Self::generate`] for the generation algorithm
+    #[must_use]
     pub fn generate_by_code(code: &[u8], message: &[u8]) -> Self {
         let code_hash = Sha1::new().chain_update(code).finalize();
         Self::generate(&code_hash[..], message)

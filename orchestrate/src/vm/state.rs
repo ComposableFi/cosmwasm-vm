@@ -19,6 +19,7 @@ use cosmwasm_vm_wasmi::{host_functions, new_wasmi_vm, WasmiBaseVM, WasmiImportRe
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 
+#[allow(clippy::module_name_repetitions)]
 pub trait VmState<'a, VM: WasmiBaseVM>
 where
     VmErrorOf<WasmiVM<VM>>: Into<VmError>,
@@ -108,15 +109,14 @@ where
         gas: u64,
         message: &[u8],
     ) -> Result<(Account, E::Output<Context<'a>>), VmError> {
-        let contract_addr = match contract {
-            Some(contract) => contract,
-            None => {
-                let (_, code_hash) = self
-                    .codes
-                    .get(&code_id)
-                    .ok_or(VmError::CodeNotFound(code_id))?;
-                Account::generate(code_hash, message)
-            }
+        let contract_addr = if let Some(contract) = contract {
+            contract
+        } else {
+            let (_, code_hash) = self
+                .codes
+                .get(&code_id)
+                .ok_or(VmError::CodeNotFound(code_id))?;
+            Account::generate(code_hash, message)
         };
         self.gas = Gas::new(gas);
         if self.db.contracts.contains_key(&contract_addr) {
@@ -222,6 +222,7 @@ impl Debug for State {
 }
 
 impl State {
+    #[must_use]
     pub fn new(
         codes: Vec<Vec<u8>>,
         initial_balances: Vec<(Account, Coin)>,
@@ -229,17 +230,23 @@ impl State {
     ) -> Self {
         let mut code_id = 0;
         Self {
-            codes: BTreeMap::from_iter(codes.into_iter().map(|code| {
-                code_id += 1;
-                let code_hash: Vec<u8> = Sha256::new().chain_update(&code).finalize()[..].into();
-                (code_id, (code_hash, code))
-            })),
+            codes: codes
+                .into_iter()
+                .map(|code| {
+                    code_id += 1;
+                    let code_hash: Vec<u8> =
+                        Sha256::new().chain_update(&code).finalize()[..].into();
+                    (code_id, (code_hash, code))
+                })
+                .collect::<BTreeMap<_, _>>(),
             gas: Gas::new(100_000_000),
             db: Db {
-                bank: if !initial_balances.is_empty() {
+                bank: if initial_balances.is_empty() {
+                    Bank::default()
+                } else {
                     let mut supply = bank::Supply::new();
                     let mut balances = bank::Balances::new();
-                    initial_balances.into_iter().for_each(|(account, coin)| {
+                    for (account, coin) in initial_balances {
                         supply
                             .entry(coin.denom.clone())
                             .and_modify(|amount| *amount += Into::<u128>::into(coin.amount))
@@ -253,10 +260,8 @@ impl State {
                                     .or_insert_with(|| (coin.amount.into()));
                             })
                             .or_insert_with(|| [(coin.denom, coin.amount.into())].into());
-                    });
+                    }
                     Bank::new(supply, balances)
-                } else {
-                    Default::default()
                 },
                 ibc: ibc_channels
                     .into_iter()
@@ -264,7 +269,7 @@ impl State {
                     .collect(),
                 ..Default::default()
             },
-            transactions: Default::default(),
+            transactions: VecDeque::default(),
         }
     }
 }
@@ -294,7 +299,7 @@ fn create_vm(extension: &mut State, env: Env, info: MessageInfo) -> WasmiVM<Cont
             .0
             .clone()
             .into_iter()
-            .flat_map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
+            .flat_map(|(_, modules)| modules.into_values())
             .collect(),
         executing_module: module,
         env,
