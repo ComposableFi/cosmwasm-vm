@@ -95,7 +95,7 @@ where
         } else {
             let mut t: T = unsafe { core::mem::zeroed() };
             let buffer =
-                unsafe { core::slice::from_raw_parts_mut(&mut t as *mut T as *mut u8, size) };
+                unsafe { core::slice::from_raw_parts_mut(core::ptr::addr_of_mut!(t) as *mut u8, size) };
             memory.read(offset, buffer)?;
             Ok(FromMemory(t))
         }
@@ -191,7 +191,7 @@ where
     ) -> Result<Self, Self::Error> {
         log::trace!("IntoMemory");
         let buffer = unsafe {
-            core::slice::from_raw_parts(value as *const T as *const u8, core::mem::size_of::<T>())
+            core::slice::from_raw_parts((value as *const T).cast::<u8>(), core::mem::size_of::<T>())
         };
         memory.write(offset, buffer)?;
         Ok(IntoMemory(PhantomData))
