@@ -73,7 +73,7 @@ impl Account {
             .chain_update(code_hash)
             .chain_update(message)
             .finalize();
-        Account(Addr::unchecked(format!("{:x}", hash)))
+        Account(Addr::unchecked(format!("{hash:x}")))
     }
 
     /// Generates an `Account` based on `code` and `message`

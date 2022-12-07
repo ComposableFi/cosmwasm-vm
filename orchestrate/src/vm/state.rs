@@ -294,7 +294,7 @@ fn create_vm(extension: &mut State, env: Env, info: MessageInfo) -> WasmiVM<Cont
             .0
             .clone()
             .into_iter()
-            .flat_map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
+            .flat_map(|(_, modules)| modules.into_values())
             .collect(),
         executing_module: module,
         env,

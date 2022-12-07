@@ -86,7 +86,7 @@ impl From<MemoryWriteError> for SimpleVMError {
 }
 impl Display for SimpleVMError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 impl CanResume for SimpleVMError {
@@ -256,7 +256,7 @@ impl<'a> SimpleWasmiVM<'a> {
             host_functions: host_functions_definitions
                 .0
                 .into_iter()
-                .flat_map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
+                .flat_map(|(_, modules)| modules.into_values())
                 .collect(),
             executing_module: module,
             env: Env {
@@ -765,10 +765,10 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
     #[cfg(feature = "stargate")]
     fn ibc_transfer(
         &mut self,
-        channel_id: String,
-        to_address: String,
-        amount: Coin,
-        timeout: IbcTimeout,
+        _channel_id: String,
+        _to_address: String,
+        _amount: Coin,
+        _timeout: IbcTimeout,
     ) -> Result<(), Self::Error> {
         todo!()
     }
@@ -791,7 +791,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
     }
 
     #[cfg(feature = "stargate")]
-    fn ibc_close_channel(&mut self, channel_id: String) -> Result<(), Self::Error> {
+    fn ibc_close_channel(&mut self, _channel_id: String) -> Result<(), Self::Error> {
         todo!()
     }
 }
@@ -817,7 +817,7 @@ impl TryFrom<String> for BankAccount {
 
 impl From<BankAccount> for Addr {
     fn from(BankAccount(account): BankAccount) -> Self {
-        Addr::unchecked(format!("{}", account))
+        Addr::unchecked(format!("{account}"))
     }
 }
 
@@ -899,7 +899,7 @@ fn create_vm<'a>(
             .0
             .clone()
             .into_iter()
-            .flat_map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
+            .flat_map(|(_, modules)| modules.into_values())
             .collect(),
         executing_module: module,
         env,
@@ -1120,7 +1120,7 @@ fn test_orchestration_advanced() {
     let funds = vec![];
     let mut extension = SimpleWasmiVMExtension {
         storage: Default::default(),
-        codes: BTreeMap::from([(0x1337, code.clone())]),
+        codes: BTreeMap::from([(0x1337, code)]),
         contracts: BTreeMap::from([(
             address,
             CosmwasmContractMeta {
@@ -1159,7 +1159,7 @@ fn test_reply() {
     let funds = vec![];
     let mut extension = SimpleWasmiVMExtension {
         storage: Default::default(),
-        codes: BTreeMap::from([(0x1337, code.clone()), (0x1338, code_hackatom)]),
+        codes: BTreeMap::from([(0x1337, code), (0x1338, code_hackatom)]),
         contracts: BTreeMap::from([
             (
                 address,
@@ -1292,7 +1292,7 @@ mod cw20_ics20 {
             },
             IbcEndpoint {
                 port_id: REMOTE_PORT.into(),
-                channel_id: format!("{}", channel_id),
+                channel_id: channel_id.to_string(),
             },
             IbcOrder::Unordered,
             ICS20_VERSION,
@@ -1433,12 +1433,11 @@ mod cw20_ics20 {
                 format!(
                     r#"{{
                       "transfer": {{
-                        "channel": "{}",
+                        "channel": "{channel_name}",
                         "remote_address": "0",
                         "timeout": null
                       }}
-                    }}"#,
-                    channel_name
+                    }}"#
                 )
                 .as_bytes(),
             ),
@@ -1452,9 +1451,7 @@ mod cw20_ics20 {
                 0u64,
                 Vec::with_capacity(
                     extension
-                        .ibc
-                        .iter()
-                        .map(|(_, x)| x.packets_sent.len())
+                        .ibc.values().map(|x| x.packets_sent.len())
                         .sum(),
                 ),
             ),

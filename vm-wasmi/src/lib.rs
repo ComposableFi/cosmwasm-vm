@@ -199,16 +199,14 @@ where
             .get(&WasmiModuleName(module_name.to_owned()))
             .ok_or_else(|| {
                 wasmi::Error::Instantiation(format!(
-                    "A module tried to load an unknown host module: {}",
-                    module_name
+                    "A module tried to load an unknown host module: {module_name}"
                 ))
             })?;
         let (WasmiHostFunctionIndex(function_index), _) = *module
             .get(&WasmiFunctionName(field_name.to_owned()))
             .ok_or_else(|| {
                 wasmi::Error::Instantiation(format!(
-                    "A module tried to load an unknown host function: {}.{}",
-                    module_name, field_name
+                    "A module tried to load an unknown host function: {module_name}.{field_name}"
                 ))
             })?;
         Ok(FuncInstance::alloc_host(signature.clone(), function_index))
@@ -1147,7 +1145,7 @@ pub mod host_functions {
                     Ok(_) => Ok(Some(RuntimeValue::I32(0))),
                     Err(e) => {
                         let Tagged(value_pointer, _) =
-                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{}", e).as_bytes())?;
+                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{e}").as_bytes())?;
                         Ok(Some(RuntimeValue::I32(value_pointer as i32)))
                     }
                 }
@@ -1175,7 +1173,7 @@ pub mod host_functions {
                     Ok(address) => address,
                     Err(e) => {
                         let Tagged(value_pointer, _) =
-                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{}", e).as_bytes())?;
+                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{e}").as_bytes())?;
                         return Ok(Some(RuntimeValue::I32(value_pointer as i32)));
                     }
                 };
@@ -1191,7 +1189,7 @@ pub mod host_functions {
                     }
                     Err(e) => {
                         let Tagged(value_pointer, _) =
-                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{}", e).as_bytes())?;
+                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{e}").as_bytes())?;
                         Ok(Some(RuntimeValue::I32(value_pointer as i32)))
                     }
                 }
@@ -1226,7 +1224,7 @@ pub mod host_functions {
                     }
                     Err(e) => {
                         let Tagged(value_pointer, _) =
-                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{}", e).as_bytes())?;
+                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{e}").as_bytes())?;
                         Ok(Some(RuntimeValue::I32(value_pointer as i32)))
                     }
                 }

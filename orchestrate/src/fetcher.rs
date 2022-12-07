@@ -54,7 +54,7 @@ pub trait CosmosApi {
 
         let response: CosmosResponse =
             serde_json::from_str(&response).map_err(|_| Error::CannotDeserialize)?;
-        base64::decode(&response.data).map_err(|_| Error::CannotDecode)
+        base64::decode(response.data).map_err(|_| Error::CannotDecode)
     }
 }
 
