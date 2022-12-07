@@ -242,6 +242,7 @@ pub mod ibc {
 
     /// Response to the low level `ibc_channel_open` call.
     #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    #[allow(clippy::module_name_repetitions)]
     pub struct IbcChannelOpenResult(pub ContractResult<Option<Ibc3ChannelOpenResponse>>);
     impl DeserializeLimit for IbcChannelOpenResult {
         fn deserialize_limit() -> usize {
@@ -256,6 +257,7 @@ pub mod ibc {
 
     /// Response to the low level `ibc_channel_connect` call.
     #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    #[allow(clippy::module_name_repetitions)]
     pub struct IbcChannelConnectResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
     impl<T> DeserializeLimit for IbcChannelConnectResult<T> {
         fn deserialize_limit() -> usize {
@@ -288,6 +290,7 @@ pub mod ibc {
 
     /// Response to the low level `ibc_channel_close` call.
     #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    #[allow(clippy::module_name_repetitions)]
     pub struct IbcChannelCloseResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
     impl<T> DeserializeLimit for IbcChannelCloseResult<T> {
         fn deserialize_limit() -> usize {
@@ -320,6 +323,7 @@ pub mod ibc {
 
     /// Response to the low level `ibc_packet_receive` call.
     #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    #[allow(clippy::module_name_repetitions)]
     pub struct IbcPacketReceiveResult<T = Empty>(pub ContractResult<IbcReceiveResponse<T>>);
     impl<T> DeserializeLimit for IbcPacketReceiveResult<T> {
         fn deserialize_limit() -> usize {
@@ -354,6 +358,7 @@ pub mod ibc {
 
     /// Response to the low level `ibc_packet_ack` call.
     #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    #[allow(clippy::module_name_repetitions)]
     pub struct IbcPacketAckResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
     impl<T> DeserializeLimit for IbcPacketAckResult<T> {
         fn deserialize_limit() -> usize {
@@ -386,6 +391,7 @@ pub mod ibc {
 
     /// Response to the low level `ibc_packet_timeout` call.
     #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    #[allow(clippy::module_name_repetitions)]
     pub struct IbcPacketTimeoutResult<T = Empty>(pub ContractResult<IbcBasicResponse<T>>);
     impl<T> DeserializeLimit for IbcPacketTimeoutResult<T> {
         fn deserialize_limit() -> usize {
@@ -417,6 +423,7 @@ pub mod ibc {
     }
 
     /// Strong type representing a call to `ibc_channel_open` export.
+    #[allow(clippy::module_name_repetitions)]
     pub struct IbcChannelOpenCall;
     impl Input for IbcChannelOpenCall {
         type Output = IbcChannelOpenResult;
@@ -429,6 +436,7 @@ pub mod ibc {
     }
 
     /// Strong type representing a call to `ibc_channel_connect` export.
+    #[allow(clippy::module_name_repetitions)]
     pub struct IbcChannelConnectCall<T = Empty>(PhantomData<T>);
     impl<T> Input for IbcChannelConnectCall<T> {
         type Output = IbcChannelConnectResult<T>;
@@ -441,6 +449,7 @@ pub mod ibc {
     }
 
     /// Strong type representing a call to `ibc_channel_close` export.
+    #[allow(clippy::module_name_repetitions)]
     pub struct IbcChannelCloseCall<T = Empty>(PhantomData<T>);
     impl<T> Input for IbcChannelCloseCall<T> {
         type Output = IbcChannelCloseResult<T>;
@@ -453,6 +462,7 @@ pub mod ibc {
     }
 
     /// Strong type representing a call to `ibc_packet_receive` export.
+    #[allow(clippy::module_name_repetitions)]
     pub struct IbcPacketReceiveCall<T = Empty>(PhantomData<T>);
     impl<T> Input for IbcPacketReceiveCall<T> {
         type Output = IbcPacketReceiveResult<T>;
@@ -465,6 +475,7 @@ pub mod ibc {
     }
 
     /// Strong type representing a call to `ibc_packet_ack` export.
+    #[allow(clippy::module_name_repetitions)]
     pub struct IbcPacketAckCall<T = Empty>(PhantomData<T>);
     impl<T> Input for IbcPacketAckCall<T> {
         type Output = IbcPacketAckResult<T>;
@@ -477,6 +488,7 @@ pub mod ibc {
     }
 
     /// Strong type representing a call to `ibc_packet_timeout` export.
+    #[allow(clippy::module_name_repetitions)]
     pub struct IbcPacketTimeoutCall<T = Empty>(PhantomData<T>);
     impl<T> Input for IbcPacketTimeoutCall<T> {
         type Output = IbcPacketTimeoutResult<T>;
@@ -601,6 +613,7 @@ pub trait HasInfo {
 
 /// Errors likely to happen while doing low level executor calls.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[allow(clippy::module_name_repetitions)]
 pub enum ExecutorError {
     /// Unable to serialize the structure to JSON.
     FailedToSerialize,

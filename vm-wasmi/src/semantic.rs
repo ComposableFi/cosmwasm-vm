@@ -611,11 +611,11 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
             Err(e) => return Ok(Err(e)),
         };
         let account = BankAccount::try_from(input.to_string())?;
-        if account != normalized {
-            Ok(Err(SimpleVMError::InvalidAddress))
+        Ok(if account == normalized {
+            Ok(())
         } else {
-            Ok(Ok(()))
-        }
+            Err(SimpleVMError::InvalidAddress)
+        })
     }
 
     fn addr_canonicalize(

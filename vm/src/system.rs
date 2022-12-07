@@ -72,6 +72,7 @@ const CUSTOM_CONTRACT_EVENT_TYPE_MIN_LENGTH: usize = 2;
 const WASM_MODULE_EVENT_RESERVED_PREFIX: &str = "_";
 
 #[allow(unused)]
+#[allow(clippy::module_name_repetitions)]
 pub enum SystemEventType {
     StoreCode,
     Instantiate,
@@ -93,6 +94,7 @@ pub enum SystemEventType {
     IbcPacketTimeout,
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub enum SystemAttributeKey {
     ContractAddr,
     CodeID,
@@ -100,11 +102,13 @@ pub enum SystemAttributeKey {
     Feature,
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub struct SystemAttribute {
     key: SystemAttributeKey,
     value: String,
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub struct SystemEvent {
     ty: SystemEventType,
     attributes: Vec<SystemAttribute>,
@@ -406,7 +410,7 @@ where
 
 /// High level dispatch for a `CosmWasm` VM.
 /// This call will manage and handle subcall as well as the transactions etc...
-/// The implementation must be semantically valid w.r.t https://github.com/CosmWasm/cosmwasm/blob/main/SEMANTICS.md
+/// The implementation must be semantically valid w.r.t <https://github.com/CosmWasm/cosmwasm/blob/main/SEMANTICS.md>
 ///
 /// Returns either the value produced by the contract along the generated events or a `VmErrorOf<V>`
 pub fn cosmwasm_system_entrypoint<I, V>(

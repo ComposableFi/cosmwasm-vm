@@ -41,6 +41,7 @@ use cosmwasm_std::{Binary, Coin, ContractInfoResponse, Event, Reply, SystemResul
 use serde::de::DeserializeOwned;
 
 /// Gas checkpoint, used to meter sub-call gas usage.
+#[allow(clippy::module_name_repetitions)]
 pub enum VmGasCheckpoint {
     /// Unlimited gas in a sub-call, the sub-call might exhaust the parent gas.
     Unlimited,
@@ -50,6 +51,7 @@ pub enum VmGasCheckpoint {
 
 /// Gasable VM calls.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[allow(clippy::module_name_repetitions)]
 pub enum VmGas {
     /// Instrumentation gas raised by the injected code.
     Instrumentation { metered: u32 },
@@ -122,15 +124,25 @@ pub enum VmGas {
     IbcCloseChannel,
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub type VmInputOf<'a, T> = <T as VMBase>::Input<'a>;
+#[allow(clippy::module_name_repetitions)]
 pub type VmOutputOf<'a, T> = <T as VMBase>::Output<'a>;
+#[allow(clippy::module_name_repetitions)]
 pub type VmErrorOf<T> = <T as VMBase>::Error;
+#[allow(clippy::module_name_repetitions)]
 pub type VmQueryCustomOf<T> = <T as VMBase>::QueryCustom;
+#[allow(clippy::module_name_repetitions)]
 pub type VmMessageCustomOf<T> = <T as VMBase>::MessageCustom;
+#[allow(clippy::module_name_repetitions)]
 pub type VmAddressOf<T> = <T as VMBase>::Address;
+#[allow(clippy::module_name_repetitions)]
 pub type VmCanonicalAddressOf<T> = <T as VMBase>::CanonicalAddress;
+#[allow(clippy::module_name_repetitions)]
 pub type VmStorageKeyOf<T> = <T as VMBase>::StorageKey;
+#[allow(clippy::module_name_repetitions)]
 pub type VmStorageValueOf<T> = <T as VMBase>::StorageValue;
+#[allow(clippy::module_name_repetitions)]
 pub type VmContracMetaOf<T> = <T as VMBase>::ContractMeta;
 
 /// A way of calling a VM. From the abstract `call` to `raw_call`.
