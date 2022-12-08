@@ -3,7 +3,6 @@ use core::mem;
 use alloc::string::String;
 use alloc::{vec, vec::Vec};
 use cosmwasm_std::{ContractResult, Empty, Response};
-use serde::Serialize;
 use wasm_instrument::parity_wasm::{
     builder,
     elements::{FuncBody, Instruction, Instructions, Local, ValueType},
@@ -259,9 +258,12 @@ impl QueryCall {
 }
 
 const INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR: u32 = 0;
+
+// We know this won't truncate as it is being executed in a 32-bit wasm context
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 const SIZE_OF_I32: i32 = mem::size_of::<i32>() as i32;
-/// Size of CosmWasm Region
-/// offset + capacity + length
+/// Size of `CosmWasm` `Region`
+/// `offset` + `capacity` + `length`
 /// <https://github.com/CosmWasm/cosmwasm/blob/0ba91a53488f1a00fd1fa702c0055bfa324d395a/README.md?plain=1#L271>
 const SIZE_OF_REGION: i32 = SIZE_OF_I32 * 3;
 
@@ -353,6 +355,8 @@ impl From<ModuleDefinition> for WasmModule {
                 definition: def.migrate_call.0,
             },
             // fn deallocate(pointer: u32);
+            // NOTE: We are not deallocating memory because for our usecase it does
+            // not affect performance.
             Function {
                 name: "deallocate".into(),
                 params: vec![ValueType::I32],
@@ -367,6 +371,8 @@ impl From<ModuleDefinition> for WasmModule {
                 definition: def.query_call.0,
             },
             // dummy function to increase the binary size
+            // Used for increasing the total wasm's size.
+            // Useful when benchmarking for different binary sizes.
             Function {
                 name: "dummy_fn".into(),
                 params: vec![],
@@ -381,6 +387,8 @@ impl From<ModuleDefinition> for WasmModule {
                 ),
             },
             // fn interface_version_8() -> ();
+            // Required in order to signal compatibility with CosmWasm 1.0
+            // <https://github.com/CosmWasm/cosmwasm/blob/0ba91a53488f1a00fd1fa702c0055bfa324d395a/README.md?plain=1#L153>
             Function {
                 name: "interface_version_8".into(),
                 params: vec![],
@@ -389,6 +397,8 @@ impl From<ModuleDefinition> for WasmModule {
             },
         ];
 
+        // Add functions definied by users.
+        // Useful for benchmarking
         for function in def.additional_functions {
             function_definitions.push(function);
         }
