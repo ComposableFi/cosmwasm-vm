@@ -1,6 +1,9 @@
+use core::mem;
+
 use alloc::string::String;
 use alloc::{vec, vec::Vec};
 use cosmwasm_std::{ContractResult, Empty, Response};
+use serde::Serialize;
 use wasm_instrument::parity_wasm::{
     builder,
     elements::{FuncBody, Instruction, Instructions, Local, ValueType},
@@ -255,6 +258,13 @@ impl QueryCall {
     }
 }
 
+const INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR: u32 = 0;
+const SIZE_OF_I32: i32 = mem::size_of::<i32>() as i32;
+/// Size of CosmWasm Region
+/// offset + capacity + length
+/// <https://github.com/CosmWasm/cosmwasm/blob/0ba91a53488f1a00fd1fa702c0055bfa324d395a/README.md?plain=1#L271>
+const SIZE_OF_REGION: i32 = SIZE_OF_I32 * 3;
+
 impl From<ModuleDefinition> for WasmModule {
     #[allow(clippy::too_many_lines)]
     fn from(def: ModuleDefinition) -> Self {
@@ -279,42 +289,43 @@ impl From<ModuleDefinition> for WasmModule {
             // fn allocate(size: usize) -> u32;
             Function {
                 name: "allocate".into(),
-                params: vec![ValueType::I32],
-                result: Some(ValueType::I32),
+                params: vec![ValueType::I32], // how much memory to allocate
+                result: Some(ValueType::I32), // ptr to the region of the new memory
                 definition: FuncBody::new(
-                    vec![Local::new(1, ValueType::I32)],
+                    Vec::new(), // We don't need any local variables
                     Instructions::new(vec![
+                        // Save original memory cursor in order to return it at the end
+                        // Once we have allocated the memory for the new region
+                        Instruction::GetGlobal(INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR),
                         // reserve space
                         // save offset as global offset ptr + 12
-                        Instruction::GetGlobal(0),
-                        Instruction::I32Const(12),
-                        Instruction::GetGlobal(0),
+                        Instruction::GetGlobal(INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR),
+                        Instruction::I32Const(SIZE_OF_REGION),
+                        Instruction::GetGlobal(INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR),
                         Instruction::I32Add,
                         Instruction::I32Store(0, 0),
                         // set capacity to input reserve size
-                        Instruction::GetGlobal(0),
-                        Instruction::I32Const(4),
+                        Instruction::GetGlobal(INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR),
+                        Instruction::I32Const(SIZE_OF_I32),
                         Instruction::I32Add,
                         Instruction::GetLocal(0),
                         Instruction::I32Store(0, 0),
                         // set length to 0
-                        Instruction::GetGlobal(0),
-                        Instruction::I32Const(8),
+                        Instruction::GetGlobal(INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR),
+                        Instruction::I32Const(SIZE_OF_I32 * 2),
                         Instruction::I32Add,
                         Instruction::I32Const(0),
                         Instruction::I32Store(0, 0),
-                        // save global offset ptr to local_var_1
-                        Instruction::GetGlobal(0),
-                        Instruction::SetLocal(1),
                         // increase global offset ptr by (12 + capacity)
-                        Instruction::GetGlobal(0),
-                        Instruction::I32Const(12),
+                        Instruction::GetGlobal(INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR),
+                        Instruction::I32Const(SIZE_OF_REGION),
                         Instruction::I32Add,
                         Instruction::GetLocal(0),
                         Instruction::I32Add,
-                        Instruction::SetGlobal(0),
                         // increase global offset ptr by allocated size
-                        Instruction::GetLocal(1),
+                        Instruction::SetGlobal(INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR),
+                        // Return the original memory cursor which we have cached at the
+                        // beginning of this function
                         Instruction::Return,
                         Instruction::End,
                     ]),
