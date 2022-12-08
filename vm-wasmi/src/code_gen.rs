@@ -3,6 +3,7 @@ use core::mem;
 use alloc::string::String;
 use alloc::{vec, vec::Vec};
 use cosmwasm_std::{ContractResult, Empty, Response};
+use serde::Serialize;
 use wasm_instrument::parity_wasm::{
     builder,
     elements::{FuncBody, Instruction, Instructions, Local, ValueType},
@@ -60,6 +61,19 @@ impl ModuleDefinition {
             }],
             additional_binary_size,
         )
+    }
+
+    pub fn with_instantiate_response<S: Serialize>(response: S) -> Result<Self, Error> {
+        Ok(Self {
+            instantiate_call: InstantiateCall(
+                InstantiateCall::plain(response).map_err(|_| Error::Internal)?,
+            ),
+            execute_call: ExecuteCall::new().map_err(|_| Error::Internal)?,
+            migrate_call: MigrateCall::new().map_err(|_| Error::Internal)?,
+            query_call: QueryCall::new().map_err(|_| Error::Internal)?,
+            additional_functions: Vec::new(),
+            additional_binary_size: 0,
+        })
     }
 }
 

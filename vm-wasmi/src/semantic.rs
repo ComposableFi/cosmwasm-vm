@@ -989,36 +989,81 @@ fn test_bare() {
     );
 }
 
-#[test]
-fn test_code_gen() {
-    let module: code_gen::WasmModule = code_gen::ModuleDefinition::new(vec![], 10).unwrap().into();
-    let sender = BankAccount(100);
-    let address = BankAccount(10_000);
-    let funds = vec![];
-    let mut extension = SimpleWasmiVMExtension {
-        storage: BTreeMap::default(),
-        codes: BTreeMap::from([(0x1337, module.code)]),
-        contracts: BTreeMap::from([(
-            address,
-            CosmwasmContractMeta {
-                code_id: 0x1337,
-                admin: None,
-                label: String::new(),
-            },
-        )]),
-        next_account_id: BankAccount(10_001),
-        transaction_depth: 0,
-        gas: Gas::new(100_000_000),
-        ..Default::default()
-    };
-    let mut vm = create_simple_vm(sender, address, funds, &mut extension);
-    let result =
-        cosmwasm_call::<InstantiateCall, WasmiVM<SimpleWasmiVM>>(&mut vm, r#"{}"#.as_bytes())
-            .unwrap();
-    assert_matches!(result, InstantiateResult(CosmwasmExecutionResult::Ok(_)));
-    let result =
-        cosmwasm_call::<ExecuteCall, WasmiVM<SimpleWasmiVM>>(&mut vm, r#"{}"#.as_bytes()).unwrap();
-    assert_matches!(result, ExecuteResult(CosmwasmExecutionResult::Ok(_)));
+mod test_code_gen {
+    use cosmwasm_std::{ContractResult, Response};
+
+    use super::*;
+    #[test]
+    fn basic() {
+        let module: code_gen::WasmModule =
+            code_gen::ModuleDefinition::new(vec![], 10).unwrap().into();
+        let sender = BankAccount(100);
+        let address = BankAccount(10_000);
+        let funds = vec![];
+        let mut extension = SimpleWasmiVMExtension {
+            storage: BTreeMap::default(),
+            codes: BTreeMap::from([(0x1337, module.code)]),
+            contracts: BTreeMap::from([(
+                address,
+                CosmwasmContractMeta {
+                    code_id: 0x1337,
+                    admin: None,
+                    label: String::new(),
+                },
+            )]),
+            next_account_id: BankAccount(10_001),
+            transaction_depth: 0,
+            gas: Gas::new(100_000_000),
+            ..Default::default()
+        };
+        let mut vm = create_simple_vm(sender, address, funds, &mut extension);
+        let result =
+            cosmwasm_call::<InstantiateCall, WasmiVM<SimpleWasmiVM>>(&mut vm, r#"{}"#.as_bytes())
+                .unwrap();
+        assert_matches!(result, InstantiateResult(CosmwasmExecutionResult::Ok(_)));
+        let result =
+            cosmwasm_call::<ExecuteCall, WasmiVM<SimpleWasmiVM>>(&mut vm, r#"{}"#.as_bytes())
+                .unwrap();
+        assert_matches!(result, ExecuteResult(CosmwasmExecutionResult::Ok(_)));
+    }
+
+    #[test]
+    fn instantiate_response() {
+        let response =
+            ContractResult::Ok(Response::<Empty>::new().add_attribute("Hello", "world!"));
+        let response_2 =
+            ContractResult::Ok(Response::<Empty>::new().add_attribute("Hello", "mars!"));
+        let module: code_gen::WasmModule =
+            code_gen::ModuleDefinition::with_instantiate_response(response.clone())
+                .unwrap()
+                .into();
+
+        let sender = BankAccount(100);
+        let address = BankAccount(10_000);
+        let funds = vec![];
+        let mut extension = SimpleWasmiVMExtension {
+            storage: BTreeMap::default(),
+            codes: BTreeMap::from([(0x1337, module.code)]),
+            contracts: BTreeMap::from([(
+                address,
+                CosmwasmContractMeta {
+                    code_id: 0x1337,
+                    admin: None,
+                    label: String::new(),
+                },
+            )]),
+            next_account_id: BankAccount(10_001),
+            transaction_depth: 0,
+            gas: Gas::new(100_000_000),
+            ..Default::default()
+        };
+        let mut vm = create_simple_vm(sender, address, funds, &mut extension);
+        let result =
+            cosmwasm_call::<InstantiateCall, WasmiVM<SimpleWasmiVM>>(&mut vm, r#"{}"#.as_bytes())
+                .unwrap();
+        assert_eq!(result, InstantiateResult(response));
+        assert_ne!(result, InstantiateResult(response_2));
+    }
 }
 
 pub fn digit_sum(input: &[u8]) -> usize {
