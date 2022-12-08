@@ -233,7 +233,7 @@ where
             block: BlockInfo {
                 height: 0,
                 time: Timestamp::from_seconds(1),
-                chain_id: "".into(),
+                chain_id: String::new(),
             },
             transaction: None,
             contract: ContractInfo {

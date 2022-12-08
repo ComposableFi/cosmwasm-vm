@@ -8,6 +8,7 @@ const COSMOS_ADDR_LEN: usize = 20;
 const COSMOS_ADDR_LEN_2: usize = 32;
 const SUBSTRATE_ADDR_LEN: usize = 32;
 
+#[allow(clippy::module_name_repetitions)]
 pub trait AddressHandler {
     fn addr_validate(input: &str) -> Result<(), VmError> {
         let canonical_addr = Self::addr_canonicalize(input)?;

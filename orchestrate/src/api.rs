@@ -23,6 +23,7 @@ use cosmwasm_vm::{
 use cosmwasm_vm_wasmi::{WasmiBaseVM, WasmiVM};
 use serde::{de::DeserializeOwned, Serialize};
 
+#[allow(clippy::module_name_repetitions)]
 pub type JunoApi<'a, E = Dispatch> = Api<
     'a,
     E,
@@ -31,6 +32,7 @@ pub type JunoApi<'a, E = Dispatch> = Api<
     Context<'a, (), JunoAddressHandler>,
 >;
 
+#[allow(clippy::module_name_repetitions)]
 pub type WasmApi<'a, E = Dispatch> = Api<
     'a,
     E,
@@ -39,6 +41,7 @@ pub type WasmApi<'a, E = Dispatch> = Api<
     Context<'a, (), WasmAddressHandler>,
 >;
 
+#[allow(clippy::module_name_repetitions)]
 pub type SubstrateApi<'a, E = Dispatch> = Api<
     'a,
     E,
@@ -475,7 +478,6 @@ impl ExecutionType for Dispatch {
 }
 
 /// Convenient builder for `State`
-#[derive(Default)]
 pub struct StateBuilder<AH: AddressHandler, CH: CustomHandler = ()> {
     codes: Vec<Vec<u8>>,
     balances: Vec<(Account, Coin)>,
@@ -484,10 +486,22 @@ pub struct StateBuilder<AH: AddressHandler, CH: CustomHandler = ()> {
     _marker: PhantomData<AH>,
 }
 
+impl<CH: CustomHandler + Default, AH: AddressHandler> Default for StateBuilder<AH, CH> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<CH: CustomHandler + Default, AH: AddressHandler> StateBuilder<AH, CH> {
     #[must_use]
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            codes: Vec::default(),
+            balances: Vec::default(),
+            ibc_channels: Vec::default(),
+            custom_handler: CH::default(),
+            _marker: PhantomData,
+        }
     }
 
     #[must_use]

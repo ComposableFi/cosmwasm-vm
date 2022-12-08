@@ -74,7 +74,6 @@ impl Account {
     /// * `message` - Raw instantiate message
     ///
     /// The address is generated with the algorithm: `Sha1(code_hash + message)`
-    #[must_use]
     pub fn generate<AH: AddressHandler>(code_hash: &[u8], message: &[u8]) -> Result<Self, VmError> {
         let addr = AH::addr_generate([code_hash, message])?;
         Ok(Self::unchecked(addr))
@@ -90,7 +89,6 @@ impl Account {
     /// that by using this function, one can generate the `Account` prior to
     /// execution.
     /// See [`Self::generate`] for the generation algorithm
-    #[must_use]
     pub fn generate_by_code<AH: AddressHandler>(
         code: &[u8],
         message: &[u8],
@@ -100,7 +98,6 @@ impl Account {
     }
 
     /// Generates an `Account` based on the provided `seed`
-    #[must_use]
     pub fn generate_from_seed<AH: AddressHandler>(seed: &str) -> Result<Self, VmError> {
         let addr = AH::addr_generate([seed.as_ref()])?;
         Ok(Self::unchecked(addr))
