@@ -128,13 +128,11 @@ impl FunctionBuilder {
 }
 
 trait EntrypointCall {
+    const MSG_PTR_INDEX: u32;
     /// Plain entrypoint which just returns the response as is
     /// `msg_ptr_index` is the index of the `msg_ptr` parameter in cosmwasm api
     /// this index is 2 in `query` but 3 in `execute`
-    fn plain<T: serde::Serialize>(
-        response: T,
-        msg_ptr_index: u32,
-    ) -> Result<FuncBody, serde_json::Error> {
+    fn plain<T: serde::Serialize>(response: T) -> Result<FuncBody, serde_json::Error> {
         let result = serde_json::to_string(&response)?;
 
         let instructions = vec![
@@ -145,8 +143,8 @@ trait EntrypointCall {
                 Instruction::I32Const(result.len() as i32),
                 Instruction::Call(0),
                 // we save the ptr
-                Instruction::SetLocal(msg_ptr_index + 1),
-                Instruction::GetLocal(msg_ptr_index + 1),
+                Instruction::SetLocal(Self::MSG_PTR_INDEX + 1),
+                Instruction::GetLocal(Self::MSG_PTR_INDEX + 1),
                 // now we should set the length to response.len()
                 Instruction::I32Const(8),
                 Instruction::I32Add,
@@ -154,30 +152,30 @@ trait EntrypointCall {
                 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
                 Instruction::I32Const(result.len() as i32),
                 Instruction::I32Store(0, 0),
-                Instruction::GetLocal(msg_ptr_index + 1),
+                Instruction::GetLocal(Self::MSG_PTR_INDEX + 1),
                 // returned ptr to { offset: i32, capacity: i32, length: i32 }
                 Instruction::I32Load(0, 0),
                 // now we load offset and save it to local_var_3
-                Instruction::SetLocal(msg_ptr_index),
-                Instruction::GetLocal(msg_ptr_index),
+                Instruction::SetLocal(Self::MSG_PTR_INDEX),
+                Instruction::GetLocal(Self::MSG_PTR_INDEX),
             ],
             {
                 let mut instructions = Vec::new();
                 for c in result.chars() {
                     instructions.extend(vec![
-                        Instruction::GetLocal(msg_ptr_index),
+                        Instruction::GetLocal(Self::MSG_PTR_INDEX),
                         Instruction::I32Const(c as i32),
                         Instruction::I32Store(0, 0),
-                        Instruction::GetLocal(msg_ptr_index),
+                        Instruction::GetLocal(Self::MSG_PTR_INDEX),
                         Instruction::I32Const(1),
                         Instruction::I32Add,
-                        Instruction::SetLocal(msg_ptr_index),
+                        Instruction::SetLocal(Self::MSG_PTR_INDEX),
                     ]);
                 }
                 instructions
             },
             vec![
-                Instruction::GetLocal(msg_ptr_index + 1),
+                Instruction::GetLocal(Self::MSG_PTR_INDEX + 1),
                 Instruction::Return,
                 Instruction::End,
             ],
@@ -196,14 +194,15 @@ trait EntrypointCall {
 #[derive(Debug)]
 struct ExecuteCall(FuncBody);
 
-impl EntrypointCall for ExecuteCall {}
+impl EntrypointCall for ExecuteCall {
+    const MSG_PTR_INDEX: u32 = 3;
+}
 
 impl ExecuteCall {
     pub fn new() -> Result<Self, serde_json::Error> {
         let response = Response::<Empty>::default();
         Ok(ExecuteCall(Self::plain(
             ContractResult::<Response<Empty>>::Ok(response),
-            3,
         )?))
     }
 }
@@ -211,29 +210,31 @@ impl ExecuteCall {
 #[derive(Debug)]
 struct InstantiateCall(FuncBody);
 
-impl EntrypointCall for InstantiateCall {}
+impl EntrypointCall for InstantiateCall {
+    const MSG_PTR_INDEX: u32 = 3;
+}
 
 impl InstantiateCall {
     pub fn new() -> Result<Self, serde_json::Error> {
         let response = Response::<Empty>::default();
-        Ok(InstantiateCall(Self::plain(
-            ContractResult::<Response<Empty>>::Ok(response),
-            3,
-        )?))
+        Ok(InstantiateCall(Self::plain(ContractResult::<
+            Response<Empty>,
+        >::Ok(response))?))
     }
 }
 
 #[derive(Debug)]
 struct MigrateCall(FuncBody);
 
-impl EntrypointCall for MigrateCall {}
+impl EntrypointCall for MigrateCall {
+    const MSG_PTR_INDEX: u32 = 2;
+}
 
 impl MigrateCall {
     pub fn new() -> Result<Self, serde_json::Error> {
         let response = Response::<Empty>::default();
         Ok(MigrateCall(Self::plain(
             ContractResult::<Response<Empty>>::Ok(response),
-            2,
         )?))
     }
 }
@@ -241,15 +242,16 @@ impl MigrateCall {
 #[derive(Debug)]
 struct QueryCall(FuncBody);
 
-impl EntrypointCall for QueryCall {}
+impl EntrypointCall for QueryCall {
+    const MSG_PTR_INDEX: u32 = 2;
+}
 
 impl QueryCall {
     pub fn new() -> Result<Self, serde_json::Error> {
         let encoded_result = hex::encode("{}");
-        Ok(QueryCall(Self::plain(
-            ContractResult::<alloc::string::String>::Ok(encoded_result),
-            2,
-        )?))
+        Ok(QueryCall(Self::plain(ContractResult::<
+            alloc::string::String,
+        >::Ok(encoded_result))?))
     }
 }
 
