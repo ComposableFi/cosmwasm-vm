@@ -1,6 +1,9 @@
+use core::mem;
+
 use alloc::string::String;
 use alloc::{vec, vec::Vec};
 use cosmwasm_std::{ContractResult, Empty, Response};
+use serde::Serialize;
 use wasm_instrument::parity_wasm::{
     builder,
     elements::{FuncBody, Instruction, Instructions, Local, ValueType},
@@ -58,6 +61,19 @@ impl ModuleDefinition {
             }],
             additional_binary_size,
         )
+    }
+
+    pub fn with_instantiate_response<S: Serialize>(response: S) -> Result<Self, Error> {
+        Ok(Self {
+            instantiate_call: InstantiateCall(
+                InstantiateCall::plain(response).map_err(|_| Error::Internal)?,
+            ),
+            execute_call: ExecuteCall::new().map_err(|_| Error::Internal)?,
+            migrate_call: MigrateCall::new().map_err(|_| Error::Internal)?,
+            query_call: QueryCall::new().map_err(|_| Error::Internal)?,
+            additional_functions: Vec::new(),
+            additional_binary_size: 0,
+        })
     }
 }
 
@@ -128,13 +144,11 @@ impl FunctionBuilder {
 }
 
 trait EntrypointCall {
+    const MSG_PTR_INDEX: u32;
     /// Plain entrypoint which just returns the response as is
     /// `msg_ptr_index` is the index of the `msg_ptr` parameter in cosmwasm api
     /// this index is 2 in `query` but 3 in `execute`
-    fn plain<T: serde::Serialize>(
-        response: T,
-        msg_ptr_index: u32,
-    ) -> Result<FuncBody, serde_json::Error> {
+    fn plain<T: serde::Serialize>(response: T) -> Result<FuncBody, serde_json::Error> {
         let result = serde_json::to_string(&response)?;
 
         let instructions = vec![
@@ -145,8 +159,8 @@ trait EntrypointCall {
                 Instruction::I32Const(result.len() as i32),
                 Instruction::Call(0),
                 // we save the ptr
-                Instruction::SetLocal(msg_ptr_index + 1),
-                Instruction::GetLocal(msg_ptr_index + 1),
+                Instruction::SetLocal(Self::MSG_PTR_INDEX + 1),
+                Instruction::GetLocal(Self::MSG_PTR_INDEX + 1),
                 // now we should set the length to response.len()
                 Instruction::I32Const(8),
                 Instruction::I32Add,
@@ -154,30 +168,30 @@ trait EntrypointCall {
                 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
                 Instruction::I32Const(result.len() as i32),
                 Instruction::I32Store(0, 0),
-                Instruction::GetLocal(msg_ptr_index + 1),
+                Instruction::GetLocal(Self::MSG_PTR_INDEX + 1),
                 // returned ptr to { offset: i32, capacity: i32, length: i32 }
                 Instruction::I32Load(0, 0),
                 // now we load offset and save it to local_var_3
-                Instruction::SetLocal(msg_ptr_index),
-                Instruction::GetLocal(msg_ptr_index),
+                Instruction::SetLocal(Self::MSG_PTR_INDEX),
+                Instruction::GetLocal(Self::MSG_PTR_INDEX),
             ],
             {
                 let mut instructions = Vec::new();
                 for c in result.chars() {
                     instructions.extend(vec![
-                        Instruction::GetLocal(msg_ptr_index),
+                        Instruction::GetLocal(Self::MSG_PTR_INDEX),
                         Instruction::I32Const(c as i32),
                         Instruction::I32Store(0, 0),
-                        Instruction::GetLocal(msg_ptr_index),
+                        Instruction::GetLocal(Self::MSG_PTR_INDEX),
                         Instruction::I32Const(1),
                         Instruction::I32Add,
-                        Instruction::SetLocal(msg_ptr_index),
+                        Instruction::SetLocal(Self::MSG_PTR_INDEX),
                     ]);
                 }
                 instructions
             },
             vec![
-                Instruction::GetLocal(msg_ptr_index + 1),
+                Instruction::GetLocal(Self::MSG_PTR_INDEX + 1),
                 Instruction::Return,
                 Instruction::End,
             ],
@@ -196,14 +210,15 @@ trait EntrypointCall {
 #[derive(Debug)]
 struct ExecuteCall(FuncBody);
 
-impl EntrypointCall for ExecuteCall {}
+impl EntrypointCall for ExecuteCall {
+    const MSG_PTR_INDEX: u32 = 3;
+}
 
 impl ExecuteCall {
     pub fn new() -> Result<Self, serde_json::Error> {
         let response = Response::<Empty>::default();
         Ok(ExecuteCall(Self::plain(
             ContractResult::<Response<Empty>>::Ok(response),
-            3,
         )?))
     }
 }
@@ -211,29 +226,31 @@ impl ExecuteCall {
 #[derive(Debug)]
 struct InstantiateCall(FuncBody);
 
-impl EntrypointCall for InstantiateCall {}
+impl EntrypointCall for InstantiateCall {
+    const MSG_PTR_INDEX: u32 = 3;
+}
 
 impl InstantiateCall {
     pub fn new() -> Result<Self, serde_json::Error> {
         let response = Response::<Empty>::default();
-        Ok(InstantiateCall(Self::plain(
-            ContractResult::<Response<Empty>>::Ok(response),
-            3,
-        )?))
+        Ok(InstantiateCall(Self::plain(ContractResult::<
+            Response<Empty>,
+        >::Ok(response))?))
     }
 }
 
 #[derive(Debug)]
 struct MigrateCall(FuncBody);
 
-impl EntrypointCall for MigrateCall {}
+impl EntrypointCall for MigrateCall {
+    const MSG_PTR_INDEX: u32 = 2;
+}
 
 impl MigrateCall {
     pub fn new() -> Result<Self, serde_json::Error> {
         let response = Response::<Empty>::default();
         Ok(MigrateCall(Self::plain(
             ContractResult::<Response<Empty>>::Ok(response),
-            2,
         )?))
     }
 }
@@ -241,17 +258,28 @@ impl MigrateCall {
 #[derive(Debug)]
 struct QueryCall(FuncBody);
 
-impl EntrypointCall for QueryCall {}
+impl EntrypointCall for QueryCall {
+    const MSG_PTR_INDEX: u32 = 2;
+}
 
 impl QueryCall {
     pub fn new() -> Result<Self, serde_json::Error> {
         let encoded_result = hex::encode("{}");
-        Ok(QueryCall(Self::plain(
-            ContractResult::<alloc::string::String>::Ok(encoded_result),
-            2,
-        )?))
+        Ok(QueryCall(Self::plain(ContractResult::<
+            alloc::string::String,
+        >::Ok(encoded_result))?))
     }
 }
+
+const INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR: u32 = 0;
+
+// We know this won't truncate as it is being executed in a 32-bit wasm context
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+const SIZE_OF_I32: i32 = mem::size_of::<i32>() as i32;
+/// Size of `CosmWasm` `Region`
+/// `offset` + `capacity` + `length`
+/// <https://github.com/CosmWasm/cosmwasm/blob/0ba91a53488f1a00fd1fa702c0055bfa324d395a/README.md?plain=1#L271>
+const SIZE_OF_REGION: i32 = SIZE_OF_I32 * 3;
 
 impl From<ModuleDefinition> for WasmModule {
     #[allow(clippy::too_many_lines)]
@@ -277,42 +305,43 @@ impl From<ModuleDefinition> for WasmModule {
             // fn allocate(size: usize) -> u32;
             Function {
                 name: "allocate".into(),
-                params: vec![ValueType::I32],
-                result: Some(ValueType::I32),
+                params: vec![ValueType::I32], // how much memory to allocate
+                result: Some(ValueType::I32), // ptr to the region of the new memory
                 definition: FuncBody::new(
-                    vec![Local::new(1, ValueType::I32)],
+                    Vec::new(), // We don't need any local variables
                     Instructions::new(vec![
+                        // Save original memory cursor in order to return it at the end
+                        // Once we have allocated the memory for the new region
+                        Instruction::GetGlobal(INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR),
                         // reserve space
                         // save offset as global offset ptr + 12
-                        Instruction::GetGlobal(0),
-                        Instruction::I32Const(12),
-                        Instruction::GetGlobal(0),
+                        Instruction::GetGlobal(INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR),
+                        Instruction::I32Const(SIZE_OF_REGION),
+                        Instruction::GetGlobal(INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR),
                         Instruction::I32Add,
                         Instruction::I32Store(0, 0),
                         // set capacity to input reserve size
-                        Instruction::GetGlobal(0),
-                        Instruction::I32Const(4),
+                        Instruction::GetGlobal(INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR),
+                        Instruction::I32Const(SIZE_OF_I32),
                         Instruction::I32Add,
                         Instruction::GetLocal(0),
                         Instruction::I32Store(0, 0),
                         // set length to 0
-                        Instruction::GetGlobal(0),
-                        Instruction::I32Const(8),
+                        Instruction::GetGlobal(INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR),
+                        Instruction::I32Const(SIZE_OF_I32 * 2),
                         Instruction::I32Add,
                         Instruction::I32Const(0),
                         Instruction::I32Store(0, 0),
-                        // save global offset ptr to local_var_1
-                        Instruction::GetGlobal(0),
-                        Instruction::SetLocal(1),
                         // increase global offset ptr by (12 + capacity)
-                        Instruction::GetGlobal(0),
-                        Instruction::I32Const(12),
+                        Instruction::GetGlobal(INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR),
+                        Instruction::I32Const(SIZE_OF_REGION),
                         Instruction::I32Add,
                         Instruction::GetLocal(0),
                         Instruction::I32Add,
-                        Instruction::SetGlobal(0),
                         // increase global offset ptr by allocated size
-                        Instruction::GetLocal(1),
+                        Instruction::SetGlobal(INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR),
+                        // Return the original memory cursor which we have cached at the
+                        // beginning of this function
                         Instruction::Return,
                         Instruction::End,
                     ]),
@@ -340,6 +369,8 @@ impl From<ModuleDefinition> for WasmModule {
                 definition: def.migrate_call.0,
             },
             // fn deallocate(pointer: u32);
+            // NOTE: We are not deallocating memory because for our usecase it does
+            // not affect performance.
             Function {
                 name: "deallocate".into(),
                 params: vec![ValueType::I32],
@@ -354,6 +385,8 @@ impl From<ModuleDefinition> for WasmModule {
                 definition: def.query_call.0,
             },
             // dummy function to increase the binary size
+            // Used for increasing the total wasm's size.
+            // Useful when benchmarking for different binary sizes.
             Function {
                 name: "dummy_fn".into(),
                 params: vec![],
@@ -368,6 +401,8 @@ impl From<ModuleDefinition> for WasmModule {
                 ),
             },
             // fn interface_version_8() -> ();
+            // Required in order to signal compatibility with CosmWasm 1.0
+            // <https://github.com/CosmWasm/cosmwasm/blob/0ba91a53488f1a00fd1fa702c0055bfa324d395a/README.md?plain=1#L153>
             Function {
                 name: "interface_version_8".into(),
                 params: vec![],
@@ -376,6 +411,8 @@ impl From<ModuleDefinition> for WasmModule {
             },
         ];
 
+        // Add functions definied by users.
+        // Useful for benchmarking
         for function in def.additional_functions {
             function_definitions.push(function);
         }
