@@ -39,3 +39,5 @@ pub mod system;
 pub mod tagged;
 pub mod transaction;
 pub mod vm;
+
+pub use cosmwasm_std;
