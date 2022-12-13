@@ -199,7 +199,7 @@ where
         env: Env,
         info: MessageInfo,
         gas: u64,
-        message: IbcChannelConnectMsg,
+        message: &IbcChannelConnectMsg,
     ) -> Result<E::Output<V>, VmError> {
         let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotDeserialize)?;
         vm_state.do_ibc::<E, IbcChannelConnectCall<VmMessageCustomOf<V>>>(env, info, gas, &message)
@@ -217,7 +217,7 @@ where
         env: Env,
         info: MessageInfo,
         gas: u64,
-        message: IbcPacketReceiveMsg,
+        message: &IbcPacketReceiveMsg,
     ) -> Result<E::Output<V>, VmError> {
         let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotDeserialize)?;
         vm_state.do_ibc::<E, IbcPacketReceiveCall<VmMessageCustomOf<V>>>(env, info, gas, &message)
@@ -235,7 +235,7 @@ where
         env: Env,
         info: MessageInfo,
         gas: u64,
-        message: IbcPacketAckMsg,
+        message: &IbcPacketAckMsg,
     ) -> Result<E::Output<V>, VmError> {
         let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotDeserialize)?;
         vm_state.do_ibc::<E, IbcPacketAckCall<VmMessageCustomOf<V>>>(env, info, gas, &message)
@@ -253,7 +253,7 @@ where
         env: Env,
         info: MessageInfo,
         gas: u64,
-        message: IbcPacketTimeoutMsg,
+        message: &IbcPacketTimeoutMsg,
     ) -> Result<E::Output<V>, VmError> {
         let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotDeserialize)?;
         vm_state.do_ibc::<E, IbcPacketTimeoutCall<VmMessageCustomOf<V>>>(env, info, gas, &message)
@@ -312,7 +312,7 @@ where
         env: Env,
         info: MessageInfo,
         gas: u64,
-        message: IbcChannelOpenMsg,
+        message: &IbcChannelOpenMsg,
     ) -> Result<IbcChannelOpenResult, VmError> {
         let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotDeserialize)?;
         vm_state.do_direct::<IbcChannelOpenCall>(env, info, gas, &message)
@@ -384,35 +384,42 @@ pub struct StateBuilder {
 }
 
 impl StateBuilder {
+    #[must_use]
     pub fn new() -> Self {
-        Default::default()
+        Self::default()
     }
 
+    #[must_use]
     pub fn add_code(mut self, code: &[u8]) -> Self {
         self.codes.push(code.into());
         self
     }
 
+    #[must_use]
     pub fn add_channel(mut self, channel_id: IbcChannelId) -> Self {
         self.ibc_channels.push(channel_id);
         self
     }
 
+    #[must_use]
     pub fn add_balance(mut self, account: Account, coin: Coin) -> Self {
         self.balances.push((account, coin));
         self
     }
 
+    #[must_use]
     pub fn add_codes(mut self, codes: Vec<&[u8]>) -> Self {
         self.codes.extend(codes.into_iter().map(Into::into));
         self
     }
 
+    #[must_use]
     pub fn add_balances(mut self, balances: Vec<(Account, Coin)>) -> Self {
         self.balances.extend(balances.into_iter().map(Into::into));
         self
     }
 
+    #[must_use]
     pub fn build(self) -> State {
         State::new(self.codes, self.balances, self.ibc_channels)
     }

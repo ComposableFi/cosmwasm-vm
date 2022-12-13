@@ -42,12 +42,14 @@ pub struct Gas {
 }
 
 impl Gas {
+    #[must_use]
     pub fn new(initial_value: u64) -> Self {
         Gas {
             checkpoints: vec![initial_value],
         }
     }
 
+    #[must_use]
     pub fn current(&self) -> &u64 {
         self.checkpoints.last().expect("impossible")
     }
@@ -56,7 +58,7 @@ impl Gas {
         self.checkpoints.last_mut().expect("impossible")
     }
 
-    pub fn push(&mut self, checkpoint: VmGasCheckpoint) -> Result<(), VmError> {
+    pub fn push(&mut self, checkpoint: &VmGasCheckpoint) -> Result<(), VmError> {
         match checkpoint {
             VmGasCheckpoint::Unlimited => {
                 let parent = self.current_mut();
@@ -65,12 +67,12 @@ impl Gas {
                 self.checkpoints.push(value);
                 Ok(())
             }
-            VmGasCheckpoint::Limited(limit) if limit <= *self.current() => {
+            VmGasCheckpoint::Limited(limit) if limit <= self.current() => {
                 *self.current_mut() -= limit;
-                self.checkpoints.push(limit);
+                self.checkpoints.push(*limit);
                 Ok(())
             }
-            _ => Err(VmError::OutOfGas),
+            VmGasCheckpoint::Limited(_) => Err(VmError::OutOfGas),
         }
     }
 
@@ -226,7 +228,7 @@ impl<'a> Context<'a> {
             host_functions: host_functions_definitions
                 .0
                 .into_iter()
-                .flat_map(|(_, modules)| modules.into_iter().map(|(_, function)| function))
+                .flat_map(|(_, modules)| modules.into_values())
                 .collect(),
             executing_module: module,
             env: Env {
@@ -412,7 +414,7 @@ impl<'a> VMBase for Context<'a> {
             .db
             .storage
             .get(&address)
-            .unwrap_or(&Default::default())
+            .unwrap_or(&Storage::default())
             .data
             .get(&key)
             .cloned())
@@ -521,7 +523,7 @@ impl<'a> VMBase for Context<'a> {
             Ok(iterator.data[position].clone())
         } else {
             // Empty data works like `None` in rust iterators
-            Ok((Default::default(), Default::default()))
+            Ok((Vec::default(), Vec::default()))
         }
     }
 
@@ -577,11 +579,11 @@ impl<'a> VMBase for Context<'a> {
             Err(e) => return Ok(Err(e)),
         };
         let account = Account::try_from(input.to_string())?;
-        if account != normalized {
-            Ok(Err(VmError::InvalidAddress))
+        Ok(if account == normalized {
+            Ok(())
         } else {
-            Ok(Ok(()))
-        }
+            Err(VmError::InvalidAddress)
+        })
     }
 
     fn addr_canonicalize(
@@ -631,10 +633,7 @@ impl<'a> VMBase for Context<'a> {
         // Remove NULL bytes (i.e. the padding)
         let trimmed = tmp.into_iter().filter(|&x| x != 0x00).collect();
         // decode UTF-8 bytes into string
-        let human = match String::from_utf8(trimmed) {
-            Ok(trimmed) => trimmed,
-            Err(_) => return Ok(Err(VmError::InvalidAddress)),
-        };
+        let Ok(human) = String::from_utf8(trimmed) else { return Ok(Err(VmError::InvalidAddress)) };
         Ok(Account::try_from(human).map_err(|_| VmError::InvalidAddress))
     }
 
@@ -690,7 +689,7 @@ impl<'a> VMBase for Context<'a> {
 
     fn charge(&mut self, value: VmGas) -> Result<(), Self::Error> {
         let gas_to_charge = match value {
-            VmGas::Instrumentation { metered } => metered as u64,
+            VmGas::Instrumentation { metered } => u64::from(metered),
             x => {
                 log::debug!("Charging gas: {:?}", x);
                 1u64
@@ -702,7 +701,7 @@ impl<'a> VMBase for Context<'a> {
 
     fn gas_checkpoint_push(&mut self, checkpoint: VmGasCheckpoint) -> Result<(), Self::Error> {
         log::debug!("> Gas before: {:?}", self.state.gas);
-        self.state.gas.push(checkpoint)?;
+        self.state.gas.push(&checkpoint)?;
         log::debug!("> Gas after: {:?}", self.state.gas);
         Ok(())
     }

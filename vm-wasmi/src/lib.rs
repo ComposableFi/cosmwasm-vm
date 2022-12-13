@@ -27,7 +27,6 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![no_std]
-#![feature(generic_associated_types)]
 #![feature(trait_alias)]
 #![cfg_attr(test, feature(assert_matches))]
 
@@ -63,7 +62,10 @@ use cosmwasm_vm::{
     system::{CosmwasmContractMeta, SystemError},
     tagged::Tagged,
     transaction::{Transactional, TransactionalErrorOf},
-    vm::*,
+    vm::{
+        VMBase, VmAddressOf, VmCanonicalAddressOf, VmContracMetaOf, VmErrorOf, VmGas,
+        VmGasCheckpoint, VmMessageCustomOf, VmQueryCustomOf, VmStorageKeyOf, VmStorageValueOf, VM,
+    },
 };
 use either::Either;
 use wasmi::{CanResume, Externals, FuncInstance, ImportResolver, NopExternals, RuntimeValue};
@@ -126,7 +128,7 @@ impl From<TryFromIntError> for WasmiVMError {
 }
 impl Display for WasmiVMError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -200,16 +202,14 @@ where
             .get(&WasmiModuleName(module_name.to_owned()))
             .ok_or_else(|| {
                 wasmi::Error::Instantiation(format!(
-                    "A module tried to load an unknown host module: {}",
-                    module_name
+                    "A module tried to load an unknown host module: {module_name}"
                 ))
             })?;
         let (WasmiHostFunctionIndex(function_index), _) = *module
             .get(&WasmiFunctionName(field_name.to_owned()))
             .ok_or_else(|| {
                 wasmi::Error::Instantiation(format!(
-                    "A module tried to load an unknown host function: {}.{}",
-                    module_name, field_name
+                    "A module tried to load an unknown host function: {module_name}.{field_name}"
                 ))
             })?;
         Ok(FuncInstance::alloc_host(signature.clone(), function_index))
@@ -270,7 +270,7 @@ where
     fn try_from(WasmiOutput(value, _): WasmiOutput<'a, WasmiVM<T>>) -> Result<Self, Self::Error> {
         match value {
             Either::Right((_, rt_value)) => Ok(rt_value),
-            _ => Err(WasmiVMError::UnexpectedUnit.into()),
+            Either::Left(_) => Err(WasmiVMError::UnexpectedUnit.into()),
         }
     }
 }
@@ -283,7 +283,7 @@ where
     fn try_from(WasmiOutput(value, _): WasmiOutput<'a, WasmiVM<T>>) -> Result<Self, Self::Error> {
         match value {
             Either::Left(_) => Ok(Unit),
-            _ => Err(WasmiVMError::ExpectedUnit.into()),
+            Either::Right(_) => Err(WasmiVMError::ExpectedUnit.into()),
         }
     }
 }
@@ -294,9 +294,15 @@ where
 {
     type Error = VmErrorOf<T>;
     fn try_from(WasmiOutput(value, _): WasmiOutput<'a, WasmiVM<T>>) -> Result<Self, Self::Error> {
+        // we target wasm32 so this will not truncate
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_possible_wrap,
+            clippy::cast_sign_loss
+        )]
         match value {
             Either::Right((_, RuntimeValue::I32(rt_value))) => Ok(rt_value as u32),
-            _ => Err(WasmiVMError::ExpectedPointer.into()),
+            Either::Left(_) | Either::Right(_) => Err(WasmiVMError::ExpectedPointer.into()),
         }
     }
 }
@@ -306,6 +312,8 @@ where
     T: WasmiBaseVM,
 {
     type Error = VmErrorOf<T>;
+    // we target wasm32 so this will not truncate
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     fn try_from(AllocateCall(ptr): AllocateCall<u32>) -> Result<Self, Self::Error> {
         Ok(WasmiInput(
             WasmiFunctionName(AllocateCall::<u32>::NAME.into()),
@@ -320,6 +328,7 @@ where
     T: WasmiBaseVM,
 {
     type Error = VmErrorOf<T>;
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     fn try_from(DeallocateCall(ptr): DeallocateCall<u32>) -> Result<Self, Self::Error> {
         Ok(WasmiInput(
             WasmiFunctionName(DeallocateCall::<u32>::NAME.into()),
@@ -335,6 +344,11 @@ where
     I: AsFunctionName,
 {
     type Error = VmErrorOf<T>;
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss
+    )]
     fn try_from(
         CosmwasmCallInput(Tagged(env_ptr, _), Tagged(info_ptr, _), Tagged(msg_ptr, _), _): CosmwasmCallInput<'a, u32, I>,
     ) -> Result<Self, Self::Error> {
@@ -359,6 +373,11 @@ where
     I: AsFunctionName,
 {
     type Error = VmErrorOf<T>;
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss
+    )]
     fn try_from(
         CosmwasmCallWithoutInfoInput(Tagged(env_ptr, _), Tagged(msg_ptr, _), _): CosmwasmCallWithoutInfoInput<
             'a,
@@ -807,9 +826,10 @@ impl<T> ReadWriteMemory for WasmiVM<T> where T: WasmiBaseVM {}
 /// ```ignore
 /// section1 || section1_len || section2 || section2_len || section3 || section3_len || …
 /// ```
+#[must_use]
 pub fn encode_sections(sections: &[Vec<u8>]) -> Option<Vec<u8>> {
     let out_len: usize =
-        sections.iter().map(|section| section.len()).sum::<usize>() + 4 * sections.len();
+        sections.iter().map(alloc::vec::Vec::len).sum::<usize>() + 4 * sections.len();
     sections
         .iter()
         .fold(Some(Vec::with_capacity(out_len)), |acc, section| {
@@ -830,6 +850,7 @@ pub fn encode_sections(sections: &[Vec<u8>]) -> Option<Vec<u8>> {
 /// Each encoded section is suffixed by a section length, encoded as big endian uint32.
 ///
 /// See also: `encode_section`.
+#[must_use]
 pub fn decode_sections(data: &[u8]) -> Vec<&[u8]> {
     let mut result: Vec<&[u8]> = vec![];
     let mut remaining_len = data.len();
@@ -847,9 +868,21 @@ pub fn decode_sections(data: &[u8]) -> Vec<&[u8]> {
     result
 }
 
+// Our casts are generally OK.
+// uszie will not truncate, as we target wasm32.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
 #[allow(dead_code)]
 pub mod host_functions {
-    use super::*;
+    use super::{
+        decode_sections, encode_sections, format, BTreeMap, RuntimeValue, String, Tagged, ToOwned,
+        VMBase, Vec, VmErrorOf, VmGas, VmQueryCustomOf, WasmiBaseVM, WasmiFunctionName,
+        WasmiHostFunction, WasmiHostFunctionIndex, WasmiHostModule, WasmiModuleName, WasmiVM,
+        WasmiVMError,
+    };
     #[cfg(feature = "iterator")]
     use cosmwasm_std::Order;
     use cosmwasm_std::QueryRequest;
@@ -861,6 +894,8 @@ pub mod host_functions {
         system::cosmwasm_system_query_raw,
     };
 
+    #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn definitions<T>() -> BTreeMap<WasmiModuleName, WasmiHostModule<T>>
     where
         T: WasmiBaseVM,
@@ -1148,7 +1183,7 @@ pub mod host_functions {
                     Ok(_) => Ok(Some(RuntimeValue::I32(0))),
                     Err(e) => {
                         let Tagged(value_pointer, _) =
-                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{}", e).as_bytes())?;
+                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{e}").as_bytes())?;
                         Ok(Some(RuntimeValue::I32(value_pointer as i32)))
                     }
                 }
@@ -1176,7 +1211,7 @@ pub mod host_functions {
                     Ok(address) => address,
                     Err(e) => {
                         let Tagged(value_pointer, _) =
-                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{}", e).as_bytes())?;
+                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{e}").as_bytes())?;
                         return Ok(Some(RuntimeValue::I32(value_pointer as i32)));
                     }
                 };
@@ -1192,7 +1227,7 @@ pub mod host_functions {
                     }
                     Err(e) => {
                         let Tagged(value_pointer, _) =
-                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{}", e).as_bytes())?;
+                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{e}").as_bytes())?;
                         Ok(Some(RuntimeValue::I32(value_pointer as i32)))
                     }
                 }
@@ -1227,7 +1262,7 @@ pub mod host_functions {
                     }
                     Err(e) => {
                         let Tagged(value_pointer, _) =
-                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{}", e).as_bytes())?;
+                            passthrough_in::<WasmiVM<T>, ()>(vm, format!("{e}").as_bytes())?;
                         Ok(Some(RuntimeValue::I32(value_pointer as i32)))
                     }
                 }
@@ -1261,7 +1296,7 @@ pub mod host_functions {
 
                 let result = vm.secp256k1_verify(&message_hash, &signature, &public_key)?;
 
-                Ok(Some(RuntimeValue::I32(!result as i32)))
+                Ok(Some(RuntimeValue::I32(i32::from(!result))))
             }
             _ => Err(WasmiVMError::InvalidHostSignature.into()),
         }
@@ -1287,23 +1322,17 @@ pub mod host_functions {
                     ConstantReadLimit<{ constants::EDCSA_SIGNATURE_LENGTH }>,
                 >(vm, *signature_ptr as u32)?;
 
-                match vm.secp256k1_recover_pubkey(
-                    &message_hash,
-                    &signature,
-                    *recovery_param as u8,
-                )? {
+                if let Ok(pubkey) =
+                    vm.secp256k1_recover_pubkey(&message_hash, &signature, *recovery_param as u8)?
+                {
                     // Note that if the call is success, the pointer is written to the lower
                     // 4-bytes. On failure, the error code is written to the upper 4-bytes, and
                     // we don't return an error.
-                    Ok(pubkey) => {
-                        let Tagged(value_pointer, _) =
-                            passthrough_in::<WasmiVM<T>, ()>(vm, &pubkey)?;
-                        Ok(Some(RuntimeValue::I64(value_pointer as i64)))
-                    }
-                    Err(_) => {
-                        const GENERIC_ERROR_CODE: i64 = 10;
-                        Ok(Some(RuntimeValue::I64(1_i64 << 32)))
-                    }
+                    let Tagged(value_pointer, _) = passthrough_in::<WasmiVM<T>, ()>(vm, &pubkey)?;
+                    Ok(Some(RuntimeValue::I64(i64::from(value_pointer))))
+                } else {
+                    const GENERIC_ERROR_CODE: i64 = 10;
+                    Ok(Some(RuntimeValue::I64(1_i64 << 32)))
                 }
             }
             _ => Err(WasmiVMError::InvalidHostSignature.into()),
@@ -1335,7 +1364,7 @@ pub mod host_functions {
                 >(vm, *public_key_ptr as u32)?;
 
                 vm.ed25519_verify(&message, &signature, &public_key)
-                    .map(|result| Some(RuntimeValue::I32(!result as i32)))
+                    .map(|result| Some(RuntimeValue::I32(i32::from(!result))))
             }
             _ => Err(WasmiVMError::InvalidHostSignature.into()),
         }
@@ -1389,7 +1418,7 @@ pub mod host_functions {
                 );
 
                 vm.ed25519_batch_verify(&messages, &signatures, &public_keys)
-                    .map(|result| Some(RuntimeValue::I32(!result as i32)))
+                    .map(|result| Some(RuntimeValue::I32(i32::from(!result))))
             }
             _ => Err(WasmiVMError::InvalidHostSignature.into()),
         }

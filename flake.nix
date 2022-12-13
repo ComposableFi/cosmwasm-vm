@@ -2,10 +2,7 @@
   description = "Cosmwasm VM";
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs";
-    flake-utils = {
-      url = "github:numtide/flake-utils";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    flake-utils.url = "github:numtide/flake-utils";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -70,7 +67,7 @@
         };
         devShell = pkgs.mkShell {
           buildInputs = [ rust-nightly ]
-            ++ (with pkgs; [ openssl openssl.dev pkgconfig taplo nixfmt ]);
+            ++ (with pkgs; [ openssl openssl.dev pkgconfig taplo nixfmt bacon ]);
         };
       });
 }

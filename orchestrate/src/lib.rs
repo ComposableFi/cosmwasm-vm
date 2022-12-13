@@ -1,5 +1,3 @@
-#![feature(let_else)]
-#![feature(generic_associated_types)]
 #![feature(trait_alias)]
 #![cfg_attr(feature = "no_std", no_std)]
 #![allow(clippy::too_many_arguments)]

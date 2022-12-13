@@ -36,18 +36,21 @@ pub trait Pointable {
     type Pointer: Debug + Ord + Copy + TryFrom<usize> + TryInto<usize>;
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub trait ReadWriteMemory:
     ReadableMemory<Error = <Self as WritableMemory>::Error> + WritableMemory
 {
 }
 
 pub type ReadableMemoryErrorOf<T> = <T as ReadableMemory>::Error;
+#[allow(clippy::module_name_repetitions)]
 pub trait ReadableMemory: Pointable {
     type Error: From<MemoryReadError>;
     fn read(&self, offset: Self::Pointer, buffer: &mut [u8]) -> Result<(), Self::Error>;
 }
 
 pub type WritableMemoryErrorOf<T> = <T as WritableMemory>::Error;
+#[allow(clippy::module_name_repetitions)]
 pub trait WritableMemory: Pointable {
     type Error: From<MemoryWriteError>;
     fn write(&self, offset: Self::Pointer, buffer: &[u8]) -> Result<(), Self::Error>;
@@ -60,6 +63,7 @@ pub struct LimitedRead<'a, M: Pointable>(pub &'a M, pub M::Pointer, pub M::Point
 pub struct LimitedTypedRead<'a, M: Pointable>(pub &'a M, pub M::Pointer, pub M::Pointer);
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[allow(clippy::module_name_repetitions)]
 pub enum MemoryReadError {
     InvalidTypeSize,
     OverflowLimit,
@@ -67,6 +71,7 @@ pub enum MemoryReadError {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[allow(clippy::module_name_repetitions)]
 pub enum MemoryWriteError {
     RegionTooSmall,
     BufferSizeOverflowPointer,
@@ -74,6 +79,7 @@ pub enum MemoryWriteError {
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(transparent)]
+#[allow(clippy::module_name_repetitions)]
 pub struct FromMemory<T>(pub T);
 impl<'a, M, T> TryFrom<Read<'a, M>> for FromMemory<T>
 where
@@ -88,8 +94,9 @@ where
             Err(MemoryReadError::InvalidTypeSize.into())
         } else {
             let mut t: T = unsafe { core::mem::zeroed() };
-            let buffer =
-                unsafe { core::slice::from_raw_parts_mut(&mut t as *mut T as *mut u8, size) };
+            let buffer = unsafe {
+                core::slice::from_raw_parts_mut(core::ptr::addr_of_mut!(t).cast::<u8>(), size)
+            };
             memory.read(offset, buffer)?;
             Ok(FromMemory(t))
         }
@@ -97,7 +104,7 @@ where
 }
 
 /// Private
-/// https://github.com/CosmWasm/cosmwasm/blob/2a6b82875563b94ccb48513bd3512bf747843cc3/packages/vm/src/memory.rs
+/// <https://github.com/CosmWasm/cosmwasm/blob/2a6b82875563b94ccb48513bd3512bf747843cc3/packages/vm/src/memory.rs>
 #[repr(C)]
 #[derive(Default, Clone, Copy, Debug)]
 struct Region<Pointer> {
@@ -158,6 +165,7 @@ where
     }
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub struct RawIntoMemory;
 impl<'a, 'b, M> TryFrom<Write<'a, 'b, M>> for RawIntoMemory
 where
@@ -171,6 +179,7 @@ where
     }
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub struct IntoMemory<T>(pub PhantomData<T>);
 impl<'a, 'b, M, T> TryFrom<TypedWrite<'a, 'b, M, T>> for IntoMemory<T>
 where
@@ -183,7 +192,7 @@ where
     ) -> Result<Self, Self::Error> {
         log::trace!("IntoMemory");
         let buffer = unsafe {
-            core::slice::from_raw_parts(value as *const T as *const u8, core::mem::size_of::<T>())
+            core::slice::from_raw_parts((value as *const T).cast::<u8>(), core::mem::size_of::<T>())
         };
         memory.write(offset, buffer)?;
         Ok(IntoMemory(PhantomData))
