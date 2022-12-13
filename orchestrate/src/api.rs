@@ -1,9 +1,12 @@
-use crate::vm::{Account, Context, IbcChannelId, State, VmError, VmState};
+use crate::vm::{
+    Account, AddressHandler, Context, CustomHandler, IbcChannelId, JunoAddressHandler, State,
+    SubstrateAddressHandler, VmError, VmState, WasmAddressHandler,
+};
 use core::marker::PhantomData;
 use cosmwasm_std::{
-    from_binary, Addr, Binary, BlockInfo, Coin, Env, Event, IbcChannelConnectMsg,
+    from_binary, Addr, Binary, BlockInfo, Coin, ContractInfo, Env, Event, IbcChannelConnectMsg,
     IbcChannelOpenMsg, IbcPacketAckMsg, IbcPacketReceiveMsg, IbcPacketTimeoutMsg, MessageInfo,
-    TransactionInfo,
+    Timestamp, TransactionInfo,
 };
 use cosmwasm_vm::{
     executor::{
@@ -20,11 +23,39 @@ use cosmwasm_vm::{
 use cosmwasm_vm_wasmi::{WasmiBaseVM, WasmiVM};
 use serde::{de::DeserializeOwned, Serialize};
 
+#[allow(clippy::module_name_repetitions)]
+pub type JunoApi<'a, E = Dispatch> = Api<
+    'a,
+    E,
+    JunoAddressHandler,
+    State<(), JunoAddressHandler>,
+    Context<'a, (), JunoAddressHandler>,
+>;
+
+#[allow(clippy::module_name_repetitions)]
+pub type WasmApi<'a, E = Dispatch> = Api<
+    'a,
+    E,
+    WasmAddressHandler,
+    State<(), WasmAddressHandler>,
+    Context<'a, (), WasmAddressHandler>,
+>;
+
+#[allow(clippy::module_name_repetitions)]
+pub type SubstrateApi<'a, E = Dispatch> = Api<
+    'a,
+    E,
+    SubstrateAddressHandler,
+    State<(), SubstrateAddressHandler>,
+    Context<'a, (), SubstrateAddressHandler>,
+>;
+
 pub struct Api<
     'a,
-    E: ExecutionType = Dispatch,
-    S: VmState<'a, V> = State,
-    V: WasmiBaseVM = Context<'a>,
+    E: ExecutionType,
+    AH: AddressHandler,
+    S: VmState<'a, V> = State<(), AH>,
+    V: WasmiBaseVM = Context<'a, (), AH>,
 > where
     VmErrorOf<WasmiVM<V>>: Into<VmError>,
 {
@@ -32,9 +63,11 @@ pub struct Api<
     _m2: PhantomData<S>,
     _m3: PhantomData<V>,
     _m4: PhantomData<&'a ()>,
+    _m5: PhantomData<AH>,
 }
 
-impl<'a, E: ExecutionType, S: VmState<'a, V>, V: WasmiBaseVM> Api<'a, E, S, V>
+impl<'a, E: ExecutionType, AH: AddressHandler, S: VmState<'a, V>, V: WasmiBaseVM>
+    Api<'a, E, AH, S, V>
 where
     VmErrorOf<WasmiVM<V>>: Into<VmError>,
 {
@@ -187,6 +220,75 @@ where
         Self::execute_raw(vm_state, env, info, gas, &message)
     }
 
+    /// Migrate a contract.
+    ///
+    /// * `vm_state`: Shared VM state.
+    /// * `env`: `Env` to be passed to contract.
+    /// * `info`: `MessageInfo` to be passed to contract.
+    /// * `gas`: Gas limit of this call.
+    /// * `message`: Raw JSON-encoded `ExecuteMsg`.
+    pub fn migrate_raw(
+        vm_state: &'a mut S,
+        code_id: CosmwasmCodeId,
+        env: Env,
+        info: MessageInfo,
+        gas: u64,
+        message: &[u8],
+    ) -> Result<E::Output<V>, VmError> {
+        vm_state.do_migrate::<E>(code_id, env, info, gas, message)
+    }
+
+    /// Migrate a contract.
+    ///
+    /// * `vm_state`: Shared VM state.
+    /// * `code_id`: Id of the code to migrate to.
+    /// * `env`: `Env` to be passed to contract.
+    /// * `info`: `MessageInfo` to be passed to contract.
+    /// * `gas`: Gas limit of this call.
+    /// * `message`: Typed message. Possibly `ExecuteMsg` from a contract.
+    pub fn migrate<M: Serialize>(
+        vm_state: &'a mut S,
+        code_id: CosmwasmCodeId,
+        env: Env,
+        info: MessageInfo,
+        gas: u64,
+        message: M,
+    ) -> Result<E::Output<V>, VmError> {
+        let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotSerialize)?;
+        Self::migrate_raw(vm_state, code_id, env, info, gas, &message)
+    }
+
+    /// Update admin of a contract.
+    ///
+    /// * `vm_state`: Shared VM state.
+    /// * `sender`: Caller of this endpoint.
+    /// * `contract`: Contract to update admin.
+    /// * `new_admin`: New admin to update to.
+    pub fn update_admin(
+        vm_state: &'a mut S,
+        sender: &Account,
+        contract_addr: &Account,
+        new_admin: Account,
+        gas: u64,
+    ) -> Result<(), VmError> {
+        vm_state.do_update_admin(sender, contract_addr, Some(new_admin), gas)
+    }
+
+    /// Clear admin of a contract.
+    ///
+    /// * `vm_state`: Shared VM state.
+    /// * `sender`: Caller of this endpoint.
+    /// * `contract`: Contract to update admin.
+    /// * `new_admin`: New admin to update to.
+    pub fn clear_admin(
+        vm_state: &'a mut S,
+        sender: &Account,
+        contract_addr: &Account,
+        gas: u64,
+    ) -> Result<(), VmError> {
+        vm_state.do_update_admin(sender, contract_addr, None, gas)
+    }
+
     /// Initiate an IBC channel handshake.
     ///
     /// * `vm_state`: Shared VM state.
@@ -260,7 +362,7 @@ where
     }
 }
 
-impl<'a, S: VmState<'a, V>, V: WasmiBaseVM> Api<'a, Direct, S, V>
+impl<'a, AH: AddressHandler, S: VmState<'a, V>, V: WasmiBaseVM> Api<'a, Direct, AH, S, V>
 where
     VmErrorOf<WasmiVM<V>>: Into<VmError>,
 {
@@ -376,17 +478,30 @@ impl ExecutionType for Dispatch {
 }
 
 /// Convenient builder for `State`
-#[derive(Default)]
-pub struct StateBuilder {
+pub struct StateBuilder<AH: AddressHandler, CH: CustomHandler = ()> {
     codes: Vec<Vec<u8>>,
     balances: Vec<(Account, Coin)>,
     ibc_channels: Vec<IbcChannelId>,
+    custom_handler: CH,
+    _marker: PhantomData<AH>,
 }
 
-impl StateBuilder {
+impl<CH: CustomHandler + Default, AH: AddressHandler> Default for StateBuilder<AH, CH> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<CH: CustomHandler + Default, AH: AddressHandler> StateBuilder<AH, CH> {
     #[must_use]
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            codes: Vec::default(),
+            balances: Vec::default(),
+            ibc_channels: Vec::default(),
+            custom_handler: CH::default(),
+            _marker: PhantomData,
+        }
     }
 
     #[must_use]
@@ -420,7 +535,53 @@ impl StateBuilder {
     }
 
     #[must_use]
-    pub fn build(self) -> State {
-        State::new(self.codes, self.balances, self.ibc_channels)
+    pub fn set_custom_handler(mut self, custom_handler: CH) -> Self {
+        self.custom_handler = custom_handler;
+        self
+    }
+
+    #[must_use]
+    pub fn build(self) -> State<CH, AH> {
+        State::new(
+            self.codes,
+            self.balances,
+            self.ibc_channels,
+            self.custom_handler,
+        )
+    }
+}
+
+/// Handy function to create a dummy `Block`. Use this
+/// if you don't care about any of the fields.
+#[must_use]
+pub fn block() -> BlockInfo {
+    BlockInfo {
+        height: 1,
+        time: Timestamp::from_seconds(1),
+        chain_id: "orchestrate-chain".into(),
+    }
+}
+
+/// Handy function to create an `Env`. Use this if you only
+/// care about the executing contract's address.
+///
+/// * `contract_addr`: Executing contract's address
+#[must_use]
+pub fn env(contract_addr: &Account) -> Env {
+    Env {
+        block: block(),
+        transaction: None,
+        contract: ContractInfo {
+            address: contract_addr.clone().into(),
+        },
+    }
+}
+
+/// Handy function to create a `MessageInfo` without `funds`
+#[must_use]
+pub fn info(sender: &Account) -> MessageInfo {
+    MessageInfo {
+        sender: sender.clone().into(),
+        funds: vec![],
     }
 }

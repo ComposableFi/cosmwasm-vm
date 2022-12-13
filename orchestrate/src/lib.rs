@@ -9,5 +9,8 @@ pub mod error;
 pub mod fetcher;
 pub mod ibc;
 pub mod vm;
+mod wasm_builder;
 
 pub use api::*;
+pub use cosmwasm_std;
+pub use wasm_builder::*;

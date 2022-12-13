@@ -7,6 +7,7 @@ pub enum Error {
     CannotDecode,
     CannotSerialize,
     CannotDeserialize,
+    CannotCompileWasm,
 }
 
 impl Display for Error {

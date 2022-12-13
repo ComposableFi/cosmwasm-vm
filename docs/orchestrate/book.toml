@@ -1,0 +1,7 @@
+[book]
+authors = ["ComposableFi Developers"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Cosmwasm Orchestrate"
+
