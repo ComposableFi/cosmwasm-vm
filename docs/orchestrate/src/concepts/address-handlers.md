@@ -1,11 +1,11 @@
 # Address Handlers
 
-Throughout this documentation, you see that we always use `JunoApi`. But there are 
-few other API's as well like `WasmApi`, `SubstrateApi`, etc. The only difference between
-this API's is how they handle the address generation, validation and canonicalization.
+Throughout this documentation, you see that we always use `JunoApi`. But there are a 
+few other APIs as well like `WasmApi`, `SubstrateApi`, etc. The only difference between
+these APIs is how they handle address generation, validation, and canonicalization.
 
-For example, Cosmos API's like `JunoApi` or `WasmApi` uses `Bech32` encoding and `JunoApi` uses
-`juno` as prefix and `WasmApi` uses `wasm` as prefix.
+For example, Cosmos APIs like `JunoApi` or `WasmApi` use `Bech32` encoding and `JunoApi` uses
+`juno` as the prefix and `WasmApi` uses `wasm` as the prefix.
 
 ## Creating your own Cosmos address handler
 
@@ -51,7 +51,7 @@ And you will use the `CoolApi` for API calls:
 
 You can also implement an address handler from scratch by implementing `AddressHandler` trait.
 
-Let's implement a dummy address handler which works with `String` addresses without any restrictions.
+Let's implement a dummy address handler that works with `String` addresses without any restrictions.
 
 ```rust
 struct DummyAddressHandler;

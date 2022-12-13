@@ -1,12 +1,12 @@
 # Tutorial: Testing a DEX 
 
-Let's see a real world example by testing `wasmswap`. We are going to swap the native token `cosm`
+Let's see a real-world example by testing `wasmswap`. We are going to swap the native token `cosm`
 with the Cw20 token `pica`.
 
 ## Setting up
 
 We are using a slightly modified version of `wasmswap`. The only difference is our VM doesn't alter
-the `data` field because it is supposed to be up-to user to use any data in any format. So we chose
+the `data` field because it is supposed to be up to user to use any data in any format. So we chose
 to follow the spec there. Let's clone the template for our tutorial:
 
 ```sh
@@ -83,12 +83,12 @@ let wasmswap_code = WasmLoader::new(env!("CARGO_PKG_NAME")).load().unwrap();
 ```
 For the wasmswap contract, we used a special type of loader which is `WasmLoader`. The thing is
 our VM works with wasm binaries just like any other chain. So we need to make sure that we are
-feeding the VM with the latest compiled wasm binary everytime we run the tests. We could manually
+feeding the VM with the latest compiled wasm binary every time we run the tests. We could manually
 compile the binary and just do `include_bytes` but believe me, you will forget to do it very often
 and get confused. 
 
 `WasmLoader` gets the package name and compiles and loads the contract for you. Note that the default
-configuration assumes the rust package name is the same as the contract name. So `wasmswap` as package
+configuration assumes the rust package name is the same as the contract name. So `wasmswap` as the package
 name means that the contract's name is also `wasmswap` and the full name will be `wasmswap.wasm`.
 The second assumption of the default loader is the target directory is `target/wasm32-unknown-unknown/release`.
 The good thing is you can configure any of those, even the command that will be used to build your 
@@ -149,7 +149,7 @@ cargo test --test integration
 let sender = Account::generate_from_seed::<JunoAddressHandler>("sender").unwrap();
 ```
 
-We need to create a valid address which we are gonna use to call the contracts. Which is basically
+We need to create a valid address which we are gonna use to call the contracts. Which is the
 `sender` field in `MessageInfo`. For that, we are using `Account` type with `JunoAddressHandler`.
 This will create a `bech32` encoded address with `juno` prefix.
 
@@ -179,13 +179,13 @@ let (cw20_address, _) = <JunoApi>::instantiate(
 .unwrap();
 ```
 
-And then we are instantiating the `cw20` contract. First notable thing is we are using `JunoApi` because
+And then we are instantiating the `cw20` contract. The first notable thing is we are using `JunoApi` because
 we have used the `JunoAddressHandler`. `JunoApi` will use `JunoAddressHandler` as the address handler.
 
-Note that we are giving instantiate message as is without doing any json encoding. This is because
-`instantiate` function gets any json-serializable type and serializes it under the hood. But if you
+Note that we are giving the instantiate message as is without doing any JSON encoding. This is because
+`instantiate` function gets any JSON-serializable type and serializes it under the hood. But if you
 have no access to message type and you don't want to define them yourself, you can use `instantiate_raw`
-function and provide the json-encoded message.
+function and provide the JSON-encoded message.
 
 Finally, note that we do `info(&sender)` which creates a `MessageInfo` and sets the `sender` field to
 the given account's address.
@@ -312,9 +312,9 @@ And then let's execute the test once more with enabling the logs.
 RUST_LOG=debug cargo test --test integration
 ```
 
-Before going into the reason of failure, take your time to read the logs and see how much useful information
-there is. You are able to see the host functions that are running, responses from the executions and
-submessages that are dispatched.
+Before going into the reason for failure, take your time to read the logs and see how much useful information
+there is. You can see the host functions that are running, responses from the executions, and
+sub-messages that are dispatched.
 
 Now let's see what went wrong:
 ```
@@ -350,7 +350,7 @@ Now that we have enough balance, let's re-run again and see the lovely green `ok
 ## `cosmwasm_std` vs. `cosmwasm_orchestrate::cosmwasm_std`
 
 You might have already noticed it but we are using `Coin` and `MessageInfo` from `cosmwasm_orchestrate::cosmwasm_std`
-instead of using them directly from `cosmwasm_std`. This is a temporary thing which we hope to resolve
+instead of using them directly from `cosmwasm_std`. This is a temporary thing that we hope to resolve
 soon. The problem is our VM is `no_std` but `cosmwasm_std` is originally only `std`. We created a PR
 for this and until it gets merged, `cosmwasm-orchestrate` will be using our fork, hence `Cargo` thinks
 that `cosmwasm_std::Coin` is not the same thing as `cosmwasm_orchestrate::cosmwasm_std::Coin`. Until the
@@ -386,7 +386,7 @@ You will get a type mismatch error if you do it wrong, so beware of that.
 ```
 
 Note that we add balance to `swapper` account as well to be able to send funds to the swap contract.
-And finally, we are able to swap `120_000_000cosm`. The final thing to do is verify the swap worked.
+And finally, we can swap `120_000_000cosm`. The final thing to do is verify the swap worked.
 
 ## Verifying the swap
 
