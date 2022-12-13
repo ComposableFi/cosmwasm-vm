@@ -1,8 +1,8 @@
 # `Direct` and `Dispatch` APIs 
 
 Sometimes, it might be not required to do a complete simulation of an entry point.
-For example, you might wanna execute `instantiate` entry point but you might just wanna
-get the `instantiate` functions result and don't proceed to sub-message execution.
+For example, you might wanna execute `instantiate` entry point but you might just want to
+get the `instantiate` functions result and not proceed to sub-message execution.
 Therefore, there are two execution types that handle exactly this: `Direct` and `Dispatch`.
 
 
