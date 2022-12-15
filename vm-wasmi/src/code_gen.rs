@@ -16,6 +16,7 @@ pub struct ModuleDefinition {
     execute_call: ExecuteCall,
     migrate_call: MigrateCall,
     query_call: QueryCall,
+    table: Option<Table>,
     additional_functions: Vec<Function>,
     additional_binary_size: usize,
 }
@@ -31,16 +32,33 @@ pub enum Error {
     Internal,
 }
 
+#[derive(Debug)]
+pub struct Table(Vec<u32>);
+
+impl Table {
+    #[must_use]
+    pub fn new(table: Vec<u32>) -> Self {
+        Self(table)
+    }
+
+    #[must_use]
+    pub fn fill(function_index: u32, n_elems: usize) -> Self {
+        Self(vec![function_index; n_elems])
+    }
+}
+
 impl ModuleDefinition {
     pub fn new(
         additional_functions: Vec<Function>,
         additional_binary_size: usize,
+        table: Option<Table>,
     ) -> Result<Self, Error> {
         Ok(Self {
             instantiate_call: InstantiateCall::new().map_err(|_| Error::Internal)?,
             execute_call: ExecuteCall::new().map_err(|_| Error::Internal)?,
             migrate_call: MigrateCall::new().map_err(|_| Error::Internal)?,
             query_call: QueryCall::new().map_err(|_| Error::Internal)?,
+            table,
             additional_functions,
             additional_binary_size,
         })
@@ -50,6 +68,7 @@ impl ModuleDefinition {
         fn_name: F,
         mut instructions: Vec<Instruction>,
         additional_binary_size: usize,
+        table: Option<Table>,
     ) -> Result<Self, Error> {
         instructions.push(Instruction::End);
         Self::new(
@@ -60,6 +79,7 @@ impl ModuleDefinition {
                 definition: FuncBody::new(Vec::new(), Instructions::new(instructions)),
             }],
             additional_binary_size,
+            table,
         )
     }
 
@@ -71,6 +91,7 @@ impl ModuleDefinition {
             execute_call: ExecuteCall::new().map_err(|_| Error::Internal)?,
             migrate_call: MigrateCall::new().map_err(|_| Error::Internal)?,
             query_call: QueryCall::new().map_err(|_| Error::Internal)?,
+            table: None,
             additional_functions: Vec::new(),
             additional_binary_size: 0,
         })
@@ -282,7 +303,7 @@ const SIZE_OF_I32: i32 = mem::size_of::<i32>() as i32;
 const SIZE_OF_REGION: i32 = SIZE_OF_I32 * 3;
 
 impl From<ModuleDefinition> for WasmModule {
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::cast_possible_truncation)]
     fn from(def: ModuleDefinition) -> Self {
         let mut contract = builder::module()
             // Generate memory
@@ -300,6 +321,16 @@ impl From<ModuleDefinition> for WasmModule {
             .internal()
             .memory(0)
             .build();
+
+        // This is for indirect call table, we only support a single table
+        if let Some(table) = def.table {
+            contract = contract
+                .table()
+                .with_min(table.0.len() as u32)
+                .with_max(Some(table.0.len() as u32))
+                .with_element(0, table.0)
+                .build();
+        }
 
         let mut function_definitions = vec![
             // fn allocate(size: usize) -> u32;
@@ -418,7 +449,7 @@ impl From<ModuleDefinition> for WasmModule {
         }
 
         // we target wasm32 so this will not truncate
-        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        #[allow(clippy::cast_possible_wrap)]
         for (i, func) in function_definitions.into_iter().enumerate() {
             let mut signature_builder = contract.function().signature();
             if !func.params.is_empty() {
