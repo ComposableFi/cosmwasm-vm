@@ -995,8 +995,9 @@ mod test_code_gen {
     use super::*;
     #[test]
     fn basic() {
-        let module: code_gen::WasmModule =
-            code_gen::ModuleDefinition::new(vec![], 10).unwrap().into();
+        let module: code_gen::WasmModule = code_gen::ModuleDefinition::new(vec![], 10, None)
+            .unwrap()
+            .into();
         let sender = BankAccount(100);
         let address = BankAccount(10_000);
         let funds = vec![];
