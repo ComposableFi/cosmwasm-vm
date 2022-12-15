@@ -119,10 +119,10 @@ pub mod deserialization_limits {
     pub const RESULT_IBC_PACKET_TIMEOUT: usize = 256 * KI;
 }
 
-pub type CosmwasmExecutionResult<T> = ContractResult<Response<T>>;
+pub type CosmwasmExecutionResult<T = Empty> = ContractResult<Response<T>>;
 pub type CosmwasmQueryResult = ContractResult<QueryResponse>;
-pub type CosmwasmReplyResult<T> = ContractResult<Response<T>>;
-pub type CosmwasmMigrateResult<T> = ContractResult<Response<T>>;
+pub type CosmwasmReplyResult<T = Empty> = ContractResult<Response<T>>;
+pub type CosmwasmMigrateResult<T = Empty> = ContractResult<Response<T>>;
 
 pub type QueryResponse = Binary;
 
@@ -147,7 +147,7 @@ impl<C> ReadLimit for QueryRequest<C> {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ReplyResult<T>(pub CosmwasmExecutionResult<T>);
+pub struct ReplyResult<T = Empty>(pub CosmwasmExecutionResult<T>);
 impl<T> DeserializeLimit for ReplyResult<T> {
     fn deserialize_limit() -> usize {
         deserialization_limits::RESULT_REPLY
@@ -178,7 +178,7 @@ impl ReadLimit for QueryResult {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ExecuteResult<T>(pub CosmwasmExecutionResult<T>);
+pub struct ExecuteResult<T = Empty>(pub CosmwasmExecutionResult<T>);
 impl<T> DeserializeLimit for ExecuteResult<T> {
     fn deserialize_limit() -> usize {
         deserialization_limits::RESULT_EXECUTE
@@ -196,7 +196,7 @@ impl<T> From<ExecuteResult<T>> for ContractResult<Response<T>> {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct InstantiateResult<T>(pub CosmwasmExecutionResult<T>);
+pub struct InstantiateResult<T = Empty>(pub CosmwasmExecutionResult<T>);
 impl<T> DeserializeLimit for InstantiateResult<T> {
     fn deserialize_limit() -> usize {
         deserialization_limits::RESULT_INSTANTIATE
@@ -214,7 +214,7 @@ impl<T> From<InstantiateResult<T>> for ContractResult<Response<T>> {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct MigrateResult<T>(pub CosmwasmExecutionResult<T>);
+pub struct MigrateResult<T = Empty>(pub CosmwasmExecutionResult<T>);
 impl<T> DeserializeLimit for MigrateResult<T> {
     fn deserialize_limit() -> usize {
         deserialization_limits::RESULT_MIGRATE
