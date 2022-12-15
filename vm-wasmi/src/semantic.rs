@@ -8,15 +8,15 @@ use super::{
     WasmiHostFunction, WasmiHostFunctionIndex, WasmiImportResolver, WasmiInput, WasmiModule,
     WasmiModuleExecutor, WasmiOutput, WasmiVM, WasmiVMError, WritableMemory,
 };
-use alloc::{boxed::Box, string::ToString};
+use alloc::string::ToString;
 use core::{assert_matches::assert_matches, num::NonZeroU32, str::FromStr};
 #[cfg(feature = "stargate")]
 use cosmwasm_std::IbcTimeout;
 #[cfg(feature = "iterator")]
 use cosmwasm_std::Order;
 use cosmwasm_std::{
-    Addr, Attribute, Binary, BlockInfo, Coin, ContractInfo, Empty, Env, Event, MessageInfo,
-    Timestamp,
+    Addr, Attribute, Binary, BlockInfo, Coin, ContractInfo, ContractResult, Empty, Env, Event,
+    MessageInfo, Timestamp,
 };
 use cosmwasm_vm::{
     executor::{
@@ -24,10 +24,10 @@ use cosmwasm_vm::{
         InstantiateResult, MigrateCall, QueryCall, ReplyCall,
     },
     system::{
-        cosmwasm_system_entrypoint, cosmwasm_system_run, CosmwasmCodeId, CosmwasmContractMeta,
+        cosmwasm_system_entrypoint, cosmwasm_system_entrypoint_hook, cosmwasm_system_run,
+        CosmwasmCodeId, CosmwasmContractMeta,
     },
 };
-use std::error::Error;
 use wasm_instrument::gas_metering::Rules;
 
 const CANONICAL_LENGTH: usize = 54;
@@ -42,7 +42,7 @@ fn initialize() {
     });
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 enum SimpleVMError {
     Interpreter(wasmi::Error),
     VMError(WasmiVMError),
@@ -57,7 +57,7 @@ enum SimpleVMError {
     #[cfg(feature = "iterator")]
     IteratorDoesNotExist,
     CannotDeserialize,
-    Custom(Box<dyn Error>),
+    Crypto,
 }
 impl From<wasmi::Error> for SimpleVMError {
     fn from(e: wasmi::Error) -> Self {
@@ -571,7 +571,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         public_key: &[u8],
     ) -> Result<bool, Self::Error> {
         cosmwasm_crypto::secp256k1_verify(message_hash, signature, public_key)
-            .map_err(|e| SimpleVMError::Custom(Box::new(e)))
+            .map_err(|_| SimpleVMError::Crypto)
     }
 
     fn secp256k1_recover_pubkey(
@@ -593,7 +593,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         public_key: &[u8],
     ) -> Result<bool, Self::Error> {
         cosmwasm_crypto::ed25519_verify(message, signature, public_key)
-            .map_err(|e| SimpleVMError::Custom(Box::new(e)))
+            .map_err(|_| SimpleVMError::Crypto)
     }
 
     fn ed25519_batch_verify(
@@ -603,7 +603,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         public_keys: &[&[u8]],
     ) -> Result<bool, Self::Error> {
         cosmwasm_crypto::ed25519_batch_verify(messages, signatures, public_keys)
-            .map_err(|e| SimpleVMError::Custom(Box::new(e)))
+            .map_err(|_| SimpleVMError::Crypto)
     }
 
     fn addr_validate(&mut self, input: &str) -> Result<Result<(), Self::Error>, Self::Error> {
@@ -1192,6 +1192,68 @@ fn test_orchestration_advanced() {
             r#"{"hashed":"K4xL+Gub1930CJU6hdpwf0t3KNk27f5efqy9+YA6iio="}"#
                 .as_bytes()
                 .to_vec()
+        )))
+    );
+}
+
+#[test]
+fn test_hook() {
+    let code = instrument_contract(include_bytes!("../../fixtures/cw20_base.wasm"));
+    let sender = BankAccount(100);
+    let address = BankAccount(10_000);
+    let funds = vec![];
+    let mut extension = SimpleWasmiVMExtension {
+        storage: BTreeMap::default(),
+        codes: BTreeMap::from([(0x1337, code)]),
+        contracts: BTreeMap::from([(
+            address,
+            CosmwasmContractMeta {
+                code_id: 0x1337,
+                admin: None,
+                label: String::new(),
+            },
+        )]),
+        next_account_id: BankAccount(10_001),
+        transaction_depth: 0,
+        gas: Gas::new(100_000_000),
+        ..Default::default()
+    };
+    let mut vm = create_simple_vm(sender, address, funds, &mut extension);
+    let _ = cosmwasm_system_entrypoint_hook::<InstantiateCall, WasmiVM<SimpleWasmiVM>>(
+        &mut vm,
+        format!(
+            r#"{{
+                  "name": "Picasso",
+                  "symbol": "PICA",
+                  "decimals": 12,
+                  "initial_balances": [],
+                  "mint": {{
+                    "minter": "{}",
+                    "cap": null
+                  }},
+                  "marketing": null
+                }}"#,
+            sender.0
+        )
+        .as_bytes(),
+        |vm, msg| cosmwasm_call::<InstantiateCall, WasmiVM<SimpleWasmiVM>>(vm, msg),
+    )
+    .unwrap();
+    let r = cosmwasm_system_entrypoint_hook::<ExecuteCall, WasmiVM<SimpleWasmiVM>>(
+        &mut vm,
+        r#"{
+              "mint": {
+                "recipient": "10001",
+                "amount": "5555"
+              }
+            }"#
+        .as_bytes(),
+        |_, _| Ok(ExecuteResult(ContractResult::Err("Bro".into()))),
+    );
+    assert_eq!(
+        r,
+        Err(SimpleVMError::VMError(WasmiVMError::SystemError(
+            SystemError::ContractExecutionFailure("Bro".into())
         )))
     );
 }
