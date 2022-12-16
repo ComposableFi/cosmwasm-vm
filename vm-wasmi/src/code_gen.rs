@@ -1,13 +1,48 @@
 use core::mem;
 
-use alloc::string::String;
-use alloc::{vec, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 use cosmwasm_std::{ContractResult, Empty, Response};
 use serde::Serialize;
 use wasm_instrument::parity_wasm::{
     builder,
     elements::{FuncBody, Instruction, Instructions, Local, ValueType},
 };
+
+pub enum PredefinedFunctions {
+    Allocate,
+    Instantiate,
+    Execute,
+    Migrate,
+    Deallocate,
+    Query,
+    Reply,
+    DummyFn,
+    InterfaceVersion8,
+    /// This indicates the beginning of the user defined functions
+    UserDefined,
+}
+
+impl ToString for PredefinedFunctions {
+    fn to_string(&self) -> String {
+        match self {
+            PredefinedFunctions::Allocate => "allocate",
+            PredefinedFunctions::Instantiate => "instantiate",
+            PredefinedFunctions::Execute => "execute",
+            PredefinedFunctions::Migrate => "migrate",
+            PredefinedFunctions::Deallocate => "deallocate",
+            PredefinedFunctions::Query => "query",
+            PredefinedFunctions::Reply => "reply",
+            PredefinedFunctions::DummyFn => "dummy_fn",
+            PredefinedFunctions::InterfaceVersion8 => "interface_version_8",
+            PredefinedFunctions::UserDefined => "_",
+        }
+        .into()
+    }
+}
 
 /// Definition for the wasm code
 #[derive(Debug)]
@@ -16,6 +51,7 @@ pub struct ModuleDefinition {
     execute_call: ExecuteCall,
     migrate_call: MigrateCall,
     query_call: QueryCall,
+    reply_call: ReplyCall,
     table: Option<Table>,
     additional_functions: Vec<Function>,
     additional_binary_size: usize,
@@ -58,6 +94,7 @@ impl ModuleDefinition {
             execute_call: ExecuteCall::new().map_err(|_| Error::Internal)?,
             migrate_call: MigrateCall::new().map_err(|_| Error::Internal)?,
             query_call: QueryCall::new().map_err(|_| Error::Internal)?,
+            reply_call: ReplyCall::new().map_err(|_| Error::Internal)?,
             table,
             additional_functions,
             additional_binary_size,
@@ -91,6 +128,7 @@ impl ModuleDefinition {
             execute_call: ExecuteCall::new().map_err(|_| Error::Internal)?,
             migrate_call: MigrateCall::new().map_err(|_| Error::Internal)?,
             query_call: QueryCall::new().map_err(|_| Error::Internal)?,
+            reply_call: ReplyCall::new().map_err(|_| Error::Internal)?,
             table: None,
             additional_functions: Vec::new(),
             additional_binary_size: 0,
@@ -238,9 +276,7 @@ impl EntrypointCall for ExecuteCall {
 impl ExecuteCall {
     pub fn new() -> Result<Self, serde_json::Error> {
         let response = Response::<Empty>::default();
-        Ok(ExecuteCall(Self::plain(
-            ContractResult::<Response<Empty>>::Ok(response),
-        )?))
+        Ok(ExecuteCall(Self::plain(ContractResult::Ok(response))?))
     }
 }
 
@@ -254,9 +290,7 @@ impl EntrypointCall for InstantiateCall {
 impl InstantiateCall {
     pub fn new() -> Result<Self, serde_json::Error> {
         let response = Response::<Empty>::default();
-        Ok(InstantiateCall(Self::plain(ContractResult::<
-            Response<Empty>,
-        >::Ok(response))?))
+        Ok(InstantiateCall(Self::plain(ContractResult::Ok(response))?))
     }
 }
 
@@ -270,9 +304,7 @@ impl EntrypointCall for MigrateCall {
 impl MigrateCall {
     pub fn new() -> Result<Self, serde_json::Error> {
         let response = Response::<Empty>::default();
-        Ok(MigrateCall(Self::plain(
-            ContractResult::<Response<Empty>>::Ok(response),
-        )?))
+        Ok(MigrateCall(Self::plain(ContractResult::Ok(response))?))
     }
 }
 
@@ -286,9 +318,21 @@ impl EntrypointCall for QueryCall {
 impl QueryCall {
     pub fn new() -> Result<Self, serde_json::Error> {
         let encoded_result = hex::encode("{}");
-        Ok(QueryCall(Self::plain(ContractResult::<
-            alloc::string::String,
-        >::Ok(encoded_result))?))
+        Ok(QueryCall(Self::plain(ContractResult::Ok(encoded_result))?))
+    }
+}
+
+#[derive(Debug)]
+struct ReplyCall(FuncBody);
+
+impl EntrypointCall for ReplyCall {
+    const MSG_PTR_INDEX: u32 = 2;
+}
+
+impl ReplyCall {
+    pub fn new() -> Result<Self, serde_json::Error> {
+        let response = Response::<Empty>::default();
+        Ok(ReplyCall(Self::plain(ContractResult::Ok(response))?))
     }
 }
 
@@ -335,7 +379,7 @@ impl From<ModuleDefinition> for WasmModule {
         let mut function_definitions = vec![
             // fn allocate(size: usize) -> u32;
             Function {
-                name: "allocate".into(),
+                name: PredefinedFunctions::Allocate.to_string(),
                 params: vec![ValueType::I32], // how much memory to allocate
                 result: Some(ValueType::I32), // ptr to the region of the new memory
                 definition: FuncBody::new(
@@ -380,21 +424,21 @@ impl From<ModuleDefinition> for WasmModule {
             },
             // fn instantiate(env_ptr: u32, info_ptr: u32, msg_ptr: u32) -> u32;
             Function {
-                name: "instantiate".into(),
+                name: PredefinedFunctions::Instantiate.to_string(),
                 params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
                 result: Some(ValueType::I32),
                 definition: def.instantiate_call.0,
             },
             // fn execute(env_ptr: u32, info_ptr: u32, msg_ptr: u32) -> u32;
             Function {
-                name: "execute".into(),
+                name: PredefinedFunctions::Execute.to_string(),
                 params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
                 result: Some(ValueType::I32),
                 definition: def.execute_call.0,
             },
             // fn migrate(env_ptr: u32, msg_ptr: u32) -> u32;
             Function {
-                name: "migrate".into(),
+                name: PredefinedFunctions::Migrate.to_string(),
                 params: vec![ValueType::I32, ValueType::I32],
                 result: Some(ValueType::I32),
                 definition: def.migrate_call.0,
@@ -403,23 +447,30 @@ impl From<ModuleDefinition> for WasmModule {
             // NOTE: We are not deallocating memory because for our usecase it does
             // not affect performance.
             Function {
-                name: "deallocate".into(),
+                name: PredefinedFunctions::Deallocate.to_string(),
                 params: vec![ValueType::I32],
                 result: None,
                 definition: FuncBody::new(Vec::new(), Instructions::empty()),
             },
             // fn query(env_ptr: u32, msg_ptr: u32) -> u32;
             Function {
-                name: "query".into(),
+                name: PredefinedFunctions::Query.to_string(),
                 params: vec![ValueType::I32, ValueType::I32],
                 result: Some(ValueType::I32),
                 definition: def.query_call.0,
+            },
+            // fn reply(env_ptr: u32, msg_ptr: u32) -> u32;
+            Function {
+                name: PredefinedFunctions::Reply.to_string(),
+                params: vec![ValueType::I32, ValueType::I32],
+                result: Some(ValueType::I32),
+                definition: def.reply_call.0,
             },
             // dummy function to increase the binary size
             // Used for increasing the total wasm's size.
             // Useful when benchmarking for different binary sizes.
             Function {
-                name: "dummy_fn".into(),
+                name: PredefinedFunctions::DummyFn.to_string(),
                 params: vec![],
                 result: None,
                 definition: FuncBody::new(
@@ -435,7 +486,7 @@ impl From<ModuleDefinition> for WasmModule {
             // Required in order to signal compatibility with CosmWasm 1.0
             // <https://github.com/CosmWasm/cosmwasm/blob/0ba91a53488f1a00fd1fa702c0055bfa324d395a/README.md?plain=1#L153>
             Function {
-                name: "interface_version_8".into(),
+                name: PredefinedFunctions::InterfaceVersion8.to_string(),
                 params: vec![],
                 result: None,
                 definition: FuncBody::new(Vec::new(), Instructions::empty()),
