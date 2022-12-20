@@ -1,21 +1,46 @@
+use alloc::{string::String, vec, vec::Vec};
 use core::mem;
-
-use alloc::string::String;
-use alloc::{vec, vec::Vec};
 use cosmwasm_std::{ContractResult, Empty, Response};
+use cosmwasm_vm::executor::{
+    AllocateCall, AsFunctionName, DeallocateCall, ExecuteCall, InstantiateCall, MigrateCall,
+    QueryCall, ReplyCall,
+};
 use serde::Serialize;
 use wasm_instrument::parity_wasm::{
     builder,
     elements::{FuncBody, Instruction, Instructions, Local, ValueType},
 };
 
+pub const INDEX_OF_USER_DEFINED_FNS: u32 = 9;
+const INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR: u32 = 0;
+// We know this won't truncate as it is being executed in a 32-bit wasm context
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+const SIZE_OF_I32: i32 = mem::size_of::<i32>() as i32;
+/// Size of `CosmWasm` `Region`
+/// `offset` + `capacity` + `length`
+/// <https://github.com/CosmWasm/cosmwasm/blob/0ba91a53488f1a00fd1fa702c0055bfa324d395a/README.md?plain=1#L271>
+const SIZE_OF_REGION: i32 = SIZE_OF_I32 * 3;
+
+pub struct InterfaceVersion8Call;
+
+impl AsFunctionName for InterfaceVersion8Call {
+    const NAME: &'static str = "interface_version_8";
+}
+
+pub struct DummyCall;
+
+impl AsFunctionName for DummyCall {
+    const NAME: &'static str = "dummy_fn";
+}
+
 /// Definition for the wasm code
 #[derive(Debug)]
 pub struct ModuleDefinition {
-    instantiate_call: InstantiateCall,
-    execute_call: ExecuteCall,
-    migrate_call: MigrateCall,
-    query_call: QueryCall,
+    instantiate_call: InstantiateFn,
+    execute_call: ExecuteFn,
+    migrate_call: MigrateFn,
+    query_call: QueryFn,
+    reply_call: ReplyFn,
     table: Option<Table>,
     additional_functions: Vec<Function>,
     additional_binary_size: usize,
@@ -54,10 +79,11 @@ impl ModuleDefinition {
         table: Option<Table>,
     ) -> Result<Self, Error> {
         Ok(Self {
-            instantiate_call: InstantiateCall::new().map_err(|_| Error::Internal)?,
-            execute_call: ExecuteCall::new().map_err(|_| Error::Internal)?,
-            migrate_call: MigrateCall::new().map_err(|_| Error::Internal)?,
-            query_call: QueryCall::new().map_err(|_| Error::Internal)?,
+            instantiate_call: InstantiateFn::new().map_err(|_| Error::Internal)?,
+            execute_call: ExecuteFn::new().map_err(|_| Error::Internal)?,
+            migrate_call: MigrateFn::new().map_err(|_| Error::Internal)?,
+            query_call: QueryFn::new().map_err(|_| Error::Internal)?,
+            reply_call: ReplyFn::new().map_err(|_| Error::Internal)?,
             table,
             additional_functions,
             additional_binary_size,
@@ -85,12 +111,13 @@ impl ModuleDefinition {
 
     pub fn with_instantiate_response<S: Serialize>(response: S) -> Result<Self, Error> {
         Ok(Self {
-            instantiate_call: InstantiateCall(
-                InstantiateCall::plain(response).map_err(|_| Error::Internal)?,
+            instantiate_call: InstantiateFn(
+                InstantiateFn::plain(response).map_err(|_| Error::Internal)?,
             ),
-            execute_call: ExecuteCall::new().map_err(|_| Error::Internal)?,
-            migrate_call: MigrateCall::new().map_err(|_| Error::Internal)?,
-            query_call: QueryCall::new().map_err(|_| Error::Internal)?,
+            execute_call: ExecuteFn::new().map_err(|_| Error::Internal)?,
+            migrate_call: MigrateFn::new().map_err(|_| Error::Internal)?,
+            query_call: QueryFn::new().map_err(|_| Error::Internal)?,
+            reply_call: ReplyFn::new().map_err(|_| Error::Internal)?,
             table: None,
             additional_functions: Vec::new(),
             additional_binary_size: 0,
@@ -229,78 +256,74 @@ trait EntrypointCall {
 }
 
 #[derive(Debug)]
-struct ExecuteCall(FuncBody);
+struct ExecuteFn(FuncBody);
 
-impl EntrypointCall for ExecuteCall {
+impl EntrypointCall for ExecuteFn {
     const MSG_PTR_INDEX: u32 = 3;
 }
 
-impl ExecuteCall {
+impl ExecuteFn {
     pub fn new() -> Result<Self, serde_json::Error> {
         let response = Response::<Empty>::default();
-        Ok(ExecuteCall(Self::plain(
-            ContractResult::<Response<Empty>>::Ok(response),
-        )?))
+        Ok(ExecuteFn(Self::plain(ContractResult::Ok(response))?))
     }
 }
 
 #[derive(Debug)]
-struct InstantiateCall(FuncBody);
+struct InstantiateFn(FuncBody);
 
-impl EntrypointCall for InstantiateCall {
+impl EntrypointCall for InstantiateFn {
     const MSG_PTR_INDEX: u32 = 3;
 }
 
-impl InstantiateCall {
+impl InstantiateFn {
     pub fn new() -> Result<Self, serde_json::Error> {
         let response = Response::<Empty>::default();
-        Ok(InstantiateCall(Self::plain(ContractResult::<
-            Response<Empty>,
-        >::Ok(response))?))
+        Ok(InstantiateFn(Self::plain(ContractResult::Ok(response))?))
     }
 }
 
 #[derive(Debug)]
-struct MigrateCall(FuncBody);
+struct MigrateFn(FuncBody);
 
-impl EntrypointCall for MigrateCall {
+impl EntrypointCall for MigrateFn {
     const MSG_PTR_INDEX: u32 = 2;
 }
 
-impl MigrateCall {
+impl MigrateFn {
     pub fn new() -> Result<Self, serde_json::Error> {
         let response = Response::<Empty>::default();
-        Ok(MigrateCall(Self::plain(
-            ContractResult::<Response<Empty>>::Ok(response),
-        )?))
+        Ok(MigrateFn(Self::plain(ContractResult::Ok(response))?))
     }
 }
 
 #[derive(Debug)]
-struct QueryCall(FuncBody);
+struct QueryFn(FuncBody);
 
-impl EntrypointCall for QueryCall {
+impl EntrypointCall for QueryFn {
     const MSG_PTR_INDEX: u32 = 2;
 }
 
-impl QueryCall {
+impl QueryFn {
     pub fn new() -> Result<Self, serde_json::Error> {
         let encoded_result = hex::encode("{}");
-        Ok(QueryCall(Self::plain(ContractResult::<
-            alloc::string::String,
-        >::Ok(encoded_result))?))
+        Ok(QueryFn(Self::plain(ContractResult::Ok(encoded_result))?))
     }
 }
 
-const INDEX_OF_LAST_UNRESERVED_MEMORY_CURSOR: u32 = 0;
+#[derive(Debug)]
+struct ReplyFn(FuncBody);
 
-// We know this won't truncate as it is being executed in a 32-bit wasm context
-#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-const SIZE_OF_I32: i32 = mem::size_of::<i32>() as i32;
-/// Size of `CosmWasm` `Region`
-/// `offset` + `capacity` + `length`
-/// <https://github.com/CosmWasm/cosmwasm/blob/0ba91a53488f1a00fd1fa702c0055bfa324d395a/README.md?plain=1#L271>
-const SIZE_OF_REGION: i32 = SIZE_OF_I32 * 3;
+impl EntrypointCall for ReplyFn {
+    const MSG_PTR_INDEX: u32 = 2;
+}
+
+impl ReplyFn {
+    pub fn new() -> Result<Self, serde_json::Error> {
+        let response = Response::<Empty>::default();
+        Ok(ReplyFn(Self::plain(ContractResult::Ok(response))?))
+    }
+}
 
 impl From<ModuleDefinition> for WasmModule {
     #[allow(clippy::too_many_lines, clippy::cast_possible_truncation)]
@@ -335,7 +358,7 @@ impl From<ModuleDefinition> for WasmModule {
         let mut function_definitions = vec![
             // fn allocate(size: usize) -> u32;
             Function {
-                name: "allocate".into(),
+                name: AllocateCall::<()>::NAME.into(),
                 params: vec![ValueType::I32], // how much memory to allocate
                 result: Some(ValueType::I32), // ptr to the region of the new memory
                 definition: FuncBody::new(
@@ -380,21 +403,21 @@ impl From<ModuleDefinition> for WasmModule {
             },
             // fn instantiate(env_ptr: u32, info_ptr: u32, msg_ptr: u32) -> u32;
             Function {
-                name: "instantiate".into(),
+                name: <InstantiateCall>::NAME.into(),
                 params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
                 result: Some(ValueType::I32),
                 definition: def.instantiate_call.0,
             },
             // fn execute(env_ptr: u32, info_ptr: u32, msg_ptr: u32) -> u32;
             Function {
-                name: "execute".into(),
+                name: <ExecuteCall>::NAME.into(),
                 params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
                 result: Some(ValueType::I32),
                 definition: def.execute_call.0,
             },
             // fn migrate(env_ptr: u32, msg_ptr: u32) -> u32;
             Function {
-                name: "migrate".into(),
+                name: <MigrateCall>::NAME.into(),
                 params: vec![ValueType::I32, ValueType::I32],
                 result: Some(ValueType::I32),
                 definition: def.migrate_call.0,
@@ -403,23 +426,30 @@ impl From<ModuleDefinition> for WasmModule {
             // NOTE: We are not deallocating memory because for our usecase it does
             // not affect performance.
             Function {
-                name: "deallocate".into(),
+                name: DeallocateCall::<()>::NAME.into(),
                 params: vec![ValueType::I32],
                 result: None,
                 definition: FuncBody::new(Vec::new(), Instructions::empty()),
             },
             // fn query(env_ptr: u32, msg_ptr: u32) -> u32;
             Function {
-                name: "query".into(),
+                name: QueryCall::NAME.into(),
                 params: vec![ValueType::I32, ValueType::I32],
                 result: Some(ValueType::I32),
                 definition: def.query_call.0,
+            },
+            // fn reply(env_ptr: u32, msg_ptr: u32) -> u32;
+            Function {
+                name: <ReplyCall>::NAME.into(),
+                params: vec![ValueType::I32, ValueType::I32],
+                result: Some(ValueType::I32),
+                definition: def.reply_call.0,
             },
             // dummy function to increase the binary size
             // Used for increasing the total wasm's size.
             // Useful when benchmarking for different binary sizes.
             Function {
-                name: "dummy_fn".into(),
+                name: DummyCall::NAME.into(),
                 params: vec![],
                 result: None,
                 definition: FuncBody::new(
@@ -435,7 +465,7 @@ impl From<ModuleDefinition> for WasmModule {
             // Required in order to signal compatibility with CosmWasm 1.0
             // <https://github.com/CosmWasm/cosmwasm/blob/0ba91a53488f1a00fd1fa702c0055bfa324d395a/README.md?plain=1#L153>
             Function {
-                name: "interface_version_8".into(),
+                name: InterfaceVersion8Call::NAME.into(),
                 params: vec![],
                 result: None,
                 definition: FuncBody::new(Vec::new(), Instructions::empty()),
