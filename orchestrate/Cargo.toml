@@ -32,6 +32,6 @@ bs58 = { version = "0.4.0", default-features = false, features = [ "alloc" ] }
 [dev-dependencies]
 cw20 = "0.16"
 cw20-base = { version = "0.16", features = ["library"] }
-tokio = { version = "1.22", features = [ "rt", "macros" ] }
+tokio = { version = "1.23", features = [ "rt", "macros" ] }
 env_logger = { version = "0.10" }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
