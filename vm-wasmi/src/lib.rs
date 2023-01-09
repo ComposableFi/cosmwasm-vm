@@ -165,6 +165,7 @@ where
 pub trait WasmiContext {
     fn executing_module(&self) -> WasmiModule;
 }
+
 pub trait WasmiHost<T: Sized + VMBase> {
     fn host_function(&self, index: WasmiHostFunctionIndex) -> Option<&WasmiHostFunction<T>>;
 }
