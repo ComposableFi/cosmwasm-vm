@@ -132,7 +132,9 @@ impl Display for WasmiVMError {
     }
 }
 
-pub trait WasmiBaseVM = WasmiModuleExecutor
+pub trait WasmiBaseVM = Sized
+    + WasmiHost<Self>
+    + WasmiContext
     + VMBase<
         ContractMeta = CosmwasmContractMeta<VmAddressOf<Self>>,
         StorageKey = Vec<u8>,
@@ -160,9 +162,11 @@ where
     ReadableMemoryErrorOf<Self>: From<MemoryReadError>,
     WritableMemoryErrorOf<Self>: From<MemoryWriteError>;
 
-pub trait WasmiModuleExecutor: Sized + VMBase {
+pub trait WasmiContext {
     fn executing_module(&self) -> WasmiModule;
-    fn host_function(&self, index: WasmiHostFunctionIndex) -> Option<&WasmiHostFunction<Self>>;
+}
+pub trait WasmiHost<T: Sized + VMBase> {
+    fn host_function(&self, index: WasmiHostFunctionIndex) -> Option<&WasmiHostFunction<T>>;
 }
 
 pub struct WasmiVM<T>(pub T);
