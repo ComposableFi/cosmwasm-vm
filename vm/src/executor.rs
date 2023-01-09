@@ -163,6 +163,11 @@ impl<T> From<ReplyResult<T>> for ContractResult<Response<T>> {
         result
     }
 }
+impl<T> From<ContractResult<Response<T>>> for ReplyResult<T> {
+    fn from(value: ContractResult<Response<T>>) -> Self {
+        ReplyResult(value)
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct QueryResult(pub CosmwasmQueryResult);
@@ -194,6 +199,11 @@ impl<T> From<ExecuteResult<T>> for ContractResult<Response<T>> {
         result
     }
 }
+impl<T> From<ContractResult<Response<T>>> for ExecuteResult<T> {
+    fn from(value: ContractResult<Response<T>>) -> Self {
+        ExecuteResult(value)
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct InstantiateResult<T = Empty>(pub CosmwasmExecutionResult<T>);
@@ -212,6 +222,11 @@ impl<T> From<InstantiateResult<T>> for ContractResult<Response<T>> {
         result
     }
 }
+impl<T> From<ContractResult<Response<T>>> for InstantiateResult<T> {
+    fn from(value: ContractResult<Response<T>>) -> Self {
+        InstantiateResult(value)
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct MigrateResult<T = Empty>(pub CosmwasmExecutionResult<T>);
@@ -228,6 +243,11 @@ impl<T> ReadLimit for MigrateResult<T> {
 impl<T> From<MigrateResult<T>> for ContractResult<Response<T>> {
     fn from(MigrateResult(result): MigrateResult<T>) -> Self {
         result
+    }
+}
+impl<T> From<ContractResult<Response<T>>> for MigrateResult<T> {
+    fn from(value: ContractResult<Response<T>>) -> Self {
+        MigrateResult(value)
     }
 }
 
@@ -287,6 +307,19 @@ pub mod ibc {
             }
         }
     }
+    impl<T> From<ContractResult<Response<T>>> for IbcChannelConnectResult<T> {
+        fn from(value: ContractResult<Response<T>>) -> Self {
+            IbcChannelConnectResult(match value {
+                ContractResult::Ok(response) => ContractResult::Ok(
+                    IbcBasicResponse::new()
+                        .add_submessages(response.messages)
+                        .add_attributes(response.attributes)
+                        .add_events(response.events),
+                ),
+                ContractResult::Err(e) => ContractResult::Err(e),
+            })
+        }
+    }
 
     /// Response to the low level `ibc_channel_close` call.
     #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -318,6 +351,19 @@ pub mod ibc {
                 ),
                 ContractResult::Err(x) => ContractResult::Err(x),
             }
+        }
+    }
+    impl<T> From<ContractResult<Response<T>>> for IbcChannelCloseResult<T> {
+        fn from(value: ContractResult<Response<T>>) -> Self {
+            IbcChannelCloseResult(match value {
+                ContractResult::Ok(response) => ContractResult::Ok(
+                    IbcBasicResponse::new()
+                        .add_submessages(response.messages)
+                        .add_attributes(response.attributes)
+                        .add_events(response.events),
+                ),
+                ContractResult::Err(e) => ContractResult::Err(e),
+            })
         }
     }
 
@@ -355,6 +401,24 @@ pub mod ibc {
             }
         }
     }
+    impl<T> From<ContractResult<Response<T>>> for IbcPacketReceiveResult<T> {
+        fn from(value: ContractResult<Response<T>>) -> Self {
+            IbcPacketReceiveResult(match value {
+                ContractResult::Ok(response) => ContractResult::Ok(match response.data {
+                    Some(data) => IbcReceiveResponse::new()
+                        .add_submessages(response.messages)
+                        .add_attributes(response.attributes)
+                        .add_events(response.events)
+                        .set_ack(data),
+                    None => IbcReceiveResponse::new()
+                        .add_submessages(response.messages)
+                        .add_attributes(response.attributes)
+                        .add_events(response.events),
+                }),
+                ContractResult::Err(e) => ContractResult::Err(e),
+            })
+        }
+    }
 
     /// Response to the low level `ibc_packet_ack` call.
     #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -388,6 +452,19 @@ pub mod ibc {
             }
         }
     }
+    impl<T> From<ContractResult<Response<T>>> for IbcPacketAckResult<T> {
+        fn from(value: ContractResult<Response<T>>) -> Self {
+            IbcPacketAckResult(match value {
+                ContractResult::Ok(response) => ContractResult::Ok(
+                    IbcBasicResponse::new()
+                        .add_submessages(response.messages)
+                        .add_attributes(response.attributes)
+                        .add_events(response.events),
+                ),
+                ContractResult::Err(e) => ContractResult::Err(e),
+            })
+        }
+    }
 
     /// Response to the low level `ibc_packet_timeout` call.
     #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -419,6 +496,19 @@ pub mod ibc {
                 ),
                 ContractResult::Err(x) => ContractResult::Err(x),
             }
+        }
+    }
+    impl<T> From<ContractResult<Response<T>>> for IbcPacketTimeoutResult<T> {
+        fn from(value: ContractResult<Response<T>>) -> Self {
+            IbcPacketTimeoutResult(match value {
+                ContractResult::Ok(response) => ContractResult::Ok(
+                    IbcBasicResponse::new()
+                        .add_submessages(response.messages)
+                        .add_attributes(response.attributes)
+                        .add_events(response.events),
+                ),
+                ContractResult::Err(e) => ContractResult::Err(e),
+            })
         }
     }
 

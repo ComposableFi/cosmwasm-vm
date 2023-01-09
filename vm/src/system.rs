@@ -345,7 +345,8 @@ where
 pub trait CosmwasmCallVM<I> = CosmwasmBaseVM
 where
     I: Input + HasInfo + HasEvent,
-    OutputOf<I>: Into<ContractResult<Response<VmMessageCustomOf<Self>>>>;
+    OutputOf<I>: Into<ContractResult<Response<VmMessageCustomOf<Self>>>>
+        + From<ContractResult<Response<VmMessageCustomOf<Self>>>>;
 
 pub trait CosmwasmDynamicVM<I> = CosmwasmBaseVM
 where
