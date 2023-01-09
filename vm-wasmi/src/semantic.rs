@@ -201,8 +201,8 @@ struct SimpleWasmiVM<'a> {
 }
 
 impl<'a> WasmiContext for SimpleWasmiVM<'a> {
-    fn executing_module(&self) -> WasmiModule {
-        self.executing_module.clone()
+    fn executing_module(&self) -> Option<WasmiModule> {
+        Some(self.executing_module.clone())
     }
 }
 

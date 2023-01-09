@@ -345,10 +345,7 @@ where
 pub trait CosmwasmCallVM<I> = CosmwasmBaseVM
 where
     I: Input + HasInfo + HasEvent,
-    OutputOf<I>: DeserializeOwned
-        + ReadLimit
-        + DeserializeLimit
-        + Into<ContractResult<Response<VmMessageCustomOf<Self>>>>;
+    OutputOf<I>: Into<ContractResult<Response<VmMessageCustomOf<Self>>>>;
 
 pub trait CosmwasmDynamicVM<I> = CosmwasmBaseVM
 where
@@ -371,7 +368,9 @@ where
             CosmwasmCallWithoutInfoInput<'x, PointerOf<Self>, MigrateCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<CosmwasmCallInput<'x, PointerOf<Self>, I>, Error = VmErrorOf<Self>>
-        + TryFrom<CosmwasmCallWithoutInfoInput<'x, PointerOf<Self>, I>, Error = VmErrorOf<Self>>;
+        + TryFrom<CosmwasmCallWithoutInfoInput<'x, PointerOf<Self>, I>, Error = VmErrorOf<Self>>,
+    I: Input + HasInfo + HasEvent,
+    OutputOf<I>: DeserializeOwned + ReadLimit + DeserializeLimit;
 
 #[cfg(feature = "stargate")]
 /// Extra constraints required by stargate enabled `CosmWasm` VM (a.k.a. IBC capable).

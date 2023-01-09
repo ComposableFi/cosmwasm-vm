@@ -100,6 +100,7 @@ pub enum WasmiVMError {
     InvalidHostSignature,
     InvalidValue,
     MaxLimitExceeded,
+    NotADynamicModule,
 }
 impl From<ExecutorError> for WasmiVMError {
     fn from(e: ExecutorError) -> Self {
@@ -163,7 +164,7 @@ where
     WritableMemoryErrorOf<Self>: From<MemoryWriteError>;
 
 pub trait WasmiContext {
-    fn executing_module(&self) -> WasmiModule;
+    fn executing_module(&self) -> Option<WasmiModule>;
 }
 
 pub trait WasmiHost<T: Sized + VMBase> {
@@ -416,7 +417,10 @@ where
         O: for<'x> TryFrom<Self::Output<'x>, Error = VmErrorOf<Self>>,
     {
         log::trace!("Function name: {}", function_name);
-        let WasmiModule { module, memory } = self.0.executing_module();
+        let WasmiModule { module, memory } = self
+            .0
+            .executing_module()
+            .ok_or(WasmiVMError::NotADynamicModule)?;
         let value = module.invoke_export(&function_name, &function_args, self)?;
         O::try_from(WasmiOutput(
             match value {

@@ -202,8 +202,8 @@ pub struct Context<'a, CH: CustomHandler, AH: AddressHandler> {
 }
 
 impl<'a, CH: CustomHandler, AH: AddressHandler> WasmiContext for Context<'a, CH, AH> {
-    fn executing_module(&self) -> WasmiModule {
-        self.executing_module.clone()
+    fn executing_module(&self) -> Option<WasmiModule> {
+        Some(self.executing_module.clone())
     }
 }
 
