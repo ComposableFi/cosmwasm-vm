@@ -340,13 +340,21 @@ where
         + From<SystemError>
         + From<TransactionalErrorOf<Self>>
         + Debug,
-    for<'x> VmInputOf<'x, Self>: TryFrom<AllocateCall<PointerOf<Self>>, Error = VmErrorOf<Self>>,
     PointerOf<Self>: for<'x> TryFrom<VmOutputOf<'x, Self>, Error = VmErrorOf<Self>>;
 
 pub trait CosmwasmCallVM<I> = CosmwasmBaseVM
 where
+    I: Input + HasInfo + HasEvent,
+    OutputOf<I>: DeserializeOwned
+        + ReadLimit
+        + DeserializeLimit
+        + Into<ContractResult<Response<VmMessageCustomOf<Self>>>>;
+
+pub trait CosmwasmDynamicVM<I> = CosmwasmBaseVM
+where
     for<'x> Unit: TryFrom<VmOutputOf<'x, Self>, Error = VmErrorOf<Self>>,
-    for<'x> VmInputOf<'x, Self>: TryFrom<DeallocateCall<PointerOf<Self>>, Error = VmErrorOf<Self>>
+    for<'x> VmInputOf<'x, Self>: TryFrom<AllocateCall<PointerOf<Self>>, Error = VmErrorOf<Self>>
+        + TryFrom<DeallocateCall<PointerOf<Self>>, Error = VmErrorOf<Self>>
         + TryFrom<
             CosmwasmCallInput<'x, PointerOf<Self>, InstantiateCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
@@ -363,12 +371,7 @@ where
             CosmwasmCallWithoutInfoInput<'x, PointerOf<Self>, MigrateCall<VmMessageCustomOf<Self>>>,
             Error = VmErrorOf<Self>,
         > + TryFrom<CosmwasmCallInput<'x, PointerOf<Self>, I>, Error = VmErrorOf<Self>>
-        + TryFrom<CosmwasmCallWithoutInfoInput<'x, PointerOf<Self>, I>, Error = VmErrorOf<Self>>,
-    I: Input + HasInfo + HasEvent,
-    OutputOf<I>: DeserializeOwned
-        + ReadLimit
-        + DeserializeLimit
-        + Into<ContractResult<Response<VmMessageCustomOf<Self>>>>;
+        + TryFrom<CosmwasmCallWithoutInfoInput<'x, PointerOf<Self>, I>, Error = VmErrorOf<Self>>;
 
 #[cfg(feature = "stargate")]
 /// Extra constraints required by stargate enabled `CosmWasm` VM (a.k.a. IBC capable).
@@ -399,7 +402,7 @@ pub fn cosmwasm_system_entrypoint_serialize<I, V, M>(
     message: &M,
 ) -> Result<(Option<Binary>, Vec<Event>), VmErrorOf<V>>
 where
-    V: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
+    V: CosmwasmCallVM<I> + CosmwasmDynamicVM<I> + StargateCosmwasmCallVM,
     M: Serialize,
 {
     cosmwasm_system_entrypoint_serialize_hook(vm, message, |vm, msg| cosmwasm_call::<I, V>(vm, msg))
@@ -427,7 +430,7 @@ pub fn cosmwasm_system_entrypoint<I, V>(
     message: &[u8],
 ) -> Result<(Option<Binary>, Vec<Event>), VmErrorOf<V>>
 where
-    V: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
+    V: CosmwasmCallVM<I> + CosmwasmDynamicVM<I> + StargateCosmwasmCallVM,
 {
     cosmwasm_system_entrypoint_hook(vm, message, |vm, msg| cosmwasm_call::<I, V>(vm, msg))
 }
@@ -703,7 +706,7 @@ pub fn cosmwasm_system_run<I, V>(
     event_handler: &mut dyn FnMut(Event),
 ) -> Result<Option<Binary>, VmErrorOf<V>>
 where
-    V: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
+    V: CosmwasmCallVM<I> + CosmwasmDynamicVM<I> + StargateCosmwasmCallVM,
 {
     cosmwasm_system_run_hook(vm, message, event_handler, |vm, msg| {
         cosmwasm_call::<I, V>(vm, msg)
