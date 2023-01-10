@@ -1242,7 +1242,7 @@ fn test_hook() {
             sender.0
         )
         .as_bytes(),
-        |vm, msg| cosmwasm_call::<InstantiateCall, WasmiVM<SimpleWasmiVM>>(vm, msg),
+        |vm, msg| cosmwasm_call::<InstantiateCall, WasmiVM<SimpleWasmiVM>>(vm, msg).map(Into::into),
     )
     .unwrap();
     let r = cosmwasm_system_entrypoint_hook::<ExecuteCall, WasmiVM<SimpleWasmiVM>>(
@@ -1254,7 +1254,7 @@ fn test_hook() {
               }
             }"#
         .as_bytes(),
-        |_, _| Ok(ExecuteResult(ContractResult::Err("Bro".into()))),
+        |_, _| Ok(ContractResult::Err("Bro".into())),
     );
     assert_eq!(
         r,

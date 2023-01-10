@@ -405,14 +405,19 @@ where
     V: CosmwasmCallVM<I> + CosmwasmDynamicVM<I> + StargateCosmwasmCallVM,
     M: Serialize,
 {
-    cosmwasm_system_entrypoint_serialize_hook(vm, message, |vm, msg| cosmwasm_call::<I, V>(vm, msg))
+    cosmwasm_system_entrypoint_serialize_hook(vm, message, |vm, msg| {
+        cosmwasm_call::<I, V>(vm, msg).map(Into::into)
+    })
 }
 
 /// Extra helper to dispatch a typed message, serializing on the go.
 pub fn cosmwasm_system_entrypoint_serialize_hook<I, V, M>(
     vm: &mut V,
     message: &M,
-    hook: impl FnOnce(&mut V, &[u8]) -> Result<<I as Input>::Output, VmErrorOf<V>>,
+    hook: impl FnOnce(
+        &mut V,
+        &[u8],
+    ) -> Result<ContractResult<Response<VmMessageCustomOf<V>>>, VmErrorOf<V>>,
 ) -> Result<(Option<Binary>, Vec<Event>), VmErrorOf<V>>
 where
     V: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
@@ -432,7 +437,9 @@ pub fn cosmwasm_system_entrypoint<I, V>(
 where
     V: CosmwasmCallVM<I> + CosmwasmDynamicVM<I> + StargateCosmwasmCallVM,
 {
-    cosmwasm_system_entrypoint_hook(vm, message, |vm, msg| cosmwasm_call::<I, V>(vm, msg))
+    cosmwasm_system_entrypoint_hook(vm, message, |vm, msg| {
+        cosmwasm_call::<I, V>(vm, msg).map(Into::into)
+    })
 }
 
 /// High level dispatch for a `CosmWasm` VM.
@@ -443,7 +450,10 @@ where
 pub fn cosmwasm_system_entrypoint_hook<I, V>(
     vm: &mut V,
     message: &[u8],
-    hook: impl FnOnce(&mut V, &[u8]) -> Result<<I as Input>::Output, VmErrorOf<V>>,
+    hook: impl FnOnce(
+        &mut V,
+        &[u8],
+    ) -> Result<ContractResult<Response<VmMessageCustomOf<V>>>, VmErrorOf<V>>,
 ) -> Result<(Option<Binary>, Vec<Event>), VmErrorOf<V>>
 where
     V: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
@@ -709,7 +719,7 @@ where
     V: CosmwasmCallVM<I> + CosmwasmDynamicVM<I> + StargateCosmwasmCallVM,
 {
     cosmwasm_system_run_hook(vm, message, event_handler, |vm, msg| {
-        cosmwasm_call::<I, V>(vm, msg)
+        cosmwasm_call::<I, V>(vm, msg).map(Into::into)
     })
 }
 
@@ -718,7 +728,10 @@ pub fn cosmwasm_system_run_hook<I, V>(
     vm: &mut V,
     message: &[u8],
     mut event_handler: &mut dyn FnMut(Event),
-    hook: impl FnOnce(&mut V, &[u8]) -> Result<<I as Input>::Output, VmErrorOf<V>>,
+    hook: impl FnOnce(
+        &mut V,
+        &[u8],
+    ) -> Result<ContractResult<Response<VmMessageCustomOf<V>>>, VmErrorOf<V>>,
 ) -> Result<Option<Binary>, VmErrorOf<V>>
 where
     V: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
