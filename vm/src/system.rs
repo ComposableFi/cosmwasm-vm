@@ -61,15 +61,15 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 // WasmModuleEventType is stored with any contract TX that returns non empty EventAttributes
-const WASM_MODULE_EVENT_TYPE: &str = "wasm";
+pub const WASM_MODULE_EVENT_TYPE: &str = "wasm";
 
 // CustomContractEventPrefix contracts can create custom events. To not mix them with other system events they got the `wasm-` prefix.
-const CUSTOM_CONTRACT_EVENT_PREFIX: &str = "wasm-";
+pub const CUSTOM_CONTRACT_EVENT_PREFIX: &str = "wasm-";
 
 // Minimum length of an event type
-const CUSTOM_CONTRACT_EVENT_TYPE_MIN_LENGTH: usize = 2;
+pub const CUSTOM_CONTRACT_EVENT_TYPE_MIN_LENGTH: usize = 2;
 
-const WASM_MODULE_EVENT_RESERVED_PREFIX: &str = "_";
+pub const WASM_MODULE_EVENT_RESERVED_PREFIX: &str = "_";
 
 #[allow(unused)]
 #[allow(clippy::module_name_repetitions)]
