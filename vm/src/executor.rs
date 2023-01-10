@@ -181,6 +181,16 @@ impl ReadLimit for QueryResult {
         read_limits::RESULT_QUERY
     }
 }
+impl From<CosmwasmQueryResult> for QueryResult {
+    fn from(value: CosmwasmQueryResult) -> Self {
+        Self(value)
+    }
+}
+impl From<QueryResult> for CosmwasmQueryResult {
+    fn from(QueryResult(value): QueryResult) -> Self {
+        value
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ExecuteResult<T = Empty>(pub CosmwasmExecutionResult<T>);
