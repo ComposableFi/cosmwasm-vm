@@ -14,7 +14,10 @@ use cosmwasm_vm::{
     },
     input::Input,
     memory::PointerOf,
-    system::{self, CosmwasmCallVM, CosmwasmCodeId, CosmwasmContractMeta, StargateCosmwasmCallVM},
+    system::{
+        self, CosmwasmCallVM, CosmwasmCodeId, CosmwasmContractMeta, CosmwasmDynamicVM,
+        StargateCosmwasmCallVM,
+    },
     vm::{VmErrorOf, VmInputOf, VmMessageCustomOf},
 };
 use cosmwasm_vm_wasmi::{host_functions, new_wasmi_vm, WasmiBaseVM, WasmiImportResolver, WasmiVM};
@@ -85,7 +88,7 @@ where
         message: &[u8],
     ) -> Result<E::Output<VM>, VmError>
     where
-        WasmiVM<VM>: CosmwasmCallVM<I> + StargateCosmwasmCallVM;
+        WasmiVM<VM>: CosmwasmCallVM<I> + CosmwasmDynamicVM<I> + StargateCosmwasmCallVM;
 
     /// Common endpoint for any other direct endpoint like `ibc_channel_open`
     fn do_direct<I>(
@@ -256,7 +259,8 @@ where
         message: &[u8],
     ) -> Result<E::Output<Context<'a, CH, AH>>, VmError>
     where
-        WasmiVM<Context<'a, CH, AH>>: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
+        WasmiVM<Context<'a, CH, AH>>:
+            CosmwasmCallVM<I> + CosmwasmDynamicVM<I> + StargateCosmwasmCallVM,
     {
         self.gas = Gas::new(gas);
         let mut vm = create_vm(self, env, info);

@@ -17,7 +17,10 @@ use cosmwasm_vm::{
         },
         QueryResult,
     },
-    system::{cosmwasm_system_entrypoint, CosmwasmCallVM, CosmwasmCodeId, StargateCosmwasmCallVM},
+    system::{
+        cosmwasm_system_entrypoint, CosmwasmCallVM, CosmwasmCodeId, CosmwasmDynamicVM,
+        StargateCosmwasmCallVM,
+    },
     vm::{VmErrorOf, VmMessageCustomOf},
 };
 use cosmwasm_vm_wasmi::{WasmiBaseVM, WasmiVM};
@@ -435,7 +438,7 @@ pub trait ExecutionType {
         message: &[u8],
     ) -> Result<Self::Output<V>, VmError>
     where
-        WasmiVM<V>: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
+        WasmiVM<V>: CosmwasmCallVM<I> + CosmwasmDynamicVM<I> + StargateCosmwasmCallVM,
         VmErrorOf<WasmiVM<V>>: Into<VmError>;
 }
 
@@ -448,7 +451,7 @@ impl ExecutionType for Direct {
         message: &[u8],
     ) -> Result<Self::Output<V>, VmError>
     where
-        WasmiVM<V>: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
+        WasmiVM<V>: CosmwasmCallVM<I> + CosmwasmDynamicVM<I> + StargateCosmwasmCallVM,
         VmErrorOf<WasmiVM<V>>: Into<VmError>,
     {
         Ok(cosmwasm_call::<I, _>(vm, message)
@@ -470,7 +473,7 @@ impl ExecutionType for Dispatch {
         message: &[u8],
     ) -> Result<Self::Output<V>, VmError>
     where
-        WasmiVM<V>: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
+        WasmiVM<V>: CosmwasmCallVM<I> + CosmwasmDynamicVM<I> + StargateCosmwasmCallVM,
         VmErrorOf<WasmiVM<V>>: Into<VmError>,
     {
         cosmwasm_system_entrypoint::<I, _>(vm, message).map_err(Into::into)

@@ -29,8 +29,9 @@ use cosmwasm_vm::{
     vm::{VMBase, VmErrorOf, VmGas, VmGasCheckpoint},
 };
 use cosmwasm_vm_wasmi::{
-    host_functions, new_wasmi_vm, WasmiHostFunction, WasmiHostFunctionIndex, WasmiImportResolver,
-    WasmiInput, WasmiModule, WasmiModuleExecutor, WasmiOutput, WasmiVM, WasmiVMError,
+    host_functions, new_wasmi_vm, WasmiContext, WasmiHost, WasmiHostFunction,
+    WasmiHostFunctionIndex, WasmiImportResolver, WasmiInput, WasmiModule, WasmiOutput, WasmiVM,
+    WasmiVMError,
 };
 use serde::de::DeserializeOwned;
 use wasm_instrument::gas_metering::Rules;
@@ -200,10 +201,13 @@ pub struct Context<'a, CH: CustomHandler, AH: AddressHandler> {
     pub state: &'a mut State<CH, AH>,
 }
 
-impl<'a, CH: CustomHandler, AH: AddressHandler> WasmiModuleExecutor for Context<'a, CH, AH> {
-    fn executing_module(&self) -> WasmiModule {
-        self.executing_module.clone()
+impl<'a, CH: CustomHandler, AH: AddressHandler> WasmiContext for Context<'a, CH, AH> {
+    fn executing_module(&self) -> Option<WasmiModule> {
+        Some(self.executing_module.clone())
     }
+}
+
+impl<'a, CH: CustomHandler, AH: AddressHandler> WasmiHost<Self> for Context<'a, CH, AH> {
     fn host_function(&self, index: WasmiHostFunctionIndex) -> Option<&WasmiHostFunction<Self>> {
         self.host_functions.get(&index)
     }

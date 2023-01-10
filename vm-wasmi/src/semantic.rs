@@ -1,12 +1,14 @@
 extern crate std;
 
+use crate::WasmiHost;
+
 use super::{
     code_gen, format, host_functions, new_wasmi_vm, vec, BTreeMap, CanResume, CanonicalAddr,
     ContractInfoResponse, CosmwasmQueryResult, Debug, Display, ExecutorError, Has, MemoryReadError,
     MemoryWriteError, Pointable, QueryResult, ReadWriteMemory, ReadableMemory, Reply, String,
     SystemError, SystemResult, Transactional, VMBase, Vec, VmErrorOf, VmGas, VmGasCheckpoint,
-    WasmiHostFunction, WasmiHostFunctionIndex, WasmiImportResolver, WasmiInput, WasmiModule,
-    WasmiModuleExecutor, WasmiOutput, WasmiVM, WasmiVMError, WritableMemory,
+    WasmiContext, WasmiHostFunction, WasmiHostFunctionIndex, WasmiImportResolver, WasmiInput,
+    WasmiModule, WasmiOutput, WasmiVM, WasmiVMError, WritableMemory,
 };
 use alloc::string::ToString;
 use core::{assert_matches::assert_matches, num::NonZeroU32, str::FromStr};
@@ -198,10 +200,13 @@ struct SimpleWasmiVM<'a> {
     extension: &'a mut SimpleWasmiVMExtension,
 }
 
-impl<'a> WasmiModuleExecutor for SimpleWasmiVM<'a> {
-    fn executing_module(&self) -> WasmiModule {
-        self.executing_module.clone()
+impl<'a> WasmiContext for SimpleWasmiVM<'a> {
+    fn executing_module(&self) -> Option<WasmiModule> {
+        Some(self.executing_module.clone())
     }
+}
+
+impl<'a> WasmiHost<Self> for SimpleWasmiVM<'a> {
     fn host_function(&self, index: WasmiHostFunctionIndex) -> Option<&WasmiHostFunction<Self>> {
         self.host_functions.get(&index)
     }
@@ -1237,7 +1242,7 @@ fn test_hook() {
             sender.0
         )
         .as_bytes(),
-        |vm, msg| cosmwasm_call::<InstantiateCall, WasmiVM<SimpleWasmiVM>>(vm, msg),
+        |vm, msg| cosmwasm_call::<InstantiateCall, WasmiVM<SimpleWasmiVM>>(vm, msg).map(Into::into),
     )
     .unwrap();
     let r = cosmwasm_system_entrypoint_hook::<ExecuteCall, WasmiVM<SimpleWasmiVM>>(
@@ -1249,7 +1254,7 @@ fn test_hook() {
               }
             }"#
         .as_bytes(),
-        |_, _| Ok(ExecuteResult(ContractResult::Err("Bro".into()))),
+        |_, _| Ok(ContractResult::Err("Bro".into())),
     );
     assert_eq!(
         r,
