@@ -336,7 +336,8 @@ impl From<ModuleDefinition> for WasmModule {
             .global()
             .with_type(ValueType::I32)
             .mutable()
-            .init_expr(Instruction::I32Const(0))
+            // We don't want this to be zero since 0 is an invalid pointer
+            .init_expr(Instruction::I32Const(10))
             .build()
             // Export memory
             .export()

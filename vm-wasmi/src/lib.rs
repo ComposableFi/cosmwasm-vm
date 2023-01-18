@@ -33,6 +33,8 @@
 extern crate alloc;
 
 pub mod code_gen;
+pub mod validation;
+pub mod version;
 
 #[cfg(test)]
 mod semantic;

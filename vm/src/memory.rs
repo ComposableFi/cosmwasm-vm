@@ -30,10 +30,11 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::marker::PhantomData;
+use num::traits::Zero;
 
 pub type PointerOf<T> = <T as Pointable>::Pointer;
 pub trait Pointable {
-    type Pointer: Debug + Ord + Copy + TryFrom<usize> + TryInto<usize>;
+    type Pointer: Debug + Ord + Copy + Zero + TryFrom<usize> + TryInto<usize>;
 }
 
 #[allow(clippy::module_name_repetitions)]
@@ -68,6 +69,9 @@ pub enum MemoryReadError {
     InvalidTypeSize,
     OverflowLimit,
     InvalidPointer,
+    OutOfRange,
+    LengthExceedsCapacity,
+    ZeroOffset,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -75,6 +79,29 @@ pub enum MemoryReadError {
 pub enum MemoryWriteError {
     RegionTooSmall,
     BufferSizeOverflowPointer,
+    TypeSizeOverflow,
+}
+
+/// <https://github.com/CosmWasm/cosmwasm/blob/9a5252d0db84c23a429f644c257af21370acb2f9/packages/vm/src/memory.rs#L122>
+fn validate_region<M: ReadableMemory>(
+    region: &Region<M::Pointer>,
+    limit: Option<M::Pointer>,
+) -> Result<(), MemoryReadError> {
+    if region.offset.is_zero() {
+        return Err(MemoryReadError::LengthExceedsCapacity);
+    }
+
+    if region.length > region.capacity {
+        return Err(MemoryReadError::OutOfRange);
+    }
+
+    if let Some(limit) = limit {
+        if region.length > limit {
+            return Err(MemoryReadError::OverflowLimit);
+        }
+    }
+
+    Ok(())
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -90,7 +117,8 @@ where
     fn try_from(Read(memory, offset): Read<'a, M>) -> Result<Self, Self::Error> {
         log::trace!("FromMemory");
         let size = core::mem::size_of::<T>();
-        if size == 0 {
+        // see safety requirement of `from_raw_parts_mut`
+        if size == 0 || size > isize::MAX as usize {
             Err(MemoryReadError::InvalidTypeSize.into())
         } else {
             let mut t: T = unsafe { core::mem::zeroed() };
@@ -127,12 +155,9 @@ where
     ) -> Result<Self, Self::Error> {
         log::trace!("FromRegion");
         let FromMemory(region) = FromMemory::<Region<M::Pointer>>::try_from(Read(memory, pointer))?;
-        if region.length > limit {
-            Err(MemoryReadError::OverflowLimit.into())
-        } else {
-            let FromMemory(value) = FromMemory::<T>::try_from(Read(memory, region.offset))?;
-            Ok(FromRegion(value))
-        }
+        validate_region::<M>(&region, Some(limit))?;
+        let FromMemory(value) = FromMemory::<T>::try_from(Read(memory, region.offset))?;
+        Ok(FromRegion(value))
     }
 }
 
@@ -149,19 +174,16 @@ where
     ) -> Result<Self, Self::Error> {
         log::trace!("RawFromRegion: {:?}", pointer);
         let FromMemory(region) = FromMemory::<Region<M::Pointer>>::try_from(Read(memory, pointer))?;
-        if region.length > limit {
-            Err(MemoryReadError::OverflowLimit.into())
-        } else {
-            let mut buffer = vec![
-                0u8;
-                region
-                    .length
-                    .try_into()
-                    .map_err(|_| MemoryReadError::InvalidPointer)?
-            ];
-            memory.read(region.offset, &mut buffer)?;
-            Ok(RawFromRegion(buffer))
-        }
+        validate_region::<M>(&region, Some(limit))?;
+        let mut buffer = vec![
+            0u8;
+            region
+                .length
+                .try_into()
+                .map_err(|_| MemoryReadError::InvalidPointer)?
+        ];
+        memory.read(region.offset, &mut buffer)?;
+        Ok(RawFromRegion(buffer))
     }
 }
 
@@ -191,6 +213,10 @@ where
         TypedWrite(memory, offset, value): TypedWrite<'a, 'b, M, T>,
     ) -> Result<Self, Self::Error> {
         log::trace!("IntoMemory");
+        // safety requirement of `from_raw_parts`
+        if core::mem::size_of::<T>() > isize::MAX as usize {
+            return Err(MemoryWriteError::TypeSizeOverflow.into());
+        }
         let buffer = unsafe {
             core::slice::from_raw_parts((value as *const T).cast::<u8>(), core::mem::size_of::<T>())
         };

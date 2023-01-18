@@ -39,6 +39,7 @@ use crate::{
 use alloc::vec::Vec;
 use core::{fmt::Debug, marker::PhantomData};
 use cosmwasm_std::{Binary, ContractResult, Empty, Env, MessageInfo, QueryRequest, Response};
+use num::traits::Zero;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 pub mod read_limits {
@@ -832,6 +833,9 @@ where
     VmErrorOf<V>:
         From<ReadableMemoryErrorOf<V>> + From<WritableMemoryErrorOf<V>> + From<ExecutorError>,
 {
+    if destination.is_zero() {
+        return Err(ExecutorError::InvalidPointer.into());
+    }
     RawIntoRegion::try_from(Write(vm, destination, data))?;
     Ok(())
 }

@@ -645,6 +645,7 @@ where
                 contract_addr,
                 admin: new_admin,
             } => {
+                vm.addr_validate(&new_admin)??;
                 let new_admin = new_admin.try_into()?;
                 let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
                 update_admin::<V>(vm, &info.sender, vm_contract_addr, Some(new_admin))?;

@@ -21,6 +21,7 @@ serde_json = { version = "1", default-features = false, features = ["alloc"] }
 either = { version = "1.8", default-features = false }
 log = { version = "0.4", default-features = false }
 wasmi = { git = "https://github.com/ComposableFi/wasmi", rev = "cd8c0c775a1d197a35ff3d5c7d6cded3d476411b", default-features = false }
+wasmi-validation = { git = "https://github.com/ComposableFi/wasmi", rev = "cd8c0c775a1d197a35ff3d5c7d6cded3d476411b", default-features = false }
 wasm-instrument = { version = "0.2", default-features = false }
 cosmwasm-std = { git = "https://github.com/ComposableFi/cosmwasm", rev = "21351cc1ced863b9af7c8a69f923036bc919b3b1", default-features = false, features = [
   "iterator",
