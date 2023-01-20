@@ -68,13 +68,14 @@ pub type CustomJunoApi<'a, E = Dispatch> = Api<
 async fn main() {
     let code = FileFetcher::from_url(REFLECT_URL).await.unwrap();
     let sender = Account::generate_from_seed::<JunoAddressHandler>("sender").unwrap();
+    let code_id = 0xBABEBABE;
     let mut state = StateBuilder::<JunoAddressHandler, MyCustomHandler>::new()
-        .add_code(&code)
+        .add_code(code_id, code)
         .set_custom_handler(MyCustomHandler {})
         .build();
     let _ = <CustomJunoApi>::instantiate_raw(
         &mut state,
-        1,
+        code_id,
         None,
         block(),
         None,

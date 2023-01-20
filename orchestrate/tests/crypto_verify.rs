@@ -56,11 +56,14 @@ fn message_info(sender: &Account) -> MessageInfo {
 
 fn setup() -> (Account, State<(), WasmAddressHandler>) {
     let wasm_code = include_bytes!("../../fixtures/crypto_verify.wasm");
-    let mut state = StateBuilder::new().add_code(wasm_code).build();
+    let code_id = 0;
+    let mut state = StateBuilder::new()
+        .add_code(code_id, wasm_code.as_slice())
+        .build();
 
     let (addr, _) = <Api<Direct>>::instantiate_raw(
         &mut state,
-        1,
+        code_id,
         None,
         BlockInfo {
             height: 1,
@@ -86,7 +89,7 @@ fn cosmos_signature_verify_works() {
     let public_key = hex::decode(SECP256K1_PUBLIC_KEY_HEX).unwrap();
 
     let verify_msg = format!(
-        r#" 
+        r#"
     {{
         "verify_cosmos_signature": {{
             "message": "{}",
@@ -120,7 +123,7 @@ fn cosmos_signature_verify_fails() {
     let public_key = hex::decode(SECP256K1_PUBLIC_KEY_HEX).unwrap();
 
     let verify_msg = format!(
-        r#" 
+        r#"
     {{
         "verify_cosmos_signature": {{
             "message": "{}",
@@ -152,7 +155,7 @@ fn ethereum_signature_verify_works() {
     let signer_address = ETHEREUM_SIGNER_ADDRESS;
 
     let verify_msg = format!(
-        r#" 
+        r#"
     {{
         "verify_ethereum_text": {{
             "message": "{}",
@@ -184,7 +187,7 @@ fn ethereum_signature_verify_fails_for_corrupted_message() {
     let signer_address = ETHEREUM_SIGNER_ADDRESS;
 
     let verify_msg = format!(
-        r#" 
+        r#"
     {{
         "verify_ethereum_text": {{
             "message": "{}",
@@ -217,7 +220,7 @@ fn ethereum_signature_verify_fails_for_corrupted_signature() {
     let signer_address = ETHEREUM_SIGNER_ADDRESS;
 
     let verify_msg = format!(
-        r#" 
+        r#"
     {{
         "verify_ethereum_text": {{
             "message": "{}",
@@ -325,7 +328,7 @@ fn tendermint_signature_verify_works() {
     let public_key = hex::decode(ED25519_PUBLIC_KEY_HEX).unwrap();
 
     let verify_msg = format!(
-        r#" 
+        r#"
     {{
         "verify_tendermint_signature": {{
             "message": "{}",
@@ -358,7 +361,7 @@ fn tendermint_signature_verify_fails() {
     let public_key = hex::decode(ED25519_PUBLIC_KEY_HEX).unwrap();
 
     let verify_msg = format!(
-        r#" 
+        r#"
     {{
         "verify_tendermint_signature": {{
             "message": "{}",
@@ -399,7 +402,7 @@ fn tendermint_signatures_batch_verify_works() {
         .collect();
 
     let verify_msg = format!(
-        r#" 
+        r#"
     {{
         "verify_tendermint_batch": {{
             "messages": {messages:?},
@@ -440,7 +443,7 @@ fn tendermint_signatures_batch_verify_message_multisig_works() {
         .collect();
 
     let verify_msg = format!(
-        r#" 
+        r#"
     {{
         "verify_tendermint_batch": {{
             "messages": {messages:?},
@@ -482,7 +485,7 @@ fn tendermint_signatures_batch_verify_single_public_key_works() {
         .collect();
 
     let verify_msg = format!(
-        r#" 
+        r#"
     {{
         "verify_tendermint_batch": {{
             "messages": {messages:?},
@@ -520,7 +523,7 @@ fn tendermint_signatures_batch_verify_fails() {
         .collect();
 
     let verify_msg = format!(
-        r#" 
+        r#"
     {{
         "verify_tendermint_batch": {{
             "messages": {messages:?},
