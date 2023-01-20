@@ -33,6 +33,8 @@
 extern crate alloc;
 
 pub mod code_gen;
+pub mod validation;
+pub mod version;
 
 #[cfg(test)]
 mod semantic;
@@ -769,6 +771,11 @@ impl<T: Has<U>, U> Has<U> for WasmiVM<T> {
     }
 }
 
+/// Create a wasm module out of `code` and `resolver`.
+///
+/// Note that validation is not done here since the implementors probably wouldn't want
+/// to do an expensive validation on each time they load the same code. So DO NOT forget
+/// to use `CodeValidation` to properly validate the wasm module.
 pub fn new_wasmi_vm<T>(
     resolver: &WasmiImportResolver<T>,
     code: &[u8],

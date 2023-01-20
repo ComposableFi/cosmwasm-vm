@@ -20,6 +20,7 @@ cosmwasm-std = { git = "https://github.com/ComposableFi/cosmwasm", rev = "21351c
   "iterator",
 ] }
 log = { version = "0.4", default-features = false }
+num = { version = "0.4", default-features = false }
 serde = { version = "1", default-features = false, features = ["derive"] }
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
 
