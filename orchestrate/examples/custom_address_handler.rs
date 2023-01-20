@@ -49,12 +49,13 @@ impl AddressHandler for DummyAddressHandler {
 async fn main() {
     let code = FileFetcher::from_url(REFLECT_URL).await.unwrap();
     let sender = Account::generate_from_seed::<CustomCosmosAddressHandler>("sender").unwrap();
+    let code_id = 0xDEADC0DE;
     let mut state = StateBuilder::<CustomCosmosAddressHandler>::new()
-        .add_code(&code)
+        .add_code(code_id, code)
         .build();
     let _ = <CosmosApi>::instantiate_raw(
         &mut state,
-        1,
+        code_id,
         None,
         block(),
         None,

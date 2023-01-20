@@ -313,17 +313,15 @@ impl<CH: CustomHandler, AH: AddressHandler> Debug for State<CH, AH> {
 impl<CH: CustomHandler, AH: AddressHandler> State<CH, AH> {
     #[must_use]
     pub fn new(
-        codes: Vec<Vec<u8>>,
+        codes: BTreeMap<CosmwasmCodeId, Vec<u8>>,
         initial_balances: Vec<(Account, Coin)>,
         ibc_channels: Vec<IbcChannelId>,
         custom_handler: CH,
     ) -> Self {
-        let mut code_id = 0;
         Self {
             codes: codes
                 .into_iter()
-                .map(|code| {
-                    code_id += 1;
+                .map(|(code_id, code)| {
                     let code_hash: Vec<u8> =
                         Sha256::new().chain_update(&code).finalize()[..].into();
                     (code_id, (code_hash, code))

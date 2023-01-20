@@ -2,6 +2,7 @@ use crate::vm::{
     Account, AddressHandler, Context, CustomHandler, IbcChannelId, JunoAddressHandler, State,
     SubstrateAddressHandler, VmError, VmState, WasmAddressHandler,
 };
+use alloc::collections::BTreeMap;
 use core::marker::PhantomData;
 use cosmwasm_std::{
     from_binary, Addr, Binary, BlockInfo, Coin, ContractInfo, Env, Event, IbcChannelConnectMsg,
@@ -482,7 +483,7 @@ impl ExecutionType for Dispatch {
 
 /// Convenient builder for `State`
 pub struct StateBuilder<AH: AddressHandler, CH: CustomHandler = ()> {
-    codes: Vec<Vec<u8>>,
+    codes: BTreeMap<CosmwasmCodeId, Vec<u8>>,
     balances: Vec<(Account, Coin)>,
     ibc_channels: Vec<IbcChannelId>,
     custom_handler: CH,
@@ -499,17 +500,17 @@ impl<CH: CustomHandler + Default, AH: AddressHandler> StateBuilder<AH, CH> {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            codes: Vec::default(),
-            balances: Vec::default(),
-            ibc_channels: Vec::default(),
+            codes: Default::default(),
+            balances: Default::default(),
+            ibc_channels: Default::default(),
             custom_handler: CH::default(),
             _marker: PhantomData,
         }
     }
 
     #[must_use]
-    pub fn add_code(mut self, code: &[u8]) -> Self {
-        self.codes.push(code.into());
+    pub fn add_code(mut self, id: CosmwasmCodeId, code: impl Into<Vec<u8>>) -> Self {
+        self.codes.insert(id, code.into());
         self
     }
 
@@ -526,8 +527,8 @@ impl<CH: CustomHandler + Default, AH: AddressHandler> StateBuilder<AH, CH> {
     }
 
     #[must_use]
-    pub fn add_codes(mut self, codes: Vec<&[u8]>) -> Self {
-        self.codes.extend(codes.into_iter().map(Into::into));
+    pub fn add_codes(mut self, codes: &mut BTreeMap<CosmwasmCodeId, Vec<u8>>) -> Self {
+        self.codes.append(codes);
         self
     }
 
