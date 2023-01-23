@@ -94,7 +94,7 @@ impl Bank {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Error {
     InsufficientBalance,
 }
