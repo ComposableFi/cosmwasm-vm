@@ -1,6 +1,6 @@
 use core::fmt::Display;
 
-#[derive(Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub enum Error {
     Network,

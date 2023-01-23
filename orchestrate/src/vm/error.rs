@@ -10,7 +10,7 @@ use wasmi::CanResume;
 use super::bank;
 use super::Account;
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub enum VmError {
     Interpreter(wasmi::Error),
