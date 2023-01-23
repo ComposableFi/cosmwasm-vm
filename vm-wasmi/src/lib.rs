@@ -333,6 +333,8 @@ pub trait WasmiContext {
 
 pub struct WasmiVM<V: WasmiBaseVM, S: AsContextMut<UserState = V>>(pub S);
 
+pub type OwnedWasmiVM<V> = WasmiVM<V, Store<V>>;
+
 impl<V, S> VMBase for WasmiVM<V, S>
 where
     V: WasmiBaseVM,

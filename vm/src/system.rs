@@ -437,6 +437,7 @@ pub fn cosmwasm_system_entrypoint<I, V>(
 where
     V: CosmwasmCallVM<I> + CosmwasmDynamicVM<I> + StargateCosmwasmCallVM,
 {
+    log::debug!("SystemEntrypoint");
     cosmwasm_system_entrypoint_hook(vm, message, |vm, msg| {
         cosmwasm_call::<I, V>(vm, msg).map(Into::into)
     })
@@ -458,7 +459,7 @@ pub fn cosmwasm_system_entrypoint_hook<I, V>(
 where
     V: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
 {
-    log::debug!("SystemEntrypoint");
+    log::debug!("SystemEntrypointHook");
     let mut events = Vec::<Event>::new();
     let mut event_handler = |event: Event| {
         events.push(event);
