@@ -732,7 +732,7 @@ where
 /// Note that validation is not done here since the implementors probably wouldn't want
 /// to do an expensive validation on each time they load the same code. So DO NOT forget
 /// to use `CodeValidation` to properly validate the wasm module.
-pub fn new_wasmi_vm<V: WasmiBaseVM, S: AsContextMut<UserState = V>>(
+pub fn new_wasmi_vm<V: WasmiBaseVM>(
     code: &[u8],
     data: V,
 ) -> Result<WasmiVM<V, Store<V>>, VmErrorOf<V>> {

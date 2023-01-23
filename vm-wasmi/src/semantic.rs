@@ -44,7 +44,7 @@ fn initialize() {
 
 #[derive(PartialEq, Debug)]
 enum SimpleVMError {
-    Interpreter(wasmi::Error),
+    Interpreter,
     VMError(WasmiVMError),
     CodeNotFound(CosmwasmCodeId),
     ContractNotFound(BankAccount),
@@ -63,8 +63,8 @@ enum SimpleVMError {
 impl HostError for SimpleVMError {}
 
 impl From<wasmi::Error> for SimpleVMError {
-    fn from(e: wasmi::Error) -> Self {
-        Self::Interpreter(e)
+    fn from(_: wasmi::Error) -> Self {
+        Self::Interpreter
     }
 }
 impl From<WasmiVMError> for SimpleVMError {
@@ -240,7 +240,7 @@ impl<'a> SimpleWasmiVM<'a> {
             },
             extension: self.extension,
         };
-        let sub_vm = new_wasmi_vm::<SimpleWasmiVM, Store<SimpleWasmiVM>>(&code, sub_vm)?;
+        let sub_vm = new_wasmi_vm::<SimpleWasmiVM>(&code, sub_vm)?;
         Ok(sub_vm)
     }
 }
@@ -866,7 +866,7 @@ fn create_vm(
         info,
         extension,
     };
-    let vm = new_wasmi_vm::<SimpleWasmiVM, Store<SimpleWasmiVM>>(&code, vm)?;
+    let vm = new_wasmi_vm::<SimpleWasmiVM>(&code, vm)?;
     Ok(vm)
 }
 
