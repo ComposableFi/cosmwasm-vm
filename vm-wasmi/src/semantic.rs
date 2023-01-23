@@ -28,7 +28,7 @@ use cosmwasm_vm::{
     },
 };
 use wasm_instrument::gas_metering::Rules;
-use wasmi2::{core::HostError, AsContextMut, Store};
+use wasmi::{core::HostError, AsContextMut, Store};
 
 const CANONICAL_LENGTH: usize = 54;
 const SHUFFLES_ENCODE: usize = 18;
@@ -200,7 +200,7 @@ impl<'a> WasmiContext for SimpleWasmiVM<'a> {
         self.executing_module.clone()
     }
 
-    fn set_wasmi_context(&mut self, instance: wasmi2::Instance, memory: wasmi2::Memory) {
+    fn set_wasmi_context(&mut self, instance: wasmi::Instance, memory: wasmi::Memory) {
         self.executing_module = Some(WasmiModule { instance, memory });
     }
 }
@@ -1347,7 +1347,6 @@ mod cw20_ics20 {
     };
 
     use super::{assert_matches, format, vec};
-    use ::cw20_ics20::ibc::{Ics20Ack, Ics20Packet};
     use alloc::{collections::BTreeMap, string::String, vec::Vec};
     use cosmwasm_std::{
         Addr, Binary, BlockInfo, Coin, ContractInfo, ContractResult, Env, IbcChannel,
@@ -1367,6 +1366,7 @@ mod cw20_ics20 {
             cosmwasm_system_entrypoint, cosmwasm_system_entrypoint_serialize, CosmwasmContractMeta,
         },
     };
+    use cw20_ics20::ibc::{Ics20Ack, Ics20Packet};
 
     type WasmiVM<T> = WVM<T, Store<T>>;
 

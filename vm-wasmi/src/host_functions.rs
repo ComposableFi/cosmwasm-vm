@@ -17,7 +17,7 @@ use cosmwasm_vm::{
     },
     system::cosmwasm_system_query_raw,
 };
-use wasmi2::{core::Trap, Caller, Func, Linker};
+use wasmi::{core::Trap, Caller, Func, Linker};
 
 pub fn env_db_read<V, S>(mut vm: WasmiVM<V, S>, key_pointer: i32) -> Result<i32, VmErrorOf<V>>
 where

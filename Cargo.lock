@@ -325,7 +325,6 @@ dependencies = [
  "serde",
  "serde_json",
  "wasm-instrument",
- "wasmi 0.11.0",
  "wasmi 0.22.0",
  "wasmi-validation",
  "wat",

@@ -41,7 +41,7 @@ use cosmwasm_vm::{
         VmGasCheckpoint, VmMessageCustomOf, VmQueryCustomOf, VmStorageKeyOf, VmStorageValueOf, VM,
     },
 };
-use wasmi2::{
+use wasmi::{
     core::Value as RuntimeValue, AsContextMut, Engine, Extern, Instance, Linker, Memory, Module,
     Store,
 };
@@ -315,7 +315,7 @@ where
         + From<ExecutorError>
         + From<SystemError>
         + From<TransactionalErrorOf<Self>>
-        + wasmi2::core::HostError
+        + wasmi::core::HostError
         + Debug
         + Display;
 
