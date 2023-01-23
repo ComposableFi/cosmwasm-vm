@@ -229,7 +229,7 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> ReadableMemory for Context<'a, C
 
 impl<'a, CH: CustomHandler, AH: AddressHandler> WritableMemory for Context<'a, CH, AH> {
     type Error = VmErrorOf<Self>;
-    fn write(&self, offset: Self::Pointer, buffer: &[u8]) -> Result<(), Self::Error> {
+    fn write(&mut self, offset: Self::Pointer, buffer: &[u8]) -> Result<(), Self::Error> {
         self.executing_module
             .memory
             .set(offset, buffer)
