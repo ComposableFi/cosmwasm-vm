@@ -233,7 +233,7 @@ dependencies = [
  "sha2 0.10.6",
  "tokio",
  "wasm-instrument",
- "wasmi 0.11.0",
+ "wasmi",
 ]
 
 [[package]]
@@ -325,7 +325,7 @@ dependencies = [
  "serde",
  "serde_json",
  "wasm-instrument",
- "wasmi 0.22.0",
+ "wasmi",
  "wasmi-validation",
  "wat",
 ]
@@ -1101,12 +1101,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 
 [[package]]
-name = "memory_units"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8452105ba047068f40ff7093dd1d9da90898e63dd61736462e9cdda6a90ad3c3"
-
-[[package]]
 name = "mime"
 version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1156,17 +1150,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "num-bigint"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f93ab6289c7b344a8a9f60f88d80aa20032336fe78da341afc91c8a2341fc75f"
-dependencies = [
- "autocfg",
- "num-integer",
- "num-traits",
-]
-
-[[package]]
 name = "num-complex"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1203,7 +1186,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0638a1c9d0a3c0914158145bc76cff373a75a627e6ecbfb71cbe6f453a5a19b0"
 dependencies = [
  "autocfg",
- "num-bigint",
  "num-integer",
  "num-traits",
 ]
@@ -2004,23 +1986,13 @@ dependencies = [
 
 [[package]]
 name = "wasmi"
-version = "0.11.0"
-source = "git+https://github.com/ComposableFi/wasmi?rev=cd8c0c775a1d197a35ff3d5c7d6cded3d476411b#cd8c0c775a1d197a35ff3d5c7d6cded3d476411b"
-dependencies = [
- "parity-wasm",
- "wasmi-validation",
- "wasmi_core 0.1.0",
-]
-
-[[package]]
-name = "wasmi"
 version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8d1c97b30ae00ad9380eb1de4fa28651622ec80ece02bab625f45058e600416"
 dependencies = [
  "spin",
  "wasmi_arena",
- "wasmi_core 0.7.0",
+ "wasmi_core",
  "wasmparser-nostd",
 ]
 
@@ -2037,18 +2009,6 @@ name = "wasmi_arena"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf5581c09dbb8d5c8b0b219c840db487d0ebc2decff86ab0f658bf7f598d0efc"
-
-[[package]]
-name = "wasmi_core"
-version = "0.1.0"
-source = "git+https://github.com/ComposableFi/wasmi?rev=cd8c0c775a1d197a35ff3d5c7d6cded3d476411b#cd8c0c775a1d197a35ff3d5c7d6cded3d476411b"
-dependencies = [
- "libm",
- "memory_units",
- "num-rational",
- "num-traits",
- "parity-wasm",
-]
 
 [[package]]
 name = "wasmi_core"

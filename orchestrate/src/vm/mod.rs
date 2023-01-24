@@ -23,18 +23,16 @@ use cosmwasm_vm::{
         QueryResult, ReplyCall,
     },
     has::Has,
-    memory::{Pointable, ReadWriteMemory, ReadableMemory, WritableMemory},
     system::{cosmwasm_system_run, CosmwasmContractMeta, SystemError},
     transaction::Transactional,
     vm::{VMBase, VmErrorOf, VmGas, VmGasCheckpoint},
 };
 use cosmwasm_vm_wasmi::{
-    host_functions, new_wasmi_vm, WasmiContext, WasmiHost, WasmiHostFunction,
-    WasmiHostFunctionIndex, WasmiImportResolver, WasmiInput, WasmiModule, WasmiOutput, WasmiVM,
-    WasmiVMError,
+    new_wasmi_vm, OwnedWasmiVM, WasmiContext, WasmiInput, WasmiModule, WasmiOutput, WasmiVMError,
 };
 use serde::de::DeserializeOwned;
 use wasm_instrument::gas_metering::Rules;
+use wasmi::{Instance, Memory};
 
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub struct Gas {
@@ -194,8 +192,7 @@ impl<CH: CustomHandler> Debug for Db<CH> {
 }
 
 pub struct Context<'a, CH: CustomHandler, AH: AddressHandler> {
-    pub host_functions: BTreeMap<WasmiHostFunctionIndex, WasmiHostFunction<Self>>,
-    pub executing_module: WasmiModule,
+    pub executing_module: Option<WasmiModule>,
     pub env: Env,
     pub info: MessageInfo,
     pub state: &'a mut State<CH, AH>,
@@ -203,48 +200,20 @@ pub struct Context<'a, CH: CustomHandler, AH: AddressHandler> {
 
 impl<'a, CH: CustomHandler, AH: AddressHandler> WasmiContext for Context<'a, CH, AH> {
     fn executing_module(&self) -> Option<WasmiModule> {
-        Some(self.executing_module.clone())
+        self.executing_module.clone()
+    }
+
+    fn set_wasmi_context(&mut self, instance: Instance, memory: Memory) {
+        self.executing_module = Some(WasmiModule { instance, memory });
     }
 }
-
-impl<'a, CH: CustomHandler, AH: AddressHandler> WasmiHost<Self> for Context<'a, CH, AH> {
-    fn host_function(&self, index: WasmiHostFunctionIndex) -> Option<&WasmiHostFunction<Self>> {
-        self.host_functions.get(&index)
-    }
-}
-
-impl<'a, CH: CustomHandler, AH: AddressHandler> Pointable for Context<'a, CH, AH> {
-    type Pointer = u32;
-}
-
-impl<'a, CH: CustomHandler, AH: AddressHandler> ReadableMemory for Context<'a, CH, AH> {
-    type Error = VmErrorOf<Self>;
-    fn read(&self, offset: Self::Pointer, buffer: &mut [u8]) -> Result<(), Self::Error> {
-        self.executing_module
-            .memory
-            .get_into(offset, buffer)
-            .map_err(|_| WasmiVMError::LowLevelMemoryReadError.into())
-    }
-}
-
-impl<'a, CH: CustomHandler, AH: AddressHandler> WritableMemory for Context<'a, CH, AH> {
-    type Error = VmErrorOf<Self>;
-    fn write(&mut self, offset: Self::Pointer, buffer: &[u8]) -> Result<(), Self::Error> {
-        self.executing_module
-            .memory
-            .set(offset, buffer)
-            .map_err(|_| WasmiVMError::LowLevelMemoryWriteError.into())
-    }
-}
-
-impl<'a, CH: CustomHandler, AH: AddressHandler> ReadWriteMemory for Context<'a, CH, AH> {}
 
 impl<'a, CH: CustomHandler, AH: AddressHandler> Context<'a, CH, AH> {
     fn load_subvm<R>(
         &mut self,
         address: <Self as VMBase>::Address,
         funds: Vec<Coin>,
-        f: impl FnOnce(&mut WasmiVM<Context<CH, AH>>) -> R,
+        f: impl FnOnce(&mut OwnedWasmiVM<Context<CH, AH>>) -> R,
     ) -> Result<R, VmErrorOf<Self>> {
         log::debug!(
             "Loading sub-vm {:?} => {:?}",
@@ -264,36 +233,31 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> Context<'a, CH, AH> {
             .get(&code_id)
             .ok_or(VmError::CodeNotFound(code_id))
             .cloned()?;
-        let host_functions_definitions =
-            WasmiImportResolver(host_functions::definitions::<Context<CH, AH>>());
-        let module = new_wasmi_vm(&host_functions_definitions, &code.1)?;
-        let mut sub_vm: WasmiVM<Context<CH, AH>> = WasmiVM(Context {
-            host_functions: host_functions_definitions
-                .0
-                .into_iter()
-                .flat_map(|(_, modules)| modules.into_values())
-                .collect(),
-            executing_module: module,
-            env: Env {
-                block: self.env.block.clone(),
-                transaction: self.env.transaction.clone(),
-                contract: ContractInfo {
-                    address: address.into(),
+        let mut sub_vm = new_wasmi_vm(
+            &code.1,
+            Context {
+                executing_module: None,
+                env: Env {
+                    block: self.env.block.clone(),
+                    transaction: self.env.transaction.clone(),
+                    contract: ContractInfo {
+                        address: address.into(),
+                    },
                 },
+                info: MessageInfo {
+                    sender: self.env.contract.address.clone(),
+                    funds,
+                },
+                state: self.state,
             },
-            info: MessageInfo {
-                sender: self.env.contract.address.clone(),
-                funds,
-            },
-            state: self.state,
-        });
+        )?;
         Ok(f(&mut sub_vm))
     }
 }
 
 impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
-    type Input<'x> = WasmiInput<'x, WasmiVM<Self>>;
-    type Output<'x> = WasmiOutput<'x, WasmiVM<Self>>;
+    type Input<'x> = WasmiInput<'x, OwnedWasmiVM<Self>>;
+    type Output<'x> = WasmiOutput<OwnedWasmiVM<Self>>;
     type QueryCustom = QueryCustomOf<CH>;
     type MessageCustom = MessageCustomOf<CH>;
     type ContractMeta = CosmwasmContractMeta<Account>;
@@ -345,7 +309,7 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
         message: &[u8],
     ) -> Result<QueryResult, Self::Error> {
         self.load_subvm(address, vec![], |sub_vm| {
-            cosmwasm_call::<QueryCall, WasmiVM<Context<CH, AH>>>(sub_vm, message)
+            cosmwasm_call::<QueryCall, OwnedWasmiVM<Context<CH, AH>>>(sub_vm, message)
         })?
     }
 

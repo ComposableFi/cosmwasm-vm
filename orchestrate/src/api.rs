@@ -24,7 +24,7 @@ use cosmwasm_vm::{
     },
     vm::{VmErrorOf, VmMessageCustomOf},
 };
-use cosmwasm_vm_wasmi::{WasmiBaseVM, WasmiVM};
+use cosmwasm_vm_wasmi::{OwnedWasmiVM, WasmiBaseVM};
 use serde::{de::DeserializeOwned, Serialize};
 
 #[allow(clippy::module_name_repetitions)]
@@ -61,7 +61,7 @@ pub struct Api<
     S: VmState<'a, V> = State<(), AH>,
     V: WasmiBaseVM = Context<'a, (), AH>,
 > where
-    VmErrorOf<WasmiVM<V>>: Into<VmError>,
+    VmErrorOf<OwnedWasmiVM<V>>: Into<VmError>,
 {
     _m1: PhantomData<E>,
     _m2: PhantomData<S>,
@@ -73,7 +73,7 @@ pub struct Api<
 impl<'a, E: ExecutionType, AH: AddressHandler, S: VmState<'a, V>, V: WasmiBaseVM>
     Api<'a, E, AH, S, V>
 where
-    VmErrorOf<WasmiVM<V>>: Into<VmError>,
+    VmErrorOf<OwnedWasmiVM<V>>: Into<VmError>,
 {
     /// Instantiate a contract and get back the contract address and the
     /// instantiate result.
@@ -368,7 +368,7 @@ where
 
 impl<'a, AH: AddressHandler, S: VmState<'a, V>, V: WasmiBaseVM> Api<'a, Direct, AH, S, V>
 where
-    VmErrorOf<WasmiVM<V>>: Into<VmError>,
+    VmErrorOf<OwnedWasmiVM<V>>: Into<VmError>,
 {
     /// Query a contract.
     ///
@@ -435,25 +435,25 @@ pub trait ExecutionType {
 
     /// Make a call to the contract
     fn raw_system_call<V: WasmiBaseVM, I>(
-        vm: &mut WasmiVM<V>,
+        vm: &mut OwnedWasmiVM<V>,
         message: &[u8],
     ) -> Result<Self::Output<V>, VmError>
     where
-        WasmiVM<V>: CosmwasmCallVM<I> + CosmwasmDynamicVM<I> + StargateCosmwasmCallVM,
-        VmErrorOf<WasmiVM<V>>: Into<VmError>;
+        OwnedWasmiVM<V>: CosmwasmCallVM<I> + CosmwasmDynamicVM<I> + StargateCosmwasmCallVM,
+        VmErrorOf<OwnedWasmiVM<V>>: Into<VmError>;
 }
 
 impl ExecutionType for Direct {
     type Output<V: WasmiBaseVM> =
-        cosmwasm_std::ContractResult<cosmwasm_std::Response<VmMessageCustomOf<WasmiVM<V>>>>;
+        cosmwasm_std::ContractResult<cosmwasm_std::Response<VmMessageCustomOf<OwnedWasmiVM<V>>>>;
 
     fn raw_system_call<V: WasmiBaseVM, I>(
-        vm: &mut WasmiVM<V>,
+        vm: &mut OwnedWasmiVM<V>,
         message: &[u8],
     ) -> Result<Self::Output<V>, VmError>
     where
-        WasmiVM<V>: CosmwasmCallVM<I> + CosmwasmDynamicVM<I> + StargateCosmwasmCallVM,
-        VmErrorOf<WasmiVM<V>>: Into<VmError>,
+        OwnedWasmiVM<V>: CosmwasmCallVM<I> + CosmwasmDynamicVM<I> + StargateCosmwasmCallVM,
+        VmErrorOf<OwnedWasmiVM<V>>: Into<VmError>,
     {
         Ok(cosmwasm_call::<I, _>(vm, message)
             .map_err(Into::into)?
@@ -470,12 +470,12 @@ impl ExecutionType for Dispatch {
     type Output<V: WasmiBaseVM> = (Option<Binary>, Vec<Event>);
 
     fn raw_system_call<V: WasmiBaseVM, I>(
-        vm: &mut WasmiVM<V>,
+        vm: &mut OwnedWasmiVM<V>,
         message: &[u8],
     ) -> Result<Self::Output<V>, VmError>
     where
-        WasmiVM<V>: CosmwasmCallVM<I> + CosmwasmDynamicVM<I> + StargateCosmwasmCallVM,
-        VmErrorOf<WasmiVM<V>>: Into<VmError>,
+        OwnedWasmiVM<V>: CosmwasmCallVM<I> + CosmwasmDynamicVM<I> + StargateCosmwasmCallVM,
+        VmErrorOf<OwnedWasmiVM<V>>: Into<VmError>,
     {
         cosmwasm_system_entrypoint::<I, _>(vm, message).map_err(Into::into)
     }
