@@ -19,6 +19,11 @@ use cosmwasm_vm::{
 };
 use wasmi::{core::Trap, Caller, Func, Linker};
 
+/// Reads the value with the given key from the db.
+///
+/// Returns the pointer to the read value if a value is successfully read.
+/// Returns `0` if `None` is returned from the VM.
+/// Propogates the error otherwise.
 pub fn env_db_read<V, S>(mut vm: WasmiVM<V, S>, key_pointer: i32) -> Result<i32, VmErrorOf<V>>
 where
     V: WasmiBaseVM,
@@ -36,11 +41,13 @@ where
             let Tagged(value_pointer, _) = passthrough_in::<WasmiVM<V, S>, ()>(&mut vm, &value)?;
             Ok(value_pointer as i32)
         }
+        // None value is not treated as error but instead, `0` acting as nullptr is passed.
         Ok(None) => Ok(0),
         Err(e) => Err(e),
     }
 }
 
+/// Writes the given key-value pair to the db.
 pub fn env_db_write<V, S>(
     mut vm: WasmiVM<V, S>,
     key_pointer: i32,
@@ -63,6 +70,7 @@ where
     Ok(())
 }
 
+/// Removes the entry with the given key from the db.
 pub fn env_db_remove<V, S>(mut vm: WasmiVM<V, S>, key_pointer: i32) -> Result<(), VmErrorOf<V>>
 where
     V: WasmiBaseVM,
@@ -77,6 +85,9 @@ where
     Ok(())
 }
 
+/// Creates an iterator over a storage with the given boundaries and order.
+///
+/// Returns the iterator id if success, otherwise the error is propogated.
 #[cfg(feature = "iterator")]
 pub fn env_db_scan<V, S>(
     mut vm: WasmiVM<V, S>,
@@ -106,6 +117,9 @@ where
     Ok(value as i32)
 }
 
+/// Reads the next item in an iterator with the given iterator id.
+///
+/// TODO(aeryz): Check the `None` case here
 #[cfg(feature = "iterator")]
 pub fn env_db_next<V, S>(mut vm: WasmiVM<V, S>, iterator_id: i32) -> Result<i32, VmErrorOf<V>>
 where
@@ -124,6 +138,10 @@ where
     }
 }
 
+/// Validates the address.
+///
+/// Returns `0` if the address is valid, otherwise pointer to the error string.
+/// Returns `Err`, only if anything goes wrong internally.
 pub fn env_addr_validate<V, S>(
     mut vm: WasmiVM<V, S>,
     address_pointer: i32,
@@ -142,7 +160,7 @@ where
         Ok(address) => address,
         Err(e) => {
             let Tagged(value_pointer, _) =
-                passthrough_in::<WasmiVM<V, S>, ()>(&mut vm, e.as_bytes())?;
+                passthrough_in::<WasmiVM<V, S>, ()>(&mut vm, format!("{e}").as_bytes())?;
             return Ok(value_pointer as i32);
         }
     };
@@ -157,6 +175,11 @@ where
     }
 }
 
+/// Canonicalizes the address.
+///
+/// Writes the canonicalized address to `destination_ptr`.
+/// Returns `0` if the operation is successfull, otherwise pointer to the error string.
+/// Returns `Err`, only if anything goes wrong internally.
 pub fn env_addr_canonicalize<V, S>(
     mut vm: WasmiVM<V, S>,
     address_ptr: i32,
@@ -198,6 +221,11 @@ where
     }
 }
 
+/// Humanizes a canonical address.
+///
+/// Writes the humanized address to `destination_ptr`.
+/// Returns `0`, if the operation is successfull, otherwise pointer to the error string.
+/// Returns `Err`, only if anything goes wrong internally.
 pub fn env_addr_humanize<V, S>(
     mut vm: WasmiVM<V, S>,
     address_ptr: i32,
@@ -213,6 +241,7 @@ where
         ConstantReadLimit<{ constants::MAX_LENGTH_CANONICAL_ADDRESS }>,
     >(&vm, address_ptr as u32)?;
 
+    // TODO(aeryz): check if `address.try_into` failure should return `Err` or `Ok(error str)`
     match vm.addr_humanize(&address.try_into()?)? {
         Ok(address) => {
             passthrough_in_to::<WasmiVM<V, S>>(
@@ -230,6 +259,9 @@ where
     }
 }
 
+/// Verifies `secp256k1` signature with the given public key and message hash.
+///
+/// Returns `0` if success, otherwise `1`.
 pub fn env_secp256k1_verify<V, S>(
     mut vm: WasmiVM<V, S>,
     message_hash_ptr: i32,
@@ -258,6 +290,12 @@ where
     Ok(i32::from(!result))
 }
 
+/// Recovers `secp256k1` public key from message hash, signature and recovery parameter.
+///
+/// Returns 64 bit integer.
+/// Returns the pointer to the recovered public key in the lower 32 bits, upper 32 bits MUST
+/// be `0`.
+/// Returns the error code in the upper 32 bits. Lower 32 bits MUST be `0`.
 pub fn env_secp256k1_recover_pubkey<V, S>(
     mut vm: WasmiVM<V, S>,
     message_hash_ptr: i32,
@@ -287,11 +325,16 @@ where
         let Tagged(value_pointer, _) = passthrough_in::<WasmiVM<V, S>, ()>(&mut vm, &pubkey)?;
         Ok(i64::from(value_pointer))
     } else {
+        // TODO(aeryz): Check for the other error codes and see if it is doable. It's good to be
+        // consistent with the error codes.
         const GENERIC_ERROR_CODE: i64 = 10;
         Ok(GENERIC_ERROR_CODE << 32)
     }
 }
 
+/// Verifies `ed25519` signature with the given public key and message.
+///
+/// Returns `0` if success, otherwise `1`.
 pub fn env_ed25519_verify<V, S>(
     mut vm: WasmiVM<V, S>,
     message_ptr: i32,
@@ -320,6 +363,9 @@ where
         .map(|result| i32::from(!result))
 }
 
+/// Does batch verification on `ed25519` signatures.
+///
+/// Returns `0` if success, otherwise `1`.
 pub fn env_ed25519_batch_verify<V, S>(
     mut vm: WasmiVM<V, S>,
     messages_ptr: i32,
@@ -362,6 +408,7 @@ where
         .map(|result| i32::from(!result))
 }
 
+/// Logs the message.
 pub fn env_debug<V, S>(mut vm: WasmiVM<V, S>, message_ptr: i32) -> Result<(), VmErrorOf<V>>
 where
     V: WasmiBaseVM,
@@ -375,6 +422,9 @@ where
     Ok(())
 }
 
+/// Reads a JSON query request and does a raw query.
+///
+/// Returns the pointer to the result if success, otherwise propogates the error.
 pub fn env_query_chain<V, S>(mut vm: WasmiVM<V, S>, query_ptr: i32) -> Result<i32, VmErrorOf<V>>
 where
     V: WasmiBaseVM,
@@ -388,6 +438,7 @@ where
     Ok(value_pointer as i32)
 }
 
+/// Aborts the execution with the given message.
 pub fn env_abort<V, S>(mut vm: WasmiVM<V, S>, message_ptr: i32) -> Result<(), VmErrorOf<V>>
 where
     V: WasmiBaseVM,
@@ -401,6 +452,7 @@ where
     Ok(())
 }
 
+/// Charges `value` amount of gas.
 pub fn env_gas<V, S>(mut vm: WasmiVM<V, S>, value: i32) -> Result<(), VmErrorOf<V>>
 where
     V: WasmiBaseVM,
@@ -412,7 +464,6 @@ where
     Ok(())
 }
 
-#[cfg(feature = "iterator")]
 /// Encodes multiple sections of data into one vector.
 ///
 /// Each section is suffixed by a section length encoded as big endian uint32.
@@ -425,6 +476,7 @@ where
 /// ```ignore
 /// section1 || section1_len || section2 || section2_len || section3 || section3_len || …
 /// ```
+#[cfg(feature = "iterator")]
 #[must_use]
 fn encode_sections(sections: &[Vec<u8>]) -> Option<Vec<u8>> {
     let out_len: usize =
@@ -467,6 +519,7 @@ fn decode_sections(data: &[u8]) -> Vec<&[u8]> {
     result
 }
 
+#[allow(clippy::too_many_lines)]
 pub(crate) fn define<V: WasmiBaseVM>(
     mut ctx: impl AsContextMut<UserState = V>,
     linker: &mut Linker<V>,
@@ -477,8 +530,8 @@ pub(crate) fn define<V: WasmiBaseVM>(
             "db_read",
             Func::wrap(
                 ctx.as_context_mut(),
-                |mut caller: Caller<'_, V>, param: i32| -> Result<i32, Trap> {
-                    env_db_read(WasmiVM(caller.as_context_mut()), param).map_err(Into::into)
+                |caller: Caller<'_, V>, param: i32| -> Result<i32, Trap> {
+                    env_db_read(WasmiVM(caller), param).map_err(Into::into)
                 },
             ),
         )
@@ -489,12 +542,8 @@ pub(crate) fn define<V: WasmiBaseVM>(
             "db_write",
             Func::wrap(
                 ctx.as_context_mut(),
-                |mut caller: Caller<'_, V>,
-                 key_pointer: i32,
-                 value_pointer: i32|
-                 -> Result<(), Trap> {
-                    env_db_write(WasmiVM(caller.as_context_mut()), key_pointer, value_pointer)
-                        .map_err(Into::into)
+                |caller: Caller<'_, V>, key_pointer: i32, value_pointer: i32| -> Result<(), Trap> {
+                    env_db_write(WasmiVM(caller), key_pointer, value_pointer).map_err(Into::into)
                 },
             ),
         )
@@ -505,8 +554,8 @@ pub(crate) fn define<V: WasmiBaseVM>(
             "db_remove",
             Func::wrap(
                 ctx.as_context_mut(),
-                |mut caller: Caller<'_, V>, key_pointer: i32| -> Result<(), Trap> {
-                    env_db_remove(WasmiVM(caller.as_context_mut()), key_pointer).map_err(Into::into)
+                |caller: Caller<'_, V>, key_pointer: i32| -> Result<(), Trap> {
+                    env_db_remove(WasmiVM(caller), key_pointer).map_err(Into::into)
                 },
             ),
         )
@@ -517,13 +566,12 @@ pub(crate) fn define<V: WasmiBaseVM>(
             "db_scan",
             Func::wrap(
                 ctx.as_context_mut(),
-                |mut caller: Caller<'_, V>,
+                |caller: Caller<'_, V>,
                  start_ptr: i32,
                  end_ptr: i32,
                  order: i32|
                  -> Result<i32, Trap> {
-                    env_db_scan(WasmiVM(caller.as_context_mut()), start_ptr, end_ptr, order)
-                        .map_err(Into::into)
+                    env_db_scan(WasmiVM(caller), start_ptr, end_ptr, order).map_err(Into::into)
                 },
             ),
         )
@@ -534,8 +582,8 @@ pub(crate) fn define<V: WasmiBaseVM>(
             "db_next",
             Func::wrap(
                 ctx.as_context_mut(),
-                |mut caller: Caller<'_, V>, iterator_id: i32| -> Result<i32, Trap> {
-                    env_db_next(WasmiVM(caller.as_context_mut()), iterator_id).map_err(Into::into)
+                |caller: Caller<'_, V>, iterator_id: i32| -> Result<i32, Trap> {
+                    env_db_next(WasmiVM(caller), iterator_id).map_err(Into::into)
                 },
             ),
         )
@@ -546,9 +594,8 @@ pub(crate) fn define<V: WasmiBaseVM>(
             "addr_validate",
             Func::wrap(
                 ctx.as_context_mut(),
-                |mut caller: Caller<'_, V>, address_ptr: i32| -> Result<i32, Trap> {
-                    env_addr_validate(WasmiVM(caller.as_context_mut()), address_ptr)
-                        .map_err(Into::into)
+                |caller: Caller<'_, V>, address_ptr: i32| -> Result<i32, Trap> {
+                    env_addr_validate(WasmiVM(caller), address_ptr).map_err(Into::into)
                 },
             ),
         )
@@ -559,16 +606,12 @@ pub(crate) fn define<V: WasmiBaseVM>(
             "addr_canonicalize",
             Func::wrap(
                 ctx.as_context_mut(),
-                |mut caller: Caller<'_, V>,
+                |caller: Caller<'_, V>,
                  address_ptr: i32,
                  destination_ptr: i32|
                  -> Result<i32, Trap> {
-                    env_addr_canonicalize(
-                        WasmiVM(caller.as_context_mut()),
-                        address_ptr,
-                        destination_ptr,
-                    )
-                    .map_err(Into::into)
+                    env_addr_canonicalize(WasmiVM(caller), address_ptr, destination_ptr)
+                        .map_err(Into::into)
                 },
             ),
         )
@@ -579,16 +622,12 @@ pub(crate) fn define<V: WasmiBaseVM>(
             "addr_humanize",
             Func::wrap(
                 ctx.as_context_mut(),
-                |mut caller: Caller<'_, V>,
+                |caller: Caller<'_, V>,
                  address_ptr: i32,
                  destination_ptr: i32|
                  -> Result<i32, Trap> {
-                    env_addr_humanize(
-                        WasmiVM(caller.as_context_mut()),
-                        address_ptr,
-                        destination_ptr,
-                    )
-                    .map_err(Into::into)
+                    env_addr_humanize(WasmiVM(caller), address_ptr, destination_ptr)
+                        .map_err(Into::into)
                 },
             ),
         )
@@ -599,13 +638,13 @@ pub(crate) fn define<V: WasmiBaseVM>(
             "secp256k1_verify",
             Func::wrap(
                 ctx.as_context_mut(),
-                |mut caller: Caller<'_, V>,
+                |caller: Caller<'_, V>,
                  message_hash_ptr: i32,
                  signature_ptr: i32,
                  public_key_ptr: i32|
                  -> Result<i32, Trap> {
                     env_secp256k1_verify(
-                        WasmiVM(caller.as_context_mut()),
+                        WasmiVM(caller),
                         message_hash_ptr,
                         signature_ptr,
                         public_key_ptr,
@@ -621,13 +660,13 @@ pub(crate) fn define<V: WasmiBaseVM>(
             "secp256k1_recover_pubkey",
             Func::wrap(
                 ctx.as_context_mut(),
-                |mut caller: Caller<'_, V>,
+                |caller: Caller<'_, V>,
                  message_hash_ptr: i32,
                  signature_ptr: i32,
                  recovery_param: i32|
                  -> Result<i64, Trap> {
                     env_secp256k1_recover_pubkey(
-                        WasmiVM(caller.as_context_mut()),
+                        WasmiVM(caller),
                         message_hash_ptr,
                         signature_ptr,
                         recovery_param,
@@ -643,13 +682,13 @@ pub(crate) fn define<V: WasmiBaseVM>(
             "ed25519_verify",
             Func::wrap(
                 ctx.as_context_mut(),
-                |mut caller: Caller<'_, V>,
+                |caller: Caller<'_, V>,
                  message_hash_ptr: i32,
                  signature_ptr: i32,
                  public_key_ptr: i32|
                  -> Result<i32, Trap> {
                     env_ed25519_verify(
-                        WasmiVM(caller.as_context_mut()),
+                        WasmiVM(caller),
                         message_hash_ptr,
                         signature_ptr,
                         public_key_ptr,
@@ -665,13 +704,13 @@ pub(crate) fn define<V: WasmiBaseVM>(
             "ed25519_batch_verify",
             Func::wrap(
                 ctx.as_context_mut(),
-                |mut caller: Caller<'_, V>,
+                |caller: Caller<'_, V>,
                  messages_ptr: i32,
                  signatures_ptr: i32,
                  public_keys_ptr: i32|
                  -> Result<i32, Trap> {
                     env_ed25519_batch_verify(
-                        WasmiVM(caller.as_context_mut()),
+                        WasmiVM(caller),
                         messages_ptr,
                         signatures_ptr,
                         public_keys_ptr,
@@ -687,8 +726,8 @@ pub(crate) fn define<V: WasmiBaseVM>(
             "debug",
             Func::wrap(
                 ctx.as_context_mut(),
-                |mut caller: Caller<'_, V>, message_ptr: i32| -> Result<(), Trap> {
-                    env_debug(WasmiVM(caller.as_context_mut()), message_ptr).map_err(Into::into)
+                |caller: Caller<'_, V>, message_ptr: i32| -> Result<(), Trap> {
+                    env_debug(WasmiVM(caller), message_ptr).map_err(Into::into)
                 },
             ),
         )
@@ -699,8 +738,8 @@ pub(crate) fn define<V: WasmiBaseVM>(
             "query_chain",
             Func::wrap(
                 ctx.as_context_mut(),
-                |mut caller: Caller<'_, V>, query_ptr: i32| -> Result<i32, Trap> {
-                    env_query_chain(WasmiVM(caller.as_context_mut()), query_ptr).map_err(Into::into)
+                |caller: Caller<'_, V>, query_ptr: i32| -> Result<i32, Trap> {
+                    env_query_chain(WasmiVM(caller), query_ptr).map_err(Into::into)
                 },
             ),
         )
@@ -711,8 +750,8 @@ pub(crate) fn define<V: WasmiBaseVM>(
             "abort",
             Func::wrap(
                 ctx.as_context_mut(),
-                |mut caller: Caller<'_, V>, message_ptr: i32| -> Result<(), Trap> {
-                    env_abort(WasmiVM(caller.as_context_mut()), message_ptr).map_err(Into::into)
+                |caller: Caller<'_, V>, message_ptr: i32| -> Result<(), Trap> {
+                    env_abort(WasmiVM(caller), message_ptr).map_err(Into::into)
                 },
             ),
         )
@@ -723,8 +762,8 @@ pub(crate) fn define<V: WasmiBaseVM>(
             "gas",
             Func::wrap(
                 ctx.as_context_mut(),
-                |mut caller: Caller<'_, V>, value: i32| -> Result<(), Trap> {
-                    env_gas(WasmiVM(caller.as_context_mut()), value).map_err(Into::into)
+                |caller: Caller<'_, V>, value: i32| -> Result<(), Trap> {
+                    env_gas(WasmiVM(caller), value).map_err(Into::into)
                 },
             ),
         )

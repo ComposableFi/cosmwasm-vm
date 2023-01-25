@@ -38,7 +38,7 @@ impl wasmi::core::HostError for VmError {}
 
 impl From<wasmi::Error> for VmError {
     fn from(e: wasmi::Error) -> Self {
-        Self::Interpreter(format!("{}", e))
+        Self::Interpreter(format!("{e}"))
     }
 }
 

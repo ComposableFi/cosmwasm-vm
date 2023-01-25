@@ -1,34 +1,47 @@
 extern crate std;
 
 use super::{
-    code_gen, format, new_wasmi_vm, vec, CanonicalAddr, ContractInfoResponse, CosmwasmQueryResult,
-    Debug, Display, ExecutorError, Has, MemoryReadError, MemoryWriteError, QueryResult, Reply,
-    String, SystemError, SystemResult, Transactional, VMBase, Vec, VmErrorOf, VmGas,
-    VmGasCheckpoint, WasmiContext, WasmiInput, WasmiModule, WasmiOutput, WasmiVM, WasmiVMError,
+    code_gen, new_wasmi_vm, OwnedWasmiVM, VMBase, WasmiContext, WasmiInput, WasmiModule,
+    WasmiOutput, WasmiVMError,
 };
-use alloc::collections::BTreeMap;
-use alloc::string::ToString;
-use core::{assert_matches::assert_matches, num::NonZeroU32, str::FromStr};
+use alloc::{
+    collections::BTreeMap,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::{
+    assert_matches::assert_matches,
+    fmt::{Debug, Display},
+    num::NonZeroU32,
+    str::FromStr,
+};
 #[cfg(feature = "stargate")]
 use cosmwasm_std::IbcTimeout;
 #[cfg(feature = "iterator")]
 use cosmwasm_std::Order;
 use cosmwasm_std::{
-    Addr, Attribute, Binary, BlockInfo, Coin, ContractInfo, ContractResult, Empty, Env, Event,
-    MessageInfo, Timestamp,
+    Addr, Attribute, Binary, BlockInfo, CanonicalAddr, Coin, ContractInfo, ContractInfoResponse,
+    ContractResult, Empty, Env, Event, MessageInfo, Reply, SystemResult, Timestamp,
 };
 use cosmwasm_vm::{
     executor::{
-        cosmwasm_call, CosmwasmExecutionResult, ExecuteCall, ExecuteResult, InstantiateCall,
-        InstantiateResult, MigrateCall, QueryCall, ReplyCall,
+        cosmwasm_call, CosmwasmExecutionResult, CosmwasmQueryResult, ExecuteCall, ExecuteResult,
+        ExecutorError, InstantiateCall, InstantiateResult, MigrateCall, QueryCall, QueryResult,
+        ReplyCall,
     },
+    has::Has,
+    memory::{MemoryReadError, MemoryWriteError},
     system::{
         cosmwasm_system_entrypoint, cosmwasm_system_entrypoint_hook, cosmwasm_system_run,
-        CosmwasmCodeId, CosmwasmContractMeta,
+        CosmwasmCodeId, CosmwasmContractMeta, SystemError,
     },
+    transaction::Transactional,
+    vm::{VmErrorOf, VmGas, VmGasCheckpoint},
 };
 use wasm_instrument::gas_metering::Rules;
-use wasmi::{core::HostError, AsContextMut, Store};
+use wasmi::core::HostError;
 
 const CANONICAL_LENGTH: usize = 54;
 const SHUFFLES_ENCODE: usize = 18;
@@ -210,7 +223,7 @@ impl<'a> SimpleWasmiVM<'a> {
         &mut self,
         address: <Self as VMBase>::Address,
         funds: Vec<Coin>,
-    ) -> Result<WasmiVM<SimpleWasmiVM, Store<SimpleWasmiVM>>, VmErrorOf<Self>> {
+    ) -> Result<OwnedWasmiVM<SimpleWasmiVM>, VmErrorOf<Self>> {
         log::debug!("Loading sub-vm, contract address: {:?}", address);
         let code = (|| {
             let CosmwasmContractMeta { code_id, .. } = self
@@ -268,8 +281,8 @@ impl From<CanonicalAddress> for CanonicalAddr {
 }
 
 impl<'a> VMBase for SimpleWasmiVM<'a> {
-    type Input<'x> = WasmiInput<'x, WasmiVM<Self, Store<Self>>>;
-    type Output<'x> = WasmiOutput<WasmiVM<Self, Store<Self>>>;
+    type Input<'x> = WasmiInput<OwnedWasmiVM<Self>>;
+    type Output<'x> = WasmiOutput<OwnedWasmiVM<Self>>;
     type QueryCustom = Empty;
     type MessageCustom = Empty;
     type ContractMeta = CosmwasmContractMeta<BankAccount>;
@@ -321,10 +334,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         message: &[u8],
     ) -> Result<QueryResult, Self::Error> {
         let mut sub_vm = self.load_subvm(address, vec![])?;
-        cosmwasm_call::<QueryCall, WasmiVM<SimpleWasmiVM, Store<SimpleWasmiVM>>>(
-            &mut sub_vm,
-            message,
-        )
+        cosmwasm_call::<QueryCall, OwnedWasmiVM<SimpleWasmiVM>>(&mut sub_vm, message)
     }
 
     fn continue_execute(
@@ -388,10 +398,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
             vec![],
         )?;
 
-        cosmwasm_system_run::<
-            ReplyCall<Self::MessageCustom>,
-            WasmiVM<SimpleWasmiVM, Store<SimpleWasmiVM>>,
-        >(
+        cosmwasm_system_run::<ReplyCall<Self::MessageCustom>, OwnedWasmiVM<SimpleWasmiVM>>(
             &mut sub_vm,
             &serde_json::to_vec(&message).map_err(|_| SimpleVMError::CannotDeserialize)?,
             event_handler,
@@ -847,7 +854,7 @@ fn create_vm(
     extension: &mut SimpleWasmiVMExtension,
     env: Env,
     info: MessageInfo,
-) -> Result<WasmiVM<SimpleWasmiVM, Store<SimpleWasmiVM>>, SimpleVMError> {
+) -> Result<OwnedWasmiVM<SimpleWasmiVM>, SimpleVMError> {
     initialize();
     let code = extension
         .codes
@@ -875,7 +882,7 @@ fn create_simple_vm(
     contract: BankAccount,
     funds: Vec<Coin>,
     extension: &mut SimpleWasmiVMExtension,
-) -> Result<WasmiVM<SimpleWasmiVM, Store<SimpleWasmiVM>>, SimpleVMError> {
+) -> Result<OwnedWasmiVM<SimpleWasmiVM>, SimpleVMError> {
     create_vm(
         extension,
         Env {
@@ -920,7 +927,7 @@ fn test_bare() {
     };
     let mut vm = create_simple_vm(sender, address, funds, &mut extension).unwrap();
     assert_matches!(
-        cosmwasm_call::<InstantiateCall<Empty>, WasmiVM<SimpleWasmiVM, Store<SimpleWasmiVM>>>(
+        cosmwasm_call::<InstantiateCall<Empty>, OwnedWasmiVM<SimpleWasmiVM>>(
             &mut vm,
             r#"{
               "name": "Picasso",
@@ -936,7 +943,7 @@ fn test_bare() {
         InstantiateResult(CosmwasmExecutionResult::Ok(_))
     );
     assert_eq!(
-        cosmwasm_call::<QueryCall, WasmiVM<SimpleWasmiVM, Store<SimpleWasmiVM>>>(
+        cosmwasm_call::<QueryCall, OwnedWasmiVM<SimpleWasmiVM>>(
             &mut vm,
             r#"{ "token_info": {} }"#.as_bytes(),
         )
@@ -949,7 +956,6 @@ fn test_bare() {
     );
 }
 
-/*
 mod test_code_gen {
     use cosmwasm_std::{ContractResult, Response};
 
@@ -978,13 +984,15 @@ mod test_code_gen {
             gas: Gas::new(100_000_000),
             ..Default::default()
         };
-        let mut vm = create_simple_vm(sender, address, funds, &mut extension);
-        let result =
-            cosmwasm_call::<InstantiateCall, WasmiVM<SimpleWasmiVM>>(&mut vm, r#"{}"#.as_bytes())
-                .unwrap();
+        let mut vm = create_simple_vm(sender, address, funds, &mut extension).unwrap();
+        let result = cosmwasm_call::<InstantiateCall, OwnedWasmiVM<SimpleWasmiVM>>(
+            &mut vm,
+            r#"{}"#.as_bytes(),
+        )
+        .unwrap();
         assert_matches!(result, InstantiateResult(CosmwasmExecutionResult::Ok(_)));
         let result =
-            cosmwasm_call::<ExecuteCall, WasmiVM<SimpleWasmiVM>>(&mut vm, r#"{}"#.as_bytes())
+            cosmwasm_call::<ExecuteCall, OwnedWasmiVM<SimpleWasmiVM>>(&mut vm, r#"{}"#.as_bytes())
                 .unwrap();
         assert_matches!(result, ExecuteResult(CosmwasmExecutionResult::Ok(_)));
     }
@@ -1019,15 +1027,16 @@ mod test_code_gen {
             gas: Gas::new(100_000_000),
             ..Default::default()
         };
-        let mut vm = create_simple_vm(sender, address, funds, &mut extension);
-        let result =
-            cosmwasm_call::<InstantiateCall, WasmiVM<SimpleWasmiVM>>(&mut vm, r#"{}"#.as_bytes())
-                .unwrap();
+        let mut vm = create_simple_vm(sender, address, funds, &mut extension).unwrap();
+        let result = cosmwasm_call::<InstantiateCall, OwnedWasmiVM<SimpleWasmiVM>>(
+            &mut vm,
+            r#"{}"#.as_bytes(),
+        )
+        .unwrap();
         assert_eq!(result, InstantiateResult(response));
         assert_ne!(result, InstantiateResult(response_2));
     }
 }
-*/
 
 pub fn digit_sum(input: &[u8]) -> usize {
     input.iter().map(|v| *v as usize).sum()
@@ -1071,10 +1080,7 @@ fn test_orchestration_base() {
         ..Default::default()
     };
     let mut vm = create_simple_vm(sender, address, funds, &mut extension).unwrap();
-    let _ = cosmwasm_system_entrypoint::<
-        InstantiateCall,
-        WasmiVM<SimpleWasmiVM, Store<SimpleWasmiVM>>,
-    >(
+    let _ = cosmwasm_system_entrypoint::<InstantiateCall, OwnedWasmiVM<SimpleWasmiVM>>(
         &mut vm,
         format!(
             r#"{{
@@ -1094,18 +1100,17 @@ fn test_orchestration_base() {
     )
     .unwrap();
 
-    let (_, events) =
-        cosmwasm_system_entrypoint::<ExecuteCall, WasmiVM<SimpleWasmiVM, Store<SimpleWasmiVM>>>(
-            &mut vm,
-            r#"{
+    let (_, events) = cosmwasm_system_entrypoint::<ExecuteCall, OwnedWasmiVM<SimpleWasmiVM>>(
+        &mut vm,
+        r#"{
               "mint": {
                 "recipient": "10001",
                 "amount": "5555"
               }
             }"#
-            .as_bytes(),
-        )
-        .unwrap();
+        .as_bytes(),
+    )
+    .unwrap();
     let attributes = vec![
         Attribute {
             key: "action".into(),
@@ -1150,7 +1155,7 @@ fn test_orchestration_advanced() {
     };
     let mut vm = create_simple_vm(sender, address, funds, &mut extension).unwrap();
     assert_eq!(
-        cosmwasm_call::<QueryCall, WasmiVM<SimpleWasmiVM, Store<SimpleWasmiVM>>>(
+        cosmwasm_call::<QueryCall, OwnedWasmiVM<SimpleWasmiVM>>(
             &mut vm,
             r#"{ "recurse": { "depth": 10, "work": 10 }}"#.as_bytes()
         )
@@ -1186,10 +1191,7 @@ fn test_hook() {
         ..Default::default()
     };
     let mut vm = create_simple_vm(sender, address, funds, &mut extension).unwrap();
-    let _ = cosmwasm_system_entrypoint_hook::<
-        InstantiateCall,
-        WasmiVM<SimpleWasmiVM, Store<SimpleWasmiVM>>,
-    >(
+    let _ = cosmwasm_system_entrypoint_hook::<InstantiateCall, OwnedWasmiVM<SimpleWasmiVM>>(
         &mut vm,
         format!(
             r#"{{
@@ -1207,15 +1209,11 @@ fn test_hook() {
         )
         .as_bytes(),
         |vm, msg| {
-            cosmwasm_call::<InstantiateCall, WasmiVM<SimpleWasmiVM, Store<SimpleWasmiVM>>>(vm, msg)
-                .map(Into::into)
+            cosmwasm_call::<InstantiateCall, OwnedWasmiVM<SimpleWasmiVM>>(vm, msg).map(Into::into)
         },
     )
     .unwrap();
-    let r = cosmwasm_system_entrypoint_hook::<
-        ExecuteCall,
-        WasmiVM<SimpleWasmiVM, Store<SimpleWasmiVM>>,
-    >(
+    let r = cosmwasm_system_entrypoint_hook::<ExecuteCall, OwnedWasmiVM<SimpleWasmiVM>>(
         &mut vm,
         r#"{
               "mint": {
@@ -1285,16 +1283,13 @@ fn test_reply() {
     log::debug!("{:?}", extension.storage);
     {
         let mut vm = create_simple_vm(sender, address, funds, &mut extension).unwrap();
-        let _ = cosmwasm_system_entrypoint::<
-            InstantiateCall,
-            WasmiVM<SimpleWasmiVM, Store<SimpleWasmiVM>>,
-        >(&mut vm, r#"{}"#.as_bytes())
+        let _ = cosmwasm_system_entrypoint::<InstantiateCall, OwnedWasmiVM<SimpleWasmiVM>>(
+            &mut vm,
+            r#"{}"#.as_bytes(),
+        )
         .unwrap();
 
-        let (_, events) = cosmwasm_system_entrypoint::<
-            ExecuteCall,
-            WasmiVM<SimpleWasmiVM, Store<SimpleWasmiVM>>,
-        >(
+        let (_, events) = cosmwasm_system_entrypoint::<ExecuteCall, OwnedWasmiVM<SimpleWasmiVM>>(
             &mut vm,
             r#"{
                   "reflect_sub_msg": {
@@ -1342,8 +1337,8 @@ fn test_reply() {
 #[cfg(feature = "stargate")]
 mod cw20_ics20 {
     use super::{
-        create_vm, instrument_contract, BankAccount, Gas, SimpleIBCPacket, SimpleIBCState,
-        SimpleWasmiVM, SimpleWasmiVMExtension, Store, WasmiVM as WVM,
+        create_vm, instrument_contract, BankAccount, Gas, OwnedWasmiVM, SimpleIBCPacket,
+        SimpleIBCState, SimpleWasmiVM, SimpleWasmiVMExtension,
     };
 
     use super::{assert_matches, format, vec};
@@ -1367,8 +1362,6 @@ mod cw20_ics20 {
         },
     };
     use cw20_ics20::ibc::{Ics20Ack, Ics20Packet};
-
-    type WasmiVM<T> = WVM<T, Store<T>>;
 
     const DEFAULT_TIMEOUT: u64 = 3600;
     const CONTRACT_PORT: &str = "ibc:wasm1234567890abcdef";
@@ -1479,7 +1472,7 @@ mod cw20_ics20 {
 
             // Contract instantiation
             assert_matches!(
-                cosmwasm_system_entrypoint::<InstantiateCall, WasmiVM<SimpleWasmiVM>>(
+                cosmwasm_system_entrypoint::<InstantiateCall, OwnedWasmiVM<SimpleWasmiVM>>(
                     &mut vm,
                     format!(
                         r#"{{
@@ -1496,7 +1489,7 @@ mod cw20_ics20 {
             );
 
             assert_matches!(
-                cosmwasm_call_serialize::<IbcChannelOpenCall, WasmiVM<SimpleWasmiVM>, _>(
+                cosmwasm_call_serialize::<IbcChannelOpenCall, OwnedWasmiVM<SimpleWasmiVM>, _>(
                     &mut vm,
                     &IbcChannelOpenMsg::OpenInit {
                         channel: channel.clone()
@@ -1508,7 +1501,7 @@ mod cw20_ics20 {
             assert_matches!(
                 cosmwasm_system_entrypoint_serialize::<
                     IbcChannelConnectCall,
-                    WasmiVM<SimpleWasmiVM>,
+                    OwnedWasmiVM<SimpleWasmiVM>,
                     _,
                 >(
                     &mut vm,
@@ -1536,7 +1529,7 @@ mod cw20_ics20 {
             )
             .unwrap();
             assert_matches!(
-                cosmwasm_system_entrypoint::<ExecuteCall, WasmiVM<SimpleWasmiVM>>(
+                cosmwasm_system_entrypoint::<ExecuteCall, OwnedWasmiVM<SimpleWasmiVM>>(
                     &mut vm,
                     format!(
                         r#"{{
@@ -1588,7 +1581,7 @@ mod cw20_ics20 {
         for packet in packets_to_dispatch {
             let (acknowledgment, _events) = cosmwasm_system_entrypoint_serialize::<
                 IbcPacketReceiveCall,
-                WasmiVM<SimpleWasmiVM>,
+                OwnedWasmiVM<SimpleWasmiVM>,
                 _,
             >(&mut vm, &make_receive_msg(packet))
             .unwrap();

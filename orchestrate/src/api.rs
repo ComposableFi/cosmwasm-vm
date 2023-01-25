@@ -500,9 +500,9 @@ impl<CH: CustomHandler + Default, AH: AddressHandler> StateBuilder<AH, CH> {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            codes: Default::default(),
-            balances: Default::default(),
-            ibc_channels: Default::default(),
+            codes: BTreeMap::default(),
+            balances: Vec::default(),
+            ibc_channels: Vec::default(),
             custom_handler: CH::default(),
             _marker: PhantomData,
         }

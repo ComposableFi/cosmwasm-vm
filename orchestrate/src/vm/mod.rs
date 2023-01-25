@@ -256,7 +256,7 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> Context<'a, CH, AH> {
 }
 
 impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
-    type Input<'x> = WasmiInput<'x, OwnedWasmiVM<Self>>;
+    type Input<'x> = WasmiInput<OwnedWasmiVM<Self>>;
     type Output<'x> = WasmiOutput<OwnedWasmiVM<Self>>;
     type QueryCustom = QueryCustomOf<CH>;
     type MessageCustom = MessageCustomOf<CH>;

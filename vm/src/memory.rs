@@ -43,6 +43,11 @@ pub trait ReadWriteMemory:
 {
 }
 
+impl<T> ReadWriteMemory for T where
+    T: ReadableMemory<Error = <Self as WritableMemory>::Error> + WritableMemory
+{
+}
+
 pub type ReadableMemoryErrorOf<T> = <T as ReadableMemory>::Error;
 #[allow(clippy::module_name_repetitions)]
 pub trait ReadableMemory: Pointable {
