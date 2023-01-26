@@ -3,9 +3,9 @@ use crate::{
     Api as IApi, Direct, Dispatch,
 };
 use cosmwasm_std::{
-    Env, Ibc3ChannelOpenResponse, IbcAcknowledgement, IbcChannel, IbcChannelConnectMsg,
-    IbcChannelOpenMsg, IbcEndpoint, IbcOrder, IbcPacketAckMsg, IbcPacketReceiveMsg,
-    IbcPacketTimeoutMsg, MessageInfo,
+    Binary, Env, Event, Ibc3ChannelOpenResponse, IbcAcknowledgement, IbcChannel,
+    IbcChannelConnectMsg, IbcChannelOpenMsg, IbcEndpoint, IbcOrder, IbcPacketAckMsg,
+    IbcPacketReceiveMsg, IbcPacketTimeoutMsg, MessageInfo,
 };
 
 pub type ConnectionId = String;
@@ -14,6 +14,15 @@ pub type ConnectionId = String;
 pub struct IbcNetwork<'a, CH, AH> {
     pub state: &'a mut State<CH, AH>,
     pub state_counterparty: &'a mut State<CH, AH>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IbcHandshakeResult {
+    pub data: Option<Binary>,
+    pub events: Vec<Event>,
+    pub data_counterparty: Option<Binary>,
+    pub events_counterparty: Vec<Event>,
+    pub channel: IbcChannel,
 }
 
 type Api<'a, E, CH, AH> = IApi<'a, E, AH, State<CH, AH>, Context<'a, CH, AH>>;
@@ -46,10 +55,16 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> IbcNetwork<'a, CH, AH> {
         a: &A,
         a_counterparty: &A,
         mut pre: impl FnMut(&mut State<CH, AH>, &mut State<CH, AH>, &A, &A),
-        mut post: impl FnMut(&mut State<CH, AH>, &mut State<CH, AH>, &A, &A),
+        mut post: impl FnMut(
+            (Vec<Option<Binary>>, Vec<Event>),
+            &mut State<CH, AH>,
+            &mut State<CH, AH>,
+            &A,
+            &A,
+        ),
     ) -> Result<(), VmError> {
         pre(self.state, self.state_counterparty, a, a_counterparty);
-        ibc_relay::<CH, AH>(
+        let result = ibc_relay::<CH, AH>(
             &channel,
             self.state,
             self.state_counterparty,
@@ -59,7 +74,13 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> IbcNetwork<'a, CH, AH> {
             &info_counterparty,
             gas,
         )?;
-        post(self.state, self.state_counterparty, a, a_counterparty);
+        post(
+            result,
+            self.state,
+            self.state_counterparty,
+            a,
+            a_counterparty,
+        );
         let mut network_reversed = IbcNetwork::new(self.state_counterparty, self.state);
         if network_reversed.relay_required(&channel)? {
             network_reversed.relay::<A>(
@@ -90,7 +111,7 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> IbcNetwork<'a, CH, AH> {
         info: MessageInfo,
         info_counterparty: MessageInfo,
         gas: u64,
-    ) -> Result<IbcChannel, VmError> {
+    ) -> Result<IbcHandshakeResult, VmError> {
         let contract = Account::try_from(env.contract.address.clone())?;
         let contract_counterparty = Account::try_from(env_counterparty.contract.address.clone())?;
         let mut channel = IbcChannel::new(
@@ -148,7 +169,7 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> IbcNetwork<'a, CH, AH> {
         let channel_counterparty = ibc_reverse_channel(channel.clone());
 
         // Step 2, OpenAck/Confirm
-        let result = Api::<Dispatch, CH, AH>::ibc_channel_connect(
+        let (data, events) = Api::<Dispatch, CH, AH>::ibc_channel_connect(
             self.state,
             env,
             info,
@@ -158,17 +179,17 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> IbcNetwork<'a, CH, AH> {
                 counterparty_version: channel_counterparty.version.clone(),
             },
         )?;
-        log::debug!("Handshake: {:?}", result);
-        let result = Api::<Dispatch, CH, AH>::ibc_channel_connect(
-            self.state_counterparty,
-            env_counterparty,
-            info_counterparty,
-            gas,
-            &IbcChannelConnectMsg::OpenConfirm {
-                channel: channel_counterparty,
-            },
-        )?;
-        log::debug!("Handshake Counterparty: {:?}", result);
+
+        let (data_counterparty, events_counterparty) =
+            Api::<Dispatch, CH, AH>::ibc_channel_connect(
+                self.state_counterparty,
+                env_counterparty,
+                info_counterparty,
+                gas,
+                &IbcChannelConnectMsg::OpenConfirm {
+                    channel: channel_counterparty,
+                },
+            )?;
 
         self.state
             .db
@@ -180,7 +201,13 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> IbcNetwork<'a, CH, AH> {
             .ibc
             .insert(channel_id, IbcState::default());
 
-        Ok(channel)
+        Ok(IbcHandshakeResult {
+            data,
+            events,
+            data_counterparty,
+            events_counterparty,
+            channel,
+        })
     }
 }
 
@@ -219,7 +246,7 @@ pub fn ibc_relay<CH: CustomHandler, AH: AddressHandler>(
     info: &MessageInfo,
     info_counterparty: &MessageInfo,
     gas: u64,
-) -> Result<(), VmError> {
+) -> Result<(Vec<Option<Binary>>, Vec<Event>), VmError> {
     let relayer = Account::try_from(info.sender.clone())?;
     let relayer_counterparty = Account::try_from(info_counterparty.sender.clone())?;
     let channel_state = state
@@ -227,9 +254,11 @@ pub fn ibc_relay<CH: CustomHandler, AH: AddressHandler>(
         .ibc
         .get_mut(&channel.endpoint.channel_id)
         .ok_or(VmError::UnknownIbcChannel)?;
+    let mut all_events = Vec::new();
+    let mut all_data = Vec::new();
     if channel_state.request_close {
         for packet in channel_state.packets.drain(0..).collect::<Vec<_>>() {
-            Api::<Dispatch, CH, AH>::ibc_packet_timeout(
+            let (data, events) = Api::<Dispatch, CH, AH>::ibc_packet_timeout(
                 state,
                 env.clone(),
                 info.clone(),
@@ -245,12 +274,14 @@ pub fn ibc_relay<CH: CustomHandler, AH: AddressHandler>(
                     relayer.clone().into(),
                 ),
             )?;
+            all_data.push(data);
+            all_events.extend(events);
         }
     } else {
         for packet in channel_state.packets.drain(0..).collect::<Vec<_>>() {
             log::info!("Relaying: {:?}", packet);
             // TODO: check timeout after env passed as parameter to Full methods
-            let (ack, _) = Api::<Dispatch, CH, AH>::ibc_packet_receive(
+            let (ack, events) = Api::<Dispatch, CH, AH>::ibc_packet_receive(
                 state_counterparty,
                 env_counterparty.clone(),
                 info_counterparty.clone(),
@@ -266,8 +297,10 @@ pub fn ibc_relay<CH: CustomHandler, AH: AddressHandler>(
                     relayer_counterparty.clone().into(),
                 ),
             )?;
+            all_data.push(ack.clone());
+            all_events.extend(events);
             log::info!("Packet ACK: {:?}", ack);
-            Api::<Dispatch, CH, AH>::ibc_packet_ack(
+            let (data, events) = Api::<Dispatch, CH, AH>::ibc_packet_ack(
                 state,
                 env.clone(),
                 info.clone(),
@@ -284,8 +317,10 @@ pub fn ibc_relay<CH: CustomHandler, AH: AddressHandler>(
                     relayer.clone().into(),
                 ),
             )?;
+            all_data.push(data);
+            all_events.extend(events);
         }
         // TODO: handle ics20 transfers?
     }
-    Ok(())
+    Ok((all_data, all_events))
 }
