@@ -1,5 +1,5 @@
 #![no_std]
-#![feature(trait_alias)] // TODO(aeryz): Check if this is stabilized
+#![feature(trait_alias)]
 #![cfg_attr(test, feature(assert_matches))]
 
 extern crate alloc;

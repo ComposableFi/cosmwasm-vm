@@ -63,22 +63,6 @@ impl<V: WasmiBaseVM, S: AsContextMut<UserState = V>> WasmiVM<V, S> {
     pub fn new(store: S) -> Self {
         WasmiVM(store)
     }
-
-    pub fn data(&self) -> &V {
-        // SAFETY: as_context_mut creates a StoreContextMut which basically holds a reference
-        // to a `Store`. So this data will live as long as `self` lives. Because if the type is
-        // `WasmiVM<V, Store<V>>`, the data will live as long as self anyways. And if the type
-        // is a reference type like `WasmiVM<V, StoreContextMut<'a, V>>`, then it will still live
-        // as long as self because rust's lifetime checker won't allow borrowing `Store` if `Store`
-        // doesn't live enough.
-        let ptr = self.0.as_context().data() as *const V;
-        unsafe { &*ptr }
-    }
-
-    pub fn data_mut(&mut self) -> &mut V {
-        let ptr = self.0.as_context_mut().data_mut() as *mut V;
-        unsafe { &mut *ptr }
-    }
 }
 
 /// Base VM implementation which basically, charges for gas and forwards
@@ -101,7 +85,7 @@ where
 
     fn running_contract_meta(&mut self) -> Result<Self::ContractMeta, Self::Error> {
         self.charge(VmGas::GetContractMeta)?;
-        self.data_mut().running_contract_meta()
+        self.0.as_context_mut().data_mut().running_contract_meta()
     }
 
     #[cfg(feature = "iterator")]
@@ -112,7 +96,10 @@ where
         order: Order,
     ) -> Result<u32, Self::Error> {
         self.charge(VmGas::DbScan)?;
-        self.data_mut().db_scan(start, end, order)
+        self.0
+            .as_context_mut()
+            .data_mut()
+            .db_scan(start, end, order)
     }
 
     #[cfg(feature = "iterator")]
@@ -121,7 +108,7 @@ where
         iterator_id: u32,
     ) -> Result<(Self::StorageKey, Self::StorageValue), Self::Error> {
         self.charge(VmGas::DbNext)?;
-        self.data_mut().db_next(iterator_id)
+        self.0.as_context_mut().data_mut().db_next(iterator_id)
     }
 
     fn set_contract_meta(
@@ -130,13 +117,15 @@ where
         new_contract_meta: Self::ContractMeta,
     ) -> Result<(), Self::Error> {
         self.charge(VmGas::SetContractMeta)?;
-        self.data_mut()
+        self.0
+            .as_context_mut()
+            .data_mut()
             .set_contract_meta(address, new_contract_meta)
     }
 
     fn contract_meta(&mut self, address: Self::Address) -> Result<Self::ContractMeta, Self::Error> {
         self.charge(VmGas::GetContractMeta)?;
-        self.data_mut().contract_meta(address)
+        self.0.as_context_mut().data_mut().contract_meta(address)
     }
 
     fn continue_query(
@@ -145,7 +134,10 @@ where
         message: &[u8],
     ) -> Result<QueryResult, Self::Error> {
         self.charge(VmGas::ContinueQuery)?;
-        self.data_mut().continue_query(address, message)
+        self.0
+            .as_context_mut()
+            .data_mut()
+            .continue_query(address, message)
     }
 
     fn continue_execute(
@@ -158,7 +150,9 @@ where
         self.charge(VmGas::ContinueExecute {
             nb_of_coins: u32::try_from(funds.len()).map_err(|_| WasmiVMError::MaxLimitExceeded)?,
         })?;
-        self.data_mut()
+        self.0
+            .as_context_mut()
+            .data_mut()
             .continue_execute(address, funds, message, event_handler)
     }
 
@@ -172,8 +166,12 @@ where
         self.charge(VmGas::ContinueInstantiate {
             nb_of_coins: u32::try_from(funds.len()).map_err(|_| WasmiVMError::MaxLimitExceeded)?,
         })?;
-        self.data_mut()
-            .continue_instantiate(contract_meta, funds, message, event_handler)
+        self.0.as_context_mut().data_mut().continue_instantiate(
+            contract_meta,
+            funds,
+            message,
+            event_handler,
+        )
     }
 
     fn continue_migrate(
@@ -183,7 +181,9 @@ where
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error> {
         self.charge(VmGas::ContinueMigrate)?;
-        self.data_mut()
+        self.0
+            .as_context_mut()
+            .data_mut()
             .continue_migrate(address, message, event_handler)
     }
 
@@ -193,7 +193,10 @@ where
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error> {
         self.charge(VmGas::ContinueReply)?;
-        self.data_mut().continue_reply(message, event_handler)
+        self.0
+            .as_context_mut()
+            .data_mut()
+            .continue_reply(message, event_handler)
     }
 
     fn query_custom(
@@ -201,7 +204,7 @@ where
         query: Self::QueryCustom,
     ) -> Result<SystemResult<CosmwasmQueryResult>, Self::Error> {
         self.charge(VmGas::QueryCustom)?;
-        self.data_mut().query_custom(query)
+        self.0.as_context_mut().data_mut().query_custom(query)
     }
 
     fn message_custom(
@@ -210,7 +213,10 @@ where
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<Option<Binary>, Self::Error> {
         self.charge(VmGas::MessageCustom)?;
-        self.data_mut().message_custom(message, event_handler)
+        self.0
+            .as_context_mut()
+            .data_mut()
+            .message_custom(message, event_handler)
     }
 
     fn query_raw(
@@ -219,7 +225,7 @@ where
         key: Self::StorageKey,
     ) -> Result<Option<Self::StorageValue>, Self::Error> {
         self.charge(VmGas::QueryRaw)?;
-        self.data_mut().query_raw(address, key)
+        self.0.as_context_mut().data_mut().query_raw(address, key)
     }
 
     fn transfer_from(
@@ -231,39 +237,42 @@ where
         self.charge(VmGas::Transfer {
             nb_of_coins: u32::try_from(funds.len()).map_err(|_| WasmiVMError::MaxLimitExceeded)?,
         })?;
-        self.data_mut().transfer_from(from, to, funds)
+        self.0
+            .as_context_mut()
+            .data_mut()
+            .transfer_from(from, to, funds)
     }
 
     fn transfer(&mut self, to: &Self::Address, funds: &[Coin]) -> Result<(), Self::Error> {
         self.charge(VmGas::Transfer {
             nb_of_coins: u32::try_from(funds.len()).map_err(|_| WasmiVMError::MaxLimitExceeded)?,
         })?;
-        self.data_mut().transfer(to, funds)
+        self.0.as_context_mut().data_mut().transfer(to, funds)
     }
 
     fn burn(&mut self, funds: &[Coin]) -> Result<(), Self::Error> {
         self.charge(VmGas::Burn)?;
-        self.data_mut().burn(funds)
+        self.0.as_context_mut().data_mut().burn(funds)
     }
 
     fn balance(&mut self, account: &Self::Address, denom: String) -> Result<Coin, Self::Error> {
         self.charge(VmGas::Balance)?;
-        self.data_mut().balance(account, denom)
+        self.0.as_context_mut().data_mut().balance(account, denom)
     }
 
     fn all_balance(&mut self, account: &Self::Address) -> Result<Vec<Coin>, Self::Error> {
         self.charge(VmGas::AllBalance)?;
-        self.data_mut().all_balance(account)
+        self.0.as_context_mut().data_mut().all_balance(account)
     }
 
     fn query_info(&mut self, address: Self::Address) -> Result<ContractInfoResponse, Self::Error> {
         self.charge(VmGas::QueryInfo)?;
-        self.data_mut().query_info(address)
+        self.0.as_context_mut().data_mut().query_info(address)
     }
 
     fn debug(&mut self, message: Vec<u8>) -> Result<(), Self::Error> {
         self.charge(VmGas::Debug)?;
-        self.data_mut().debug(message)
+        self.0.as_context_mut().data_mut().debug(message)
     }
 
     fn db_read(
@@ -271,7 +280,7 @@ where
         key: Self::StorageKey,
     ) -> Result<Option<Self::StorageValue>, Self::Error> {
         self.charge(VmGas::DbRead)?;
-        self.data_mut().db_read(key)
+        self.0.as_context_mut().data_mut().db_read(key)
     }
 
     fn db_write(
@@ -280,17 +289,17 @@ where
         value: Self::StorageValue,
     ) -> Result<(), Self::Error> {
         self.charge(VmGas::DbWrite)?;
-        self.data_mut().db_write(key, value)
+        self.0.as_context_mut().data_mut().db_write(key, value)
     }
 
     fn db_remove(&mut self, key: Self::StorageKey) -> Result<(), Self::Error> {
         self.charge(VmGas::DbRemove)?;
-        self.data_mut().db_remove(key)
+        self.0.as_context_mut().data_mut().db_remove(key)
     }
 
     fn addr_validate(&mut self, input: &str) -> Result<Result<(), Self::Error>, Self::Error> {
         self.charge(VmGas::AddrValidate)?;
-        self.data_mut().addr_validate(input)
+        self.0.as_context_mut().data_mut().addr_validate(input)
     }
 
     fn addr_canonicalize(
@@ -298,7 +307,7 @@ where
         input: &str,
     ) -> Result<Result<Self::CanonicalAddress, Self::Error>, Self::Error> {
         self.charge(VmGas::AddrCanonicalize)?;
-        self.data_mut().addr_canonicalize(input)
+        self.0.as_context_mut().data_mut().addr_canonicalize(input)
     }
 
     fn addr_humanize(
@@ -306,27 +315,30 @@ where
         addr: &Self::CanonicalAddress,
     ) -> Result<Result<Self::Address, Self::Error>, Self::Error> {
         self.charge(VmGas::AddrHumanize)?;
-        self.data_mut().addr_humanize(addr)
+        self.0.as_context_mut().data_mut().addr_humanize(addr)
     }
 
     fn abort(&mut self, message: String) -> Result<(), Self::Error> {
-        self.data_mut().abort(message)
+        self.0.as_context_mut().data_mut().abort(message)
     }
 
     fn charge(&mut self, value: VmGas) -> Result<(), Self::Error> {
-        self.data_mut().charge(value)
+        self.0.as_context_mut().data_mut().charge(value)
     }
 
     fn gas_checkpoint_push(&mut self, checkpoint: VmGasCheckpoint) -> Result<(), Self::Error> {
-        self.data_mut().gas_checkpoint_push(checkpoint)
+        self.0
+            .as_context_mut()
+            .data_mut()
+            .gas_checkpoint_push(checkpoint)
     }
 
     fn gas_checkpoint_pop(&mut self) -> Result<(), Self::Error> {
-        self.data_mut().gas_checkpoint_pop()
+        self.0.as_context_mut().data_mut().gas_checkpoint_pop()
     }
 
     fn gas_ensure_available(&mut self) -> Result<(), Self::Error> {
-        self.data_mut().gas_ensure_available()
+        self.0.as_context_mut().data_mut().gas_ensure_available()
     }
 
     fn secp256k1_verify(
@@ -335,8 +347,13 @@ where
         signature: &[u8],
         public_key: &[u8],
     ) -> Result<bool, Self::Error> {
-        self.data_mut().charge(VmGas::Secp256k1Verify)?;
-        self.data_mut()
+        self.0
+            .as_context_mut()
+            .data_mut()
+            .charge(VmGas::Secp256k1Verify)?;
+        self.0
+            .as_context_mut()
+            .data_mut()
             .secp256k1_verify(message_hash, signature, public_key)
     }
 
@@ -347,8 +364,11 @@ where
         recovery_param: u8,
     ) -> Result<Result<Vec<u8>, ()>, Self::Error> {
         self.charge(VmGas::Secp256k1RecoverPubkey)?;
-        self.data_mut()
-            .secp256k1_recover_pubkey(message_hash, signature, recovery_param)
+        self.0.as_context_mut().data_mut().secp256k1_recover_pubkey(
+            message_hash,
+            signature,
+            recovery_param,
+        )
     }
 
     fn ed25519_verify(
@@ -358,7 +378,9 @@ where
         public_key: &[u8],
     ) -> Result<bool, Self::Error> {
         self.charge(VmGas::Ed25519Verify)?;
-        self.data_mut()
+        self.0
+            .as_context_mut()
+            .data_mut()
             .ed25519_verify(message, signature, public_key)
     }
 
@@ -369,7 +391,9 @@ where
         public_keys: &[&[u8]],
     ) -> Result<bool, Self::Error> {
         self.charge(VmGas::Ed25519BatchVerify)?;
-        self.data_mut()
+        self.0
+            .as_context_mut()
+            .data_mut()
             .ed25519_batch_verify(messages, signatures, public_keys)
     }
 
@@ -382,7 +406,9 @@ where
         timeout: cosmwasm_std::IbcTimeout,
     ) -> Result<(), Self::Error> {
         self.charge(VmGas::IbcTransfer)?;
-        self.data_mut()
+        self.0
+            .as_context_mut()
+            .data_mut()
             .ibc_transfer(channel_id, to_address, amount, timeout)
     }
 
@@ -394,13 +420,19 @@ where
         timeout: cosmwasm_std::IbcTimeout,
     ) -> Result<(), Self::Error> {
         self.charge(VmGas::IbcSendPacket)?;
-        self.data_mut().ibc_send_packet(channel_id, data, timeout)
+        self.0
+            .as_context_mut()
+            .data_mut()
+            .ibc_send_packet(channel_id, data, timeout)
     }
 
     #[cfg(feature = "stargate")]
     fn ibc_close_channel(&mut self, channel_id: String) -> Result<(), Self::Error> {
         self.charge(VmGas::IbcCloseChannel)?;
-        self.data_mut().ibc_close_channel(channel_id)
+        self.0
+            .as_context_mut()
+            .data_mut()
+            .ibc_close_channel(channel_id)
     }
 }
 
@@ -423,6 +455,8 @@ where
     {
         log::trace!("Function name: {}", function_name);
         let WasmiModule { instance, .. } = self
+            .0
+            .as_context()
             .data()
             .executing_module()
             .ok_or(WasmiVMError::NotADynamicModule)?;
@@ -459,6 +493,8 @@ where
     type Error = VmErrorOf<V>;
     fn read(&self, offset: Self::Pointer, buffer: &mut [u8]) -> Result<(), Self::Error> {
         let WasmiModule { memory, .. } = self
+            .0
+            .as_context()
             .data()
             .executing_module()
             .ok_or(WasmiVMError::NotADynamicModule)?;
@@ -476,6 +512,8 @@ where
     type Error = VmErrorOf<V>;
     fn write(&mut self, offset: Self::Pointer, buffer: &[u8]) -> Result<(), Self::Error> {
         let WasmiModule { memory, .. } = self
+            .0
+            .as_context()
             .data()
             .executing_module()
             .ok_or(WasmiVMError::NotADynamicModule)?;
@@ -493,15 +531,15 @@ where
     type Error = TransactionalErrorOf<V>;
 
     fn transaction_begin(&mut self) -> Result<(), Self::Error> {
-        self.data_mut().transaction_begin()
+        self.0.as_context_mut().data_mut().transaction_begin()
     }
 
     fn transaction_commit(&mut self) -> Result<(), Self::Error> {
-        self.data_mut().transaction_commit()
+        self.0.as_context_mut().data_mut().transaction_commit()
     }
 
     fn transaction_rollback(&mut self) -> Result<(), Self::Error> {
-        self.data_mut().transaction_rollback()
+        self.0.as_context_mut().data_mut().transaction_rollback()
     }
 }
 
@@ -511,6 +549,6 @@ where
     S: AsContextMut<UserState = V>,
 {
     fn get(&self) -> U {
-        self.data().get()
+        self.0.as_context().data().get()
     }
 }
