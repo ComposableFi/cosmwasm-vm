@@ -25,8 +25,6 @@ bech32 = "0.9.1"
 bs58 = "0.4.0"
 
 [dev-dependencies]
-cw20 = "0.16"
-cw20-base = { version = "0.16", features = ["library"] }
 tokio = { version = "1.23", features = [ "rt", "macros", "rt-multi-thread" ] }
 env_logger = "0.10"
 hex = { version = "0.4", features = ["alloc"] }

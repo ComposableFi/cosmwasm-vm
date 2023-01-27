@@ -8,7 +8,7 @@ use cosmwasm_vm::{
     system::SystemError,
 };
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub enum WasmiVMError {
     ExecutorError(ExecutorError),

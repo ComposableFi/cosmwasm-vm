@@ -7,7 +7,7 @@ use cosmwasm_vm::{
 };
 use cosmwasm_vm_wasmi::WasmiVMError;
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub enum VmError {
     Interpreter(String),
@@ -38,7 +38,16 @@ impl wasmi::core::HostError for VmError {}
 
 impl From<wasmi::Error> for VmError {
     fn from(e: wasmi::Error) -> Self {
-        Self::Interpreter(format!("{e}"))
+        match e {
+            wasmi::Error::Trap(ref trap) => {
+                if let Some(err) = trap.downcast_ref::<VmError>() {
+                    err.clone()
+                } else {
+                    Self::Interpreter(format!("{e}"))
+                }
+            }
+            e => Self::Interpreter(format!("{e}")),
+        }
     }
 }
 
