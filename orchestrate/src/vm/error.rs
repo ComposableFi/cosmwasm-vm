@@ -1,3 +1,4 @@
+use super::{bank, Account};
 use core::fmt::Display;
 use cosmwasm_vm::{
     executor::ExecutorError,
@@ -5,15 +6,11 @@ use cosmwasm_vm::{
     system::{CosmwasmCodeId, SystemError},
 };
 use cosmwasm_vm_wasmi::WasmiVMError;
-use wasmi::CanResume;
 
-use super::bank;
-use super::Account;
-
-#[derive(PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub enum VmError {
-    Interpreter(wasmi::Error),
+    Interpreter(String),
     VMError(WasmiVMError),
     BankError(bank::Error),
     CodeNotFound(CosmwasmCodeId),
@@ -37,9 +34,20 @@ pub enum VmError {
     NotAuthorized,
 }
 
+impl wasmi::core::HostError for VmError {}
+
 impl From<wasmi::Error> for VmError {
     fn from(e: wasmi::Error) -> Self {
-        Self::Interpreter(e)
+        match e {
+            wasmi::Error::Trap(ref trap) => {
+                if let Some(err) = trap.downcast_ref::<VmError>() {
+                    err.clone()
+                } else {
+                    Self::Interpreter(format!("{e}"))
+                }
+            }
+            e => Self::Interpreter(format!("{e}")),
+        }
     }
 }
 
@@ -82,11 +90,5 @@ impl From<bank::Error> for VmError {
 impl Display for VmError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "{self:?}")
-    }
-}
-
-impl CanResume for VmError {
-    fn can_resume(&self) -> bool {
-        false
     }
 }

@@ -43,6 +43,11 @@ pub trait ReadWriteMemory:
 {
 }
 
+impl<T> ReadWriteMemory for T where
+    T: ReadableMemory<Error = <Self as WritableMemory>::Error> + WritableMemory
+{
+}
+
 pub type ReadableMemoryErrorOf<T> = <T as ReadableMemory>::Error;
 #[allow(clippy::module_name_repetitions)]
 pub trait ReadableMemory: Pointable {
@@ -54,11 +59,11 @@ pub type WritableMemoryErrorOf<T> = <T as WritableMemory>::Error;
 #[allow(clippy::module_name_repetitions)]
 pub trait WritableMemory: Pointable {
     type Error: From<MemoryWriteError>;
-    fn write(&self, offset: Self::Pointer, buffer: &[u8]) -> Result<(), Self::Error>;
+    fn write(&mut self, offset: Self::Pointer, buffer: &[u8]) -> Result<(), Self::Error>;
 }
 
-pub struct Write<'a, 'b, M: Pointable>(pub &'a M, pub M::Pointer, pub &'b [u8]);
-pub struct TypedWrite<'a, 'b, M: Pointable, T>(pub &'a M, pub M::Pointer, pub &'b T);
+pub struct Write<'a, 'b, M: Pointable>(pub &'a mut M, pub M::Pointer, pub &'b [u8]);
+pub struct TypedWrite<'a, 'b, M: Pointable, T>(pub &'a mut M, pub M::Pointer, pub &'b T);
 pub struct Read<'a, M: Pointable>(pub &'a M, pub M::Pointer);
 pub struct LimitedRead<'a, M: Pointable>(pub &'a M, pub M::Pointer, pub M::Pointer);
 pub struct LimitedTypedRead<'a, M: Pointable>(pub &'a M, pub M::Pointer, pub M::Pointer);
