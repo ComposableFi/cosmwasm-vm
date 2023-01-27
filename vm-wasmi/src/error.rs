@@ -29,7 +29,6 @@ pub enum WasmiVMError {
     MaxLimitExceeded,
     NotADynamicModule,
     FunctionNotFound,
-    InternalWasmiError,
 }
 
 impl From<ExecutorError> for WasmiVMError {

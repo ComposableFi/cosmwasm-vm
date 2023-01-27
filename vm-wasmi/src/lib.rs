@@ -237,7 +237,7 @@ where
 /// to use `CodeValidation` to properly validate the wasm module.
 pub fn new_wasmi_vm<V: WasmiBaseVM>(code: &[u8], data: V) -> Result<OwnedWasmiVM<V>, VmErrorOf<V>> {
     let engine = Engine::default();
-    let module = Module::new(&engine, code).map_err(|_| WasmiVMError::InternalWasmiError)?;
+    let module = Module::new(&engine, code).map_err(Into::<wasmi::Error>::into)?;
 
     let mut store = Store::new(&engine, data);
     let mut linker = <Linker<V>>::new();
@@ -246,9 +246,9 @@ pub fn new_wasmi_vm<V: WasmiBaseVM>(code: &[u8], data: V) -> Result<OwnedWasmiVM
 
     let instance = linker
         .instantiate(&mut store, &module)
-        .map_err(|_| WasmiVMError::InternalWasmiError)?
+        .map_err(Into::<wasmi::Error>::into)?
         .start(&mut store)
-        .map_err(|_| WasmiVMError::InternalWasmiError)?;
+        .map_err(Into::<wasmi::Error>::into)?;
 
     let memory = instance
         .get_export(store.as_context_mut(), "memory")
