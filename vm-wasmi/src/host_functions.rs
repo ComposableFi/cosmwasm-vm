@@ -535,7 +535,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
                 },
             ),
         )
-        .map_err(|_| WasmiVMError::InternalWasmiError)?;
+        .map_err(Into::<wasmi::Error>::into)?;
     linker
         .define(
             "env",
@@ -547,7 +547,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
                 },
             ),
         )
-        .map_err(|_| WasmiVMError::InternalWasmiError)?;
+        .map_err(Into::<wasmi::Error>::into)?;
     linker
         .define(
             "env",
@@ -559,7 +559,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
                 },
             ),
         )
-        .map_err(|_| WasmiVMError::InternalWasmiError)?;
+        .map_err(Into::<wasmi::Error>::into)?;
     linker
         .define(
             "env",
@@ -575,7 +575,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
                 },
             ),
         )
-        .map_err(|_| WasmiVMError::InternalWasmiError)?;
+        .map_err(Into::<wasmi::Error>::into)?;
     linker
         .define(
             "env",
@@ -587,7 +587,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
                 },
             ),
         )
-        .map_err(|_| WasmiVMError::InternalWasmiError)?;
+        .map_err(Into::<wasmi::Error>::into)?;
     linker
         .define(
             "env",
@@ -599,7 +599,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
                 },
             ),
         )
-        .map_err(|_| WasmiVMError::InternalWasmiError)?;
+        .map_err(Into::<wasmi::Error>::into)?;
     linker
         .define(
             "env",
@@ -615,7 +615,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
                 },
             ),
         )
-        .map_err(|_| WasmiVMError::InternalWasmiError)?;
+        .map_err(Into::<wasmi::Error>::into)?;
     linker
         .define(
             "env",
@@ -631,7 +631,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
                 },
             ),
         )
-        .map_err(|_| WasmiVMError::InternalWasmiError)?;
+        .map_err(Into::<wasmi::Error>::into)?;
     linker
         .define(
             "env",
@@ -653,7 +653,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
                 },
             ),
         )
-        .map_err(|_| WasmiVMError::InternalWasmiError)?;
+        .map_err(Into::<wasmi::Error>::into)?;
     linker
         .define(
             "env",
@@ -675,7 +675,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
                 },
             ),
         )
-        .map_err(|_| WasmiVMError::InternalWasmiError)?;
+        .map_err(Into::<wasmi::Error>::into)?;
     linker
         .define(
             "env",
@@ -697,7 +697,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
                 },
             ),
         )
-        .map_err(|_| WasmiVMError::InternalWasmiError)?;
+        .map_err(Into::<wasmi::Error>::into)?;
     linker
         .define(
             "env",
@@ -719,7 +719,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
                 },
             ),
         )
-        .map_err(|_| WasmiVMError::InternalWasmiError)?;
+        .map_err(Into::<wasmi::Error>::into)?;
     linker
         .define(
             "env",
@@ -731,7 +731,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
                 },
             ),
         )
-        .map_err(|_| WasmiVMError::InternalWasmiError)?;
+        .map_err(Into::<wasmi::Error>::into)?;
     linker
         .define(
             "env",
@@ -743,7 +743,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
                 },
             ),
         )
-        .map_err(|_| WasmiVMError::InternalWasmiError)?;
+        .map_err(Into::<wasmi::Error>::into)?;
     linker
         .define(
             "env",
@@ -755,7 +755,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
                 },
             ),
         )
-        .map_err(|_| WasmiVMError::InternalWasmiError)?;
+        .map_err(Into::<wasmi::Error>::into)?;
     linker
         .define(
             "env",
@@ -767,6 +767,6 @@ pub(crate) fn define<V: WasmiBaseVM>(
                 },
             ),
         )
-        .map_err(|_| WasmiVMError::InternalWasmiError)?;
+        .map_err(Into::<wasmi::Error>::into)?;
     Ok(())
 }

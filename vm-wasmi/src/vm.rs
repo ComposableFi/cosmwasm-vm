@@ -469,9 +469,7 @@ where
             .and_then(Extern::into_func)
             .ok_or(WasmiVMError::FunctionNotFound)?;
 
-        export
-            .call(self.0.as_context_mut(), &params, &mut result)
-            .map_err(|_| WasmiVMError::InternalWasmiError)?;
+        export.call(self.0.as_context_mut(), &params, &mut result)?;
 
         O::try_from(WasmiOutput(WasmiFunctionResult(result), PhantomData))
     }
