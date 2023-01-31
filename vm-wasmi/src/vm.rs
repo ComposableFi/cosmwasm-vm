@@ -176,6 +176,27 @@ where
         )
     }
 
+    #[cfg(feature = "cosmwasm_1_2")]
+    fn continue_instantiate2(
+        &mut self,
+        contract_meta: Self::ContractMeta,
+        funds: Vec<Coin>,
+        salt: &[u8],
+        message: &[u8],
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<(Self::Address, Option<Binary>), Self::Error> {
+        self.charge(VmGas::ContinueInstantiate2 {
+            nb_of_coins: u32::try_from(funds.len()).map_err(|_| WasmiVMError::MaxLimitExceeded)?,
+        })?;
+        self.0.as_context_mut().data_mut().continue_instantiate2(
+            contract_meta,
+            funds,
+            salt,
+            message,
+            event_handler,
+        )
+    }
+
     fn continue_migrate(
         &mut self,
         address: Self::Address,

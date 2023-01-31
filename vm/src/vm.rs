@@ -67,6 +67,8 @@ pub enum VmGas {
     ContinueExecute { nb_of_coins: u32 },
     /// Cost of `continue_instantiate`.
     ContinueInstantiate { nb_of_coins: u32 },
+    /// Cost of `continue_instantiate2`
+    ContinueInstantiate2 { nb_of_coins: u32 },
     /// Cost of `continue_migrate`.
     ContinueMigrate,
     /// Cost of `continue_reply`
