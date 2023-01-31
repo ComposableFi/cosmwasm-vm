@@ -13,6 +13,8 @@ use super::ExecutionType;
 use alloc::collections::BTreeMap;
 use bank::Bank;
 use core::{fmt::Debug, num::NonZeroU32};
+#[cfg(feature = "cosmwasm_1_2")]
+use cosmwasm_std::CodeInfoResponse;
 use cosmwasm_std::{
     Binary, Coin, ContractInfo, ContractInfoResponse, Env, Event, IbcTimeout, MessageInfo, Order,
     Reply, SystemResult,
@@ -172,10 +174,18 @@ impl IbcState {
 
 pub type IbcChannelId = String;
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct WasmContractInfo {
+    pub instantiator: Account,
+    pub code_id: u64,
+    pub admin: Option<Account>,
+    pub label: String,
+}
+
 #[derive(Default, Clone)]
 pub struct Db<CH> {
     pub ibc: BTreeMap<IbcChannelId, IbcState>,
-    pub contracts: BTreeMap<Account, CosmwasmContractMeta<Account>>,
+    pub contracts: BTreeMap<Account, WasmContractInfo>,
     pub storage: BTreeMap<Account, Storage>,
     pub bank: Bank,
     pub custom_handler: CH,
@@ -220,13 +230,13 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> Context<'a, CH, AH> {
             self.env.contract.address,
             address
         );
-        let CosmwasmContractMeta { code_id, .. } =
-            self.state
-                .db
-                .contracts
-                .get(&address)
-                .cloned()
-                .ok_or_else(|| VmError::ContractNotFound(address.clone()))?;
+        let WasmContractInfo { code_id, .. } = self
+            .state
+            .db
+            .contracts
+            .get(&address)
+            .cloned()
+            .ok_or_else(|| VmError::ContractNotFound(address.clone()))?;
         let code = self
             .state
             .codes
@@ -268,13 +278,9 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
     type Error = VmError;
 
     fn running_contract_meta(&mut self) -> Result<Self::ContractMeta, Self::Error> {
-        Ok(self
-            .state
-            .db
-            .contracts
-            .get(&Account::try_from(self.env.contract.address.clone()).expect("impossible"))
-            .cloned()
-            .expect("contract is inserted by vm, this should never happen"))
+        self.contract_meta(
+            Account::try_from(self.env.contract.address.clone()).expect("impossible"),
+        )
     }
 
     fn set_contract_meta(
@@ -282,25 +288,34 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
         address: Self::Address,
         contract_meta: Self::ContractMeta,
     ) -> Result<(), Self::Error> {
-        let meta = self
+        let mut meta = self
             .state
             .db
             .contracts
             .get_mut(&address)
             .ok_or(VmError::ContractNotFound(address))?;
 
-        *meta = contract_meta;
+        meta.code_id = contract_meta.code_id;
+        meta.admin = contract_meta.admin;
+        meta.label = contract_meta.label;
 
         Ok(())
     }
 
     fn contract_meta(&mut self, address: Self::Address) -> Result<Self::ContractMeta, Self::Error> {
-        self.state
+        let info = self
+            .state
             .db
             .contracts
-            .get_mut(&address)
-            .ok_or(VmError::ContractNotFound(address))
+            .get(&address)
             .cloned()
+            .ok_or(VmError::ContractNotFound(address))?;
+
+        Ok(CosmwasmContractMeta {
+            code_id: info.code_id,
+            admin: info.admin,
+            label: info.label,
+        })
     }
 
     fn continue_query(
@@ -336,7 +351,11 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
 
     fn continue_instantiate(
         &mut self,
-        contract_meta: Self::ContractMeta,
+        CosmwasmContractMeta {
+            code_id,
+            admin,
+            label,
+        }: CosmwasmContractMeta<Account>,
         funds: Vec<Coin>,
         message: &[u8],
         event_handler: &mut dyn FnMut(Event),
@@ -344,14 +363,20 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
         let (_, code_hash) = &self
             .state
             .codes
-            .get(&contract_meta.code_id)
-            .ok_or(VmError::CodeNotFound(contract_meta.code_id))?;
+            .get(&code_id)
+            .ok_or(VmError::CodeNotFound(code_id))?;
         let address = Account::generate::<AH>(code_hash, message)?;
 
-        self.state
-            .db
-            .contracts
-            .insert(address.clone(), contract_meta);
+        self.state.db.contracts.insert(
+            address.clone(),
+            WasmContractInfo {
+                instantiator: Account::try_from(self.env.contract.address.clone())
+                    .map_err(|_| VmError::InvalidAddress)?,
+                code_id,
+                admin,
+                label,
+            },
+        );
 
         self.load_subvm(address.clone(), funds, |sub_vm| {
             cosmwasm_system_run::<InstantiateCall<Self::MessageCustom>, _>(
@@ -468,7 +493,21 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
         Ok(self.state.db.bank.all_balances(account))
     }
 
-    fn query_info(&mut self, _: Self::Address) -> Result<ContractInfoResponse, Self::Error> {
+    #[cfg(feature = "cosmwasm_1_1")]
+    fn supply(&mut self, denom: String) -> Result<Coin, Self::Error> {
+        log::debug!("Query supply.");
+        Ok(Coin::new(self.state.db.bank.supply(&denom), denom))
+    }
+
+    fn query_contract_info(
+        &mut self,
+        _: Self::Address,
+    ) -> Result<ContractInfoResponse, Self::Error> {
+        Err(VmError::Unsupported)
+    }
+
+    #[cfg(feature = "cosmwasm_1_2")]
+    fn query_code_info(&mut self, _: u64) -> Result<CodeInfoResponse, Self::Error> {
         Err(VmError::Unsupported)
     }
 

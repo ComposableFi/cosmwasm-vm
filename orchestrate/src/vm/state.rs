@@ -1,7 +1,7 @@
 use super::{
     bank::{self, Bank},
     Account, AddressHandler, Context, CustomHandler, Db, ExecutionType, Gas, IbcChannelId,
-    IbcState, VmError,
+    IbcState, VmError, WasmContractInfo,
 };
 use alloc::collections::{BTreeMap, VecDeque};
 use core::fmt::Debug;
@@ -14,10 +14,7 @@ use cosmwasm_vm::{
     },
     input::Input,
     memory::PointerOf,
-    system::{
-        self, CosmwasmCallVM, CosmwasmCodeId, CosmwasmContractMeta, CosmwasmDynamicVM,
-        StargateCosmwasmCallVM,
-    },
+    system::{self, CosmwasmCallVM, CosmwasmCodeId, CosmwasmDynamicVM, StargateCosmwasmCallVM},
     vm::{VmErrorOf, VmInputOf, VmMessageCustomOf},
 };
 use cosmwasm_vm_wasmi::{new_wasmi_vm, OwnedWasmiVM, WasmiBaseVM};
@@ -150,7 +147,9 @@ where
         }
         self.db.contracts.insert(
             contract_addr.clone(),
-            CosmwasmContractMeta {
+            WasmContractInfo {
+                instantiator: Account::try_from(info.sender.clone())
+                    .map_err(|_| VmError::InvalidAddress)?,
                 code_id,
                 admin,
                 label: String::from("test-label"),
