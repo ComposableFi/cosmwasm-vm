@@ -7,6 +7,8 @@ use core::{
     fmt::{Debug, Display},
     marker::PhantomData,
 };
+#[cfg(feature = "cosmwasm_1_2")]
+use cosmwasm_std::CodeInfoResponse;
 #[cfg(feature = "iterator")]
 use cosmwasm_std::Order;
 use cosmwasm_std::{
@@ -265,9 +267,27 @@ where
         self.0.as_context_mut().data_mut().all_balance(account)
     }
 
-    fn query_info(&mut self, address: Self::Address) -> Result<ContractInfoResponse, Self::Error> {
-        self.charge(VmGas::QueryInfo)?;
-        self.0.as_context_mut().data_mut().query_info(address)
+    #[cfg(feature = "cosmwasm_1_1")]
+    fn supply(&mut self, denom: String) -> Result<Coin, Self::Error> {
+        self.charge(VmGas::Supply)?;
+        self.0.as_context_mut().data_mut().supply(denom)
+    }
+
+    fn query_contract_info(
+        &mut self,
+        address: Self::Address,
+    ) -> Result<ContractInfoResponse, Self::Error> {
+        self.charge(VmGas::QueryContractInfo)?;
+        self.0
+            .as_context_mut()
+            .data_mut()
+            .query_contract_info(address)
+    }
+
+    #[cfg(feature = "cosmwasm_1_2")]
+    fn query_code_info(&mut self, id: u64) -> Result<CodeInfoResponse, Self::Error> {
+        self.charge(VmGas::QueryCodeInfo)?;
+        self.0.as_context_mut().data_mut().query_code_info(id)
     }
 
     fn debug(&mut self, message: Vec<u8>) -> Result<(), Self::Error> {
