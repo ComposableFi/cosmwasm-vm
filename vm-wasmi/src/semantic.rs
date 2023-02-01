@@ -470,7 +470,10 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         Ok(vec![])
     }
 
-    fn query_info(&mut self, _: Self::Address) -> Result<ContractInfoResponse, Self::Error> {
+    fn query_contract_info(
+        &mut self,
+        _: Self::Address,
+    ) -> Result<ContractInfoResponse, Self::Error> {
         Err(SimpleVMError::Unsupported)
     }
 
