@@ -3,17 +3,14 @@ name = "cosmwasm-orchestrate"
 version = "0.1.0"
 edition = "2021"
 
-[features]
-cosmwasm_1_1 = ["cosmwasm-std/cosmwasm_1_1", "cosmwasm-vm/cosmwasm_1_1", "cosmwasm-vm-wasmi/cosmwasm_1_1"]
-cosmwasm_1_2 = ["cosmwasm-std/cosmwasm_1_2", "cosmwasm-vm/cosmwasm_1_2", "cosmwasm-vm-wasmi/cosmwasm_1_2", "cosmwasm_1_1"]
-
 [dependencies]
 cosmwasm-vm = { path = "../vm" }
 cosmwasm-vm-wasmi = { path = "../vm-wasmi" }
 cosmwasm-std = { git = "https://github.com/ComposableFi/cosmwasm", rev = "34af48221c90e6818fe341d6d5b15116dfeab671", features = [
   "stargate",
   "ibc3",
-  "staking"
+  "staking",
+  "cosmwasm_1_2"
 ] }
 cosmwasm-crypto = { git = "https://github.com/ComposableFi/cosmwasm", rev = "34af48221c90e6818fe341d6d5b15116dfeab671" }
 serde_json = "1.0"

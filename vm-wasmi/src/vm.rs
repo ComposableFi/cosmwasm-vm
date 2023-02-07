@@ -7,21 +7,17 @@ use core::{
     fmt::{Debug, Display},
     marker::PhantomData,
 };
-#[cfg(feature = "cosmwasm_1_2")]
-use cosmwasm_std::CodeInfoResponse;
 #[cfg(feature = "iterator")]
 use cosmwasm_std::Order;
 use cosmwasm_std::{
-    Addr, Binary, CanonicalAddr, Coin, ContractInfoResponse, Env, Event, MessageInfo, Reply,
-    SystemResult,
+    Addr, Binary, CanonicalAddr, CodeInfoResponse, Coin, ContractInfoResponse, Env, Event,
+    MessageInfo, Reply, SystemResult,
 };
-#[cfg(feature = "cosmwasm_1_2")]
-use cosmwasm_vm::system::CosmwasmCodeId;
 use cosmwasm_vm::{
     executor::{CosmwasmQueryResult, ExecutorError, QueryResult},
     has::Has,
     memory::{MemoryReadError, MemoryWriteError, Pointable, ReadableMemory, WritableMemory},
-    system::{CosmwasmContractMeta, SystemError},
+    system::{CosmwasmCodeId, CosmwasmContractMeta, SystemError},
     transaction::{Transactional, TransactionalErrorOf},
     vm::{
         VMBase, VmAddressOf, VmCanonicalAddressOf, VmContracMetaOf, VmErrorOf, VmGas,
@@ -178,7 +174,6 @@ where
         )
     }
 
-    #[cfg(feature = "cosmwasm_1_2")]
     fn continue_instantiate2(
         &mut self,
         contract_meta: Self::ContractMeta,
@@ -290,7 +285,6 @@ where
         self.0.as_context_mut().data_mut().all_balance(account)
     }
 
-    #[cfg(feature = "cosmwasm_1_1")]
     fn supply(&mut self, denom: String) -> Result<Coin, Self::Error> {
         self.charge(VmGas::Supply)?;
         self.0.as_context_mut().data_mut().supply(denom)
@@ -307,7 +301,6 @@ where
             .query_contract_info(address)
     }
 
-    #[cfg(feature = "cosmwasm_1_2")]
     fn query_code_info(&mut self, id: CosmwasmCodeId) -> Result<CodeInfoResponse, Self::Error> {
         self.charge(VmGas::QueryCodeInfo)?;
         self.0.as_context_mut().data_mut().query_code_info(id)

@@ -26,21 +26,20 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-#[cfg(feature = "cosmwasm_1_2")]
-use crate::system::CosmwasmCodeId;
 use crate::{
     executor::{CosmwasmQueryResult, QueryResult},
     input::Input,
+    system::CosmwasmCodeId,
 };
 use alloc::{string::String, vec::Vec};
 use core::fmt::Debug;
-#[cfg(feature = "cosmwasm_1_2")]
-use cosmwasm_std::CodeInfoResponse;
 #[cfg(feature = "stargate")]
 use cosmwasm_std::IbcTimeout;
 #[cfg(feature = "iterator")]
 use cosmwasm_std::Order;
-use cosmwasm_std::{Binary, Coin, ContractInfoResponse, Event, Reply, SystemResult};
+use cosmwasm_std::{
+    Binary, CodeInfoResponse, Coin, ContractInfoResponse, Event, Reply, SystemResult,
+};
 
 use serde::de::DeserializeOwned;
 
@@ -90,12 +89,10 @@ pub enum VmGas {
     /// Cost of `all_balance`.
     AllBalance,
     /// Cost of `supply`
-    #[cfg(feature = "cosmwasm_1_1")]
     Supply,
     /// Cost of `query_contract_info`.
     QueryContractInfo,
     /// Cost of `query_code_info`.
-    #[cfg(feature = "cosmwasm_1_2")]
     QueryCodeInfo,
     /// Cost of `db_read`.
     DbRead,
@@ -255,7 +252,6 @@ pub trait VMBase {
 
     /// Continue execution by instantiating the given contract `code_id` with a predictable address.
     /// Make sure to align with the implementation: https://github.com/CosmWasm/wasmd/blob/main/x/wasm/keeper/addresses.go
-    #[cfg(feature = "cosmwasm_1_2")]
     fn continue_instantiate2(
         &mut self,
         contract_meta: Self::ContractMeta,
@@ -321,7 +317,6 @@ pub trait VMBase {
     fn all_balance(&mut self, account: &Self::Address) -> Result<Vec<Coin>, Self::Error>;
 
     /// Query for the supply of a `denom`.
-    #[cfg(feature = "cosmwasm_1_1")]
     fn supply(&mut self, denom: String) -> Result<Coin, Self::Error>;
 
     /// Query the contract info.
@@ -331,7 +326,6 @@ pub trait VMBase {
     ) -> Result<ContractInfoResponse, Self::Error>;
 
     /// Query the code info.
-    #[cfg(feature = "cosmwasm_1_2")]
     fn query_code_info(&mut self, id: CosmwasmCodeId) -> Result<CodeInfoResponse, Self::Error>;
 
     /// Log the message

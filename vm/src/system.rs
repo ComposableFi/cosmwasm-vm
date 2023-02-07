@@ -50,12 +50,10 @@ use crate::{
 };
 use alloc::{fmt::Display, format, string::String, vec, vec::Vec};
 use core::fmt::Debug;
-#[cfg(feature = "cosmwasm_1_1")]
-use cosmwasm_std::SupplyResponse;
 use cosmwasm_std::{
     Addr, AllBalanceResponse, Attribute, BalanceResponse, BankMsg, BankQuery, Binary,
     ContractResult, CosmosMsg, Env, Event, MessageInfo, QueryRequest, Reply, ReplyOn, Response,
-    SubMsg, SubMsgResponse, SubMsgResult, SystemResult, WasmMsg, WasmQuery,
+    SubMsg, SubMsgResponse, SubMsgResult, SupplyResponse, SystemResult, WasmMsg, WasmQuery,
 };
 #[cfg(feature = "stargate")]
 use cosmwasm_std::{Empty, IbcMsg};
@@ -634,7 +632,6 @@ where
                     &mut sub_event_handler,
                 )
                 .map(|(_, data)| data),
-            #[cfg(feature = "cosmwasm_1_2")]
             WasmMsg::Instantiate2 {
                 admin,
                 code_id,
@@ -950,7 +947,6 @@ where
                     serialized_info,
                 ))))
             }
-            #[cfg(feature = "cosmwasm_1_1")]
             BankQuery::Supply { denom } => {
                 // `SupplyResponse` is non-exhaustive, so can't define as `SupplyResponse { denom }`
                 let mut supply = SupplyResponse::default();
@@ -991,7 +987,6 @@ where
                     serialized_info,
                 ))))
             }
-            #[cfg(feature = "cosmwasm_1_2")]
             WasmQuery::CodeInfo { code_id } => {
                 let info = vm.query_code_info(code_id)?;
                 let serialized_info =

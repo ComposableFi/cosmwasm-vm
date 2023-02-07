@@ -14,8 +14,6 @@ default = ["iterator", "stargate", "ibc3"]
 iterator = ["cosmwasm-vm/iterator"]
 stargate = ["cosmwasm-vm/stargate"]
 ibc3 = ["cosmwasm-vm/ibc3"]
-cosmwasm_1_1 = ["cosmwasm-std/cosmwasm_1_1", "cosmwasm-vm/cosmwasm_1_1"]
-cosmwasm_1_2 = ["cosmwasm-std/cosmwasm_1_2", "cosmwasm-vm/cosmwasm_1_2", "cosmwasm_1_1"]
 
 [dependencies]
 serde = { version = "1", default-features = false, features = ["derive"] }
@@ -27,6 +25,7 @@ wasmi-validation = { git = "https://github.com/ComposableFi/wasmi", rev = "cd8c0
 wasm-instrument = { version = "0.2", default-features = false }
 cosmwasm-std = { git = "https://github.com/ComposableFi/cosmwasm", rev = "34af48221c90e6818fe341d6d5b15116dfeab671", default-features = false, features = [
   "iterator",
+  "cosmwasm_1_2"
 ] }
 cosmwasm-vm = { path = "../vm", default-features = false }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }

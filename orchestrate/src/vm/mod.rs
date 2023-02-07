@@ -13,21 +13,17 @@ use super::ExecutionType;
 use alloc::collections::BTreeMap;
 use bank::Bank;
 use core::{fmt::Debug, num::NonZeroU32};
-#[cfg(feature = "cosmwasm_1_2")]
-use cosmwasm_std::CodeInfoResponse;
 use cosmwasm_std::{
-    Binary, Coin, ContractInfo, ContractInfoResponse, Env, Event, IbcTimeout, MessageInfo, Order,
-    Reply, SystemResult,
+    Binary, CodeInfoResponse, Coin, ContractInfo, ContractInfoResponse, Env, Event, IbcTimeout,
+    MessageInfo, Order, Reply, SystemResult,
 };
-#[cfg(feature = "cosmwasm_1_2")]
-use cosmwasm_vm::system::CosmwasmCodeId;
 use cosmwasm_vm::{
     executor::{
         cosmwasm_call, CosmwasmQueryResult, ExecuteCall, InstantiateCall, MigrateCall, QueryCall,
         QueryResult, ReplyCall,
     },
     has::Has,
-    system::{cosmwasm_system_run, CosmwasmContractMeta, SystemError},
+    system::{cosmwasm_system_run, CosmwasmCodeId, CosmwasmContractMeta, SystemError},
     transaction::Transactional,
     vm::{VMBase, VmErrorOf, VmGas, VmGasCheckpoint},
 };
@@ -402,7 +398,6 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
         self.continue_instantiate_impl(contract_meta, funds, message, b"salt", event_handler)
     }
 
-    #[cfg(feature = "cosmwasm_1_2")]
     fn continue_instantiate2(
         &mut self,
         contract_meta: CosmwasmContractMeta<Account>,
@@ -519,7 +514,6 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
         Ok(self.state.db.bank.all_balances(account))
     }
 
-    #[cfg(feature = "cosmwasm_1_1")]
     fn supply(&mut self, denom: String) -> Result<Coin, Self::Error> {
         log::debug!("Query supply.");
         Ok(Coin::new(self.state.db.bank.supply(&denom), denom))
@@ -548,7 +542,6 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
         Ok(contract_info_response)
     }
 
-    #[cfg(feature = "cosmwasm_1_2")]
     fn query_code_info(
         &mut self,
         code_id: CosmwasmCodeId,
