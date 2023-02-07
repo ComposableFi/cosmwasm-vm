@@ -15,6 +15,8 @@ use cosmwasm_std::{
     Addr, Binary, CanonicalAddr, Coin, ContractInfoResponse, Env, Event, MessageInfo, Reply,
     SystemResult,
 };
+#[cfg(feature = "cosmwasm_1_2")]
+use cosmwasm_vm::system::CosmwasmCodeId;
 use cosmwasm_vm::{
     executor::{CosmwasmQueryResult, ExecutorError, QueryResult},
     has::Has,
@@ -306,7 +308,7 @@ where
     }
 
     #[cfg(feature = "cosmwasm_1_2")]
-    fn query_code_info(&mut self, id: u64) -> Result<CodeInfoResponse, Self::Error> {
+    fn query_code_info(&mut self, id: CosmwasmCodeId) -> Result<CodeInfoResponse, Self::Error> {
         self.charge(VmGas::QueryCodeInfo)?;
         self.0.as_context_mut().data_mut().query_code_info(id)
     }

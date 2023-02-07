@@ -26,6 +26,8 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+#[cfg(feature = "cosmwasm_1_2")]
+use crate::system::CosmwasmCodeId;
 use crate::{
     executor::{CosmwasmQueryResult, QueryResult},
     input::Input,
@@ -330,7 +332,7 @@ pub trait VMBase {
 
     /// Query the code info.
     #[cfg(feature = "cosmwasm_1_2")]
-    fn query_code_info(&mut self, id: u64) -> Result<CodeInfoResponse, Self::Error>;
+    fn query_code_info(&mut self, id: CosmwasmCodeId) -> Result<CodeInfoResponse, Self::Error>;
 
     /// Log the message
     fn debug(&mut self, message: Vec<u8>) -> Result<(), Self::Error>;

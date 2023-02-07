@@ -19,6 +19,8 @@ use cosmwasm_std::{
     Binary, Coin, ContractInfo, ContractInfoResponse, Env, Event, IbcTimeout, MessageInfo, Order,
     Reply, SystemResult,
 };
+#[cfg(feature = "cosmwasm_1_2")]
+use cosmwasm_vm::system::CosmwasmCodeId;
 use cosmwasm_vm::{
     executor::{
         cosmwasm_call, CosmwasmQueryResult, ExecuteCall, InstantiateCall, MigrateCall, QueryCall,
@@ -263,6 +265,47 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> Context<'a, CH, AH> {
         )?;
         Ok(f(&mut sub_vm))
     }
+
+    fn continue_instantiate_impl(
+        &mut self,
+        CosmwasmContractMeta {
+            code_id,
+            admin,
+            label,
+        }: CosmwasmContractMeta<Account>,
+        funds: Vec<Coin>,
+        message: &[u8],
+        salt: &[u8],
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<(Account, Option<Binary>), VmError> {
+        let (_, code_hash) = &self
+            .state
+            .codes
+            .get(&code_id)
+            .ok_or(VmError::CodeNotFound(code_id))?;
+        let address =
+            Account::generate::<AH>(&Account(self.env.contract.address.clone()), code_hash, salt)?;
+
+        self.state.db.contracts.insert(
+            address.clone(),
+            WasmContractInfo {
+                instantiator: Account::try_from(self.env.contract.address.clone())
+                    .map_err(|_| VmError::InvalidAddress)?,
+                code_id,
+                admin,
+                label,
+            },
+        );
+
+        self.load_subvm(address.clone(), funds, |sub_vm| {
+            cosmwasm_system_run::<InstantiateCall<MessageCustomOf<CH>>, _>(
+                sub_vm,
+                message,
+                event_handler,
+            )
+        })?
+        .map(|data| (address, data))
+    }
 }
 
 impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
@@ -351,41 +394,24 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
 
     fn continue_instantiate(
         &mut self,
-        CosmwasmContractMeta {
-            code_id,
-            admin,
-            label,
-        }: CosmwasmContractMeta<Account>,
+        contract_meta: CosmwasmContractMeta<Account>,
         funds: Vec<Coin>,
         message: &[u8],
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<(Self::Address, Option<Binary>), Self::Error> {
-        let (_, code_hash) = &self
-            .state
-            .codes
-            .get(&code_id)
-            .ok_or(VmError::CodeNotFound(code_id))?;
-        let address = Account::generate::<AH>(code_hash, message)?;
+        self.continue_instantiate_impl(contract_meta, funds, message, b"salt", event_handler)
+    }
 
-        self.state.db.contracts.insert(
-            address.clone(),
-            WasmContractInfo {
-                instantiator: Account::try_from(self.env.contract.address.clone())
-                    .map_err(|_| VmError::InvalidAddress)?,
-                code_id,
-                admin,
-                label,
-            },
-        );
-
-        self.load_subvm(address.clone(), funds, |sub_vm| {
-            cosmwasm_system_run::<InstantiateCall<Self::MessageCustom>, _>(
-                sub_vm,
-                message,
-                event_handler,
-            )
-        })?
-        .map(|data| (address, data))
+    #[cfg(feature = "cosmwasm_1_2")]
+    fn continue_instantiate2(
+        &mut self,
+        contract_meta: CosmwasmContractMeta<Account>,
+        funds: Vec<Coin>,
+        message: &[u8],
+        salt: &[u8],
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<(Self::Address, Option<Binary>), Self::Error> {
+        self.continue_instantiate_impl(contract_meta, funds, message, salt, event_handler)
     }
 
     fn continue_migrate(
@@ -501,14 +527,42 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
 
     fn query_contract_info(
         &mut self,
-        _: Self::Address,
+        contract_address: Self::Address,
     ) -> Result<ContractInfoResponse, Self::Error> {
-        Err(VmError::Unsupported)
+        let contract_info = self
+            .state
+            .db
+            .contracts
+            .get(&contract_address)
+            .ok_or(VmError::ContractNotFound(contract_address.clone()))?;
+        let mut contract_info_response = ContractInfoResponse::default();
+        contract_info_response.code_id = contract_info.code_id;
+        contract_info_response.admin = contract_info.admin.clone().map(Into::into);
+        contract_info_response.creator = contract_info.instantiator.clone().into();
+
+        let ibc_port_id = format!("{contract_address}");
+        if self.state.db.ibc.contains_key(&ibc_port_id) {
+            contract_info_response.ibc_port = Some(format!("{contract_address}"));
+        }
+
+        Ok(contract_info_response)
     }
 
     #[cfg(feature = "cosmwasm_1_2")]
-    fn query_code_info(&mut self, _: u64) -> Result<CodeInfoResponse, Self::Error> {
-        Err(VmError::Unsupported)
+    fn query_code_info(
+        &mut self,
+        code_id: CosmwasmCodeId,
+    ) -> Result<CodeInfoResponse, Self::Error> {
+        let (_, code_hash) = self
+            .state
+            .codes
+            .get(&code_id)
+            .ok_or(VmError::CodeNotFound(code_id))?;
+        let mut code_info_response = CodeInfoResponse::default();
+        code_info_response.code_id = code_id;
+        code_info_response.checksum = code_hash.as_slice().into();
+        code_info_response.creator = Account::generate_from_seed::<AH>("creator")?.into();
+        Ok(code_info_response)
     }
 
     fn debug(&mut self, message: Vec<u8>) -> Result<(), Self::Error> {

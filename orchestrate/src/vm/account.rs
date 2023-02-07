@@ -74,8 +74,21 @@ impl Account {
     /// * `message` - Raw instantiate message
     ///
     /// The address is generated with the algorithm: `Sha1(code_hash + message)`
-    pub fn generate<AH: AddressHandler>(code_hash: &[u8], message: &[u8]) -> Result<Self, VmError> {
-        let addr = AH::addr_generate([code_hash, message])?;
+    pub fn generate<AH: AddressHandler>(
+        instantiator: &Account,
+        code_hash: &[u8],
+        salt: &[u8],
+    ) -> Result<Self, VmError> {
+        let canonical_addr = AH::addr_canonicalize(instantiator.0.as_ref())?;
+        let addr = AH::addr_generate([
+            b"wasm\0".as_ref(),
+            &(code_hash.len() as u64).to_be_bytes(),
+            code_hash,
+            &(canonical_addr.len() as u64).to_be_bytes(),
+            &canonical_addr,
+            &(salt.len() as u64).to_be_bytes(),
+            salt,
+        ])?;
         Ok(Self::unchecked(addr))
     }
 
@@ -90,11 +103,12 @@ impl Account {
     /// execution.
     /// See [`Self::generate`] for the generation algorithm
     pub fn generate_by_code<AH: AddressHandler>(
+        instantiator: &Account,
         code: &[u8],
-        message: &[u8],
+        salt: &[u8],
     ) -> Result<Self, VmError> {
         let code_hash = Sha256::new().chain_update(code).finalize();
-        Self::generate::<AH>(&code_hash[..], message)
+        Self::generate::<AH>(instantiator, &code_hash[..], salt)
     }
 
     /// Generates an `Account` based on the provided `seed`

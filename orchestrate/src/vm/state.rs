@@ -139,7 +139,7 @@ where
                 .codes
                 .get(&code_id)
                 .ok_or(VmError::CodeNotFound(code_id))?;
-            Account::generate::<AH>(code_hash, message)?
+            Account::generate::<AH>(&Account(info.sender.clone()), code_hash, b"salt")?
         };
         self.gas = Gas::new(gas);
         if self.db.contracts.contains_key(&contract_addr) {
