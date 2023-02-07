@@ -23,8 +23,9 @@ log = { version = "0.4", default-features = false }
 wasmi = { version = "0.22", default-features = false }
 wasmi-validation = { git = "https://github.com/ComposableFi/wasmi", rev = "cd8c0c775a1d197a35ff3d5c7d6cded3d476411b", default-features = false }
 wasm-instrument = { version = "0.2", default-features = false }
-cosmwasm-std = { git = "https://github.com/ComposableFi/cosmwasm", rev = "21351cc1ced863b9af7c8a69f923036bc919b3b1", default-features = false, features = [
+cosmwasm-std = { git = "https://github.com/ComposableFi/cosmwasm", rev = "34af48221c90e6818fe341d6d5b15116dfeab671", default-features = false, features = [
   "iterator",
+  "cosmwasm_1_2"
 ] }
 cosmwasm-vm = { path = "../vm", default-features = false }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }

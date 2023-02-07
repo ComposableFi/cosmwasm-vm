@@ -53,7 +53,7 @@ use core::fmt::Debug;
 use cosmwasm_std::{
     Addr, AllBalanceResponse, Attribute, BalanceResponse, BankMsg, BankQuery, Binary,
     ContractResult, CosmosMsg, Env, Event, MessageInfo, QueryRequest, Reply, ReplyOn, Response,
-    SubMsg, SubMsgResponse, SubMsgResult, SystemResult, WasmMsg, WasmQuery,
+    SubMsg, SubMsgResponse, SubMsgResult, SupplyResponse, SystemResult, WasmMsg, WasmQuery,
 };
 #[cfg(feature = "stargate")]
 use cosmwasm_std::{Empty, IbcMsg};
@@ -632,6 +632,29 @@ where
                     &mut sub_event_handler,
                 )
                 .map(|(_, data)| data),
+            WasmMsg::Instantiate2 {
+                admin,
+                code_id,
+                label,
+                msg,
+                funds,
+                salt,
+            } => vm
+                .continue_instantiate2(
+                    CosmwasmContractMeta {
+                        code_id,
+                        admin: match admin {
+                            Some(admin) => Some(admin.try_into()?),
+                            None => None,
+                        },
+                        label,
+                    },
+                    funds,
+                    &salt,
+                    &msg,
+                    &mut sub_event_handler,
+                )
+                .map(|(_, data)| data),
             WasmMsg::Migrate {
                 contract_addr,
                 new_code_id,
@@ -924,6 +947,16 @@ where
                     serialized_info,
                 ))))
             }
+            BankQuery::Supply { denom } => {
+                // `SupplyResponse` is non-exhaustive, so can't define as `SupplyResponse { denom }`
+                let mut supply = SupplyResponse::default();
+                supply.amount = vm.supply(denom)?;
+                let serialized_info =
+                    serde_json::to_vec(&supply).map_err(|_| SystemError::FailedToSerialize)?;
+                Ok(SystemResult::Ok(ContractResult::Ok(Binary(
+                    serialized_info,
+                ))))
+            }
             _ => Err(SystemError::UnsupportedMessage.into()),
         },
         QueryRequest::Wasm(wasm_query) => match wasm_query {
@@ -947,7 +980,15 @@ where
             }
             WasmQuery::ContractInfo { contract_addr } => {
                 let vm_contract_addr = contract_addr.try_into()?;
-                let info = vm.query_info(vm_contract_addr)?;
+                let info = vm.query_contract_info(vm_contract_addr)?;
+                let serialized_info =
+                    serde_json::to_vec(&info).map_err(|_| SystemError::FailedToSerialize)?;
+                Ok(SystemResult::Ok(ContractResult::Ok(Binary(
+                    serialized_info,
+                ))))
+            }
+            WasmQuery::CodeInfo { code_id } => {
+                let info = vm.query_code_info(code_id)?;
                 let serialized_info =
                     serde_json::to_vec(&info).map_err(|_| SystemError::FailedToSerialize)?;
                 Ok(SystemResult::Ok(ContractResult::Ok(Binary(

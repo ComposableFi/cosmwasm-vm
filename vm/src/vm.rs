@@ -29,6 +29,7 @@
 use crate::{
     executor::{CosmwasmQueryResult, QueryResult},
     input::Input,
+    system::CosmwasmCodeId,
 };
 use alloc::{string::String, vec::Vec};
 use core::fmt::Debug;
@@ -36,7 +37,9 @@ use core::fmt::Debug;
 use cosmwasm_std::IbcTimeout;
 #[cfg(feature = "iterator")]
 use cosmwasm_std::Order;
-use cosmwasm_std::{Binary, Coin, ContractInfoResponse, Event, Reply, SystemResult};
+use cosmwasm_std::{
+    Binary, CodeInfoResponse, Coin, ContractInfoResponse, Event, Reply, SystemResult,
+};
 
 use serde::de::DeserializeOwned;
 
@@ -65,6 +68,8 @@ pub enum VmGas {
     ContinueExecute { nb_of_coins: u32 },
     /// Cost of `continue_instantiate`.
     ContinueInstantiate { nb_of_coins: u32 },
+    /// Cost of `continue_instantiate2`
+    ContinueInstantiate2 { nb_of_coins: u32 },
     /// Cost of `continue_migrate`.
     ContinueMigrate,
     /// Cost of `continue_reply`
@@ -83,8 +88,12 @@ pub enum VmGas {
     Balance,
     /// Cost of `all_balance`.
     AllBalance,
-    /// Cost of `query_info`.
-    QueryInfo,
+    /// Cost of `supply`
+    Supply,
+    /// Cost of `query_contract_info`.
+    QueryContractInfo,
+    /// Cost of `query_code_info`.
+    QueryCodeInfo,
     /// Cost of `db_read`.
     DbRead,
     /// Cost of `db_write`.
@@ -241,6 +250,17 @@ pub trait VMBase {
         event_handler: &mut dyn FnMut(Event),
     ) -> Result<(Self::Address, Option<Binary>), Self::Error>;
 
+    /// Continue execution by instantiating the given contract `code_id` with a predictable address.
+    /// Make sure to align with the implementation: https://github.com/CosmWasm/wasmd/blob/main/x/wasm/keeper/addresses.go
+    fn continue_instantiate2(
+        &mut self,
+        contract_meta: Self::ContractMeta,
+        funds: Vec<Coin>,
+        salt: &[u8],
+        message: &[u8],
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<(Self::Address, Option<Binary>), Self::Error>;
+
     /// Continue execution by calling migrate at the given contract address.
     fn continue_migrate(
         &mut self,
@@ -289,14 +309,24 @@ pub trait VMBase {
 
     /// Burn the `funds` from the current contract.
     fn burn(&mut self, funds: &[Coin]) -> Result<(), Self::Error>;
+
     /// Query the balance of `denom` tokens.
     fn balance(&mut self, account: &Self::Address, denom: String) -> Result<Coin, Self::Error>;
 
     /// Query for the balance of all tokens.
     fn all_balance(&mut self, account: &Self::Address) -> Result<Vec<Coin>, Self::Error>;
 
+    /// Query for the supply of a `denom`.
+    fn supply(&mut self, denom: String) -> Result<Coin, Self::Error>;
+
     /// Query the contract info.
-    fn query_info(&mut self, address: Self::Address) -> Result<ContractInfoResponse, Self::Error>;
+    fn query_contract_info(
+        &mut self,
+        address: Self::Address,
+    ) -> Result<ContractInfoResponse, Self::Error>;
+
+    /// Query the code info.
+    fn query_code_info(&mut self, id: CosmwasmCodeId) -> Result<CodeInfoResponse, Self::Error>;
 
     /// Log the message
     fn debug(&mut self, message: Vec<u8>) -> Result<(), Self::Error>;

@@ -22,8 +22,9 @@ use cosmwasm_std::IbcTimeout;
 #[cfg(feature = "iterator")]
 use cosmwasm_std::Order;
 use cosmwasm_std::{
-    Addr, Attribute, Binary, BlockInfo, CanonicalAddr, Coin, ContractInfo, ContractInfoResponse,
-    ContractResult, Empty, Env, Event, MessageInfo, Reply, SystemResult, Timestamp,
+    Addr, Attribute, Binary, BlockInfo, CanonicalAddr, CodeInfoResponse, Coin, ContractInfo,
+    ContractInfoResponse, ContractResult, Empty, Env, Event, MessageInfo, Reply, SystemResult,
+    Timestamp,
 };
 use cosmwasm_vm::{
     executor::{
@@ -374,6 +375,29 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         .map(|data| (BankAccount(address), data))
     }
 
+    fn continue_instantiate2(
+        &mut self,
+        contract_meta: Self::ContractMeta,
+        funds: Vec<Coin>,
+        message: &[u8],
+        _salt: &[u8],
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<(Self::Address, Option<Binary>), Self::Error> {
+        let BankAccount(address) = self.extension.next_account_id;
+        self.extension.next_account_id = BankAccount(address + 1);
+        self.extension
+            .contracts
+            .insert(BankAccount(address), contract_meta);
+
+        let mut sub_vm = self.load_subvm(BankAccount(address), funds)?;
+        cosmwasm_system_run::<InstantiateCall<Self::MessageCustom>, _>(
+            &mut sub_vm,
+            message,
+            event_handler,
+        )
+        .map(|data| (BankAccount(address), data))
+    }
+
     fn continue_migrate(
         &mut self,
         address: Self::Address,
@@ -465,12 +489,24 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         Err(SimpleVMError::Unsupported)
     }
 
+    fn supply(&mut self, _: String) -> Result<Coin, Self::Error> {
+        log::debug!("Supply.");
+        Err(SimpleVMError::Unsupported)
+    }
+
     fn all_balance(&mut self, _: &Self::Address) -> Result<Vec<Coin>, Self::Error> {
         log::debug!("Query all balance.");
         Ok(vec![])
     }
 
-    fn query_info(&mut self, _: Self::Address) -> Result<ContractInfoResponse, Self::Error> {
+    fn query_contract_info(
+        &mut self,
+        _: Self::Address,
+    ) -> Result<ContractInfoResponse, Self::Error> {
+        Err(SimpleVMError::Unsupported)
+    }
+
+    fn query_code_info(&mut self, _: CosmwasmCodeId) -> Result<CodeInfoResponse, Self::Error> {
         Err(SimpleVMError::Unsupported)
     }
 

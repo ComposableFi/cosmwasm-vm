@@ -16,8 +16,9 @@ stargate = ["cosmwasm-std/stargate"]
 ibc3 = ["cosmwasm-std/ibc3"]
 
 [dependencies]
-cosmwasm-std = { git = "https://github.com/ComposableFi/cosmwasm", rev = "21351cc1ced863b9af7c8a69f923036bc919b3b1", default-features = false, features = [
+cosmwasm-std = { git = "https://github.com/ComposableFi/cosmwasm", rev = "34af48221c90e6818fe341d6d5b15116dfeab671", default-features = false, features = [
   "iterator",
+  "cosmwasm_1_2",
 ] }
 log = { version = "0.4", default-features = false }
 num = { version = "0.4", default-features = false }

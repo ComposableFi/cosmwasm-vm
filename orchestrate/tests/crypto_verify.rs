@@ -61,6 +61,8 @@ fn setup() -> (Account, State<(), WasmAddressHandler>) {
         .add_code(code_id, wasm_code.as_slice())
         .build();
 
+    let sender = Account::generate_from_seed::<WasmAddressHandler>(CREATOR).unwrap();
+
     let (addr, _) = <Api<Direct>>::instantiate_raw(
         &mut state,
         code_id,
@@ -71,7 +73,7 @@ fn setup() -> (Account, State<(), WasmAddressHandler>) {
             chain_id: "hello".into(),
         },
         None,
-        message_info(&Account::unchecked(CREATOR)),
+        message_info(&sender),
         100_000_000,
         r#"{}"#.as_bytes(),
     )

@@ -170,18 +170,6 @@ dependencies = [
 
 [[package]]
 name = "cosmwasm-crypto"
-version = "1.1.6"
-source = "git+https://github.com/ComposableFi/cosmwasm?rev=21351cc1ced863b9af7c8a69f923036bc919b3b1#21351cc1ced863b9af7c8a69f923036bc919b3b1"
-dependencies = [
- "digest 0.10.6",
- "ed25519-zebra",
- "k256",
- "rand_core 0.6.4",
- "thiserror",
-]
-
-[[package]]
-name = "cosmwasm-crypto"
 version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "227315dc11f0bb22a273d0c43d3ba8ef52041c42cf959f09045388a89c57e661"
@@ -194,11 +182,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "cosmwasm-derive"
-version = "1.1.6"
-source = "git+https://github.com/ComposableFi/cosmwasm?rev=21351cc1ced863b9af7c8a69f923036bc919b3b1#21351cc1ced863b9af7c8a69f923036bc919b3b1"
+name = "cosmwasm-crypto"
+version = "1.2.0"
+source = "git+https://github.com/ComposableFi/cosmwasm?rev=34af48221c90e6818fe341d6d5b15116dfeab671#34af48221c90e6818fe341d6d5b15116dfeab671"
 dependencies = [
- "syn",
+ "digest 0.10.6",
+ "ed25519-zebra",
+ "k256",
+ "rand_core 0.6.4",
+ "thiserror",
 ]
 
 [[package]]
@@ -211,6 +203,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cosmwasm-derive"
+version = "1.2.0"
+source = "git+https://github.com/ComposableFi/cosmwasm?rev=34af48221c90e6818fe341d6d5b15116dfeab671#34af48221c90e6818fe341d6d5b15116dfeab671"
+dependencies = [
+ "syn",
+]
+
+[[package]]
 name = "cosmwasm-orchestrate"
 version = "0.1.0"
 dependencies = [
@@ -218,8 +218,8 @@ dependencies = [
  "base64",
  "bech32",
  "bs58",
- "cosmwasm-crypto 1.1.6",
- "cosmwasm-std 1.1.6",
+ "cosmwasm-crypto 1.2.0",
+ "cosmwasm-std 1.2.0",
  "cosmwasm-vm",
  "cosmwasm-vm-wasmi",
  "env_logger 0.10.0",
@@ -260,24 +260,6 @@ dependencies = [
 
 [[package]]
 name = "cosmwasm-std"
-version = "1.1.6"
-source = "git+https://github.com/ComposableFi/cosmwasm?rev=21351cc1ced863b9af7c8a69f923036bc919b3b1#21351cc1ced863b9af7c8a69f923036bc919b3b1"
-dependencies = [
- "base64",
- "cosmwasm-crypto 1.1.6",
- "cosmwasm-derive 1.1.6",
- "derivative",
- "forward_ref",
- "hex",
- "schemars",
- "serde",
- "serde-json-wasm",
- "thiserror",
- "uint",
-]
-
-[[package]]
-name = "cosmwasm-std"
 version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b13d5a84d15cf7be17dc249a21588cdb0f7ef308907c50ce2723316a7d79c3dc"
@@ -290,7 +272,26 @@ dependencies = [
  "hex",
  "schemars",
  "serde",
- "serde-json-wasm",
+ "serde-json-wasm 0.4.1",
+ "thiserror",
+ "uint",
+]
+
+[[package]]
+name = "cosmwasm-std"
+version = "1.2.0"
+source = "git+https://github.com/ComposableFi/cosmwasm?rev=34af48221c90e6818fe341d6d5b15116dfeab671#34af48221c90e6818fe341d6d5b15116dfeab671"
+dependencies = [
+ "base64",
+ "cosmwasm-crypto 1.2.0",
+ "cosmwasm-derive 1.2.0",
+ "derivative",
+ "forward_ref",
+ "hex",
+ "schemars",
+ "serde",
+ "serde-json-wasm 0.5.0",
+ "sha2 0.10.6",
  "thiserror",
  "uint",
 ]
@@ -299,7 +300,7 @@ dependencies = [
 name = "cosmwasm-vm"
 version = "0.1.0"
 dependencies = [
- "cosmwasm-std 1.1.6",
+ "cosmwasm-std 1.2.0",
  "env_logger 0.9.3",
  "log",
  "num",
@@ -313,7 +314,7 @@ name = "cosmwasm-vm-wasmi"
 version = "0.1.0"
 dependencies = [
  "cosmwasm-crypto 1.1.5",
- "cosmwasm-std 1.1.6",
+ "cosmwasm-std 1.2.0",
  "cosmwasm-vm",
  "cw20-ics20",
  "either",
@@ -1451,6 +1452,15 @@ name = "serde-json-wasm"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "479b4dbc401ca13ee8ce902851b834893251404c4f3c65370a49e047a6be09a5"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "serde-json-wasm"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a15bee9b04dd165c3f4e142628982ddde884c2022a89e8ddf99c4829bf2c3a58"
 dependencies = [
  "serde",
 ]

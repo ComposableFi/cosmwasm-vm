@@ -10,14 +10,14 @@ use core::{
 #[cfg(feature = "iterator")]
 use cosmwasm_std::Order;
 use cosmwasm_std::{
-    Addr, Binary, CanonicalAddr, Coin, ContractInfoResponse, Env, Event, MessageInfo, Reply,
-    SystemResult,
+    Addr, Binary, CanonicalAddr, CodeInfoResponse, Coin, ContractInfoResponse, Env, Event,
+    MessageInfo, Reply, SystemResult,
 };
 use cosmwasm_vm::{
     executor::{CosmwasmQueryResult, ExecutorError, QueryResult},
     has::Has,
     memory::{MemoryReadError, MemoryWriteError, Pointable, ReadableMemory, WritableMemory},
-    system::{CosmwasmContractMeta, SystemError},
+    system::{CosmwasmCodeId, CosmwasmContractMeta, SystemError},
     transaction::{Transactional, TransactionalErrorOf},
     vm::{
         VMBase, VmAddressOf, VmCanonicalAddressOf, VmContracMetaOf, VmErrorOf, VmGas,
@@ -174,6 +174,26 @@ where
         )
     }
 
+    fn continue_instantiate2(
+        &mut self,
+        contract_meta: Self::ContractMeta,
+        funds: Vec<Coin>,
+        salt: &[u8],
+        message: &[u8],
+        event_handler: &mut dyn FnMut(Event),
+    ) -> Result<(Self::Address, Option<Binary>), Self::Error> {
+        self.charge(VmGas::ContinueInstantiate2 {
+            nb_of_coins: u32::try_from(funds.len()).map_err(|_| WasmiVMError::MaxLimitExceeded)?,
+        })?;
+        self.0.as_context_mut().data_mut().continue_instantiate2(
+            contract_meta,
+            funds,
+            salt,
+            message,
+            event_handler,
+        )
+    }
+
     fn continue_migrate(
         &mut self,
         address: Self::Address,
@@ -265,9 +285,25 @@ where
         self.0.as_context_mut().data_mut().all_balance(account)
     }
 
-    fn query_info(&mut self, address: Self::Address) -> Result<ContractInfoResponse, Self::Error> {
-        self.charge(VmGas::QueryInfo)?;
-        self.0.as_context_mut().data_mut().query_info(address)
+    fn supply(&mut self, denom: String) -> Result<Coin, Self::Error> {
+        self.charge(VmGas::Supply)?;
+        self.0.as_context_mut().data_mut().supply(denom)
+    }
+
+    fn query_contract_info(
+        &mut self,
+        address: Self::Address,
+    ) -> Result<ContractInfoResponse, Self::Error> {
+        self.charge(VmGas::QueryContractInfo)?;
+        self.0
+            .as_context_mut()
+            .data_mut()
+            .query_contract_info(address)
+    }
+
+    fn query_code_info(&mut self, id: CosmwasmCodeId) -> Result<CodeInfoResponse, Self::Error> {
+        self.charge(VmGas::QueryCodeInfo)?;
+        self.0.as_context_mut().data_mut().query_code_info(id)
     }
 
     fn debug(&mut self, message: Vec<u8>) -> Result<(), Self::Error> {

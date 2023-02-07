@@ -92,6 +92,10 @@ impl Bank {
             None => Vec::new(),
         }
     }
+
+    pub fn supply<S: AsRef<str>>(&self, denom: S) -> u128 {
+        *self.supply.get(denom.as_ref()).unwrap_or(&0)
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
