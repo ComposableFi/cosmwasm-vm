@@ -575,7 +575,7 @@ fn sanitize_custom_attributes(
 #[allow(clippy::too_many_lines)]
 fn dispatch_submessage<V, I>(
     vm: &mut V,
-    info: &MessageInfo,
+    caller_contract: &Addr,
     msg: CosmosMsg<VmMessageCustomOf<V>>,
     gas_limit: Option<u64>,
     event_handler: &mut dyn FnMut(Event),
@@ -661,7 +661,7 @@ where
                 msg: Binary(msg),
             } => {
                 let contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
-                let sender = VmAddressOf::<V>::try_from(info.sender.clone().into_string())?;
+                let sender = VmAddressOf::<V>::try_from(caller_contract.clone().into_string())?;
                 migrate::<V>(vm, sender, contract_addr.clone(), new_code_id)?;
                 vm.continue_migrate(contract_addr, &msg, &mut sub_event_handler)
             }
@@ -671,12 +671,12 @@ where
             } => {
                 let new_admin = new_admin.try_into()?;
                 let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
-                update_admin::<V>(vm, &info.sender, vm_contract_addr, Some(new_admin))?;
+                update_admin::<V>(vm, caller_contract, vm_contract_addr, Some(new_admin))?;
                 Ok(None)
             }
             WasmMsg::ClearAdmin { contract_addr } => {
                 let vm_contract_addr = VmAddressOf::<V>::try_from(contract_addr)?;
-                update_admin::<V>(vm, &info.sender, vm_contract_addr, None)?;
+                update_admin::<V>(vm, caller_contract, vm_contract_addr, None)?;
                 Ok(None)
             }
             _ => Err(SystemError::UnsupportedMessage.into()),
@@ -833,7 +833,13 @@ where
                     // The result MUST be captured to determine whether we rollback or commit the local transaction.
                     // We MUST not return using something like the questionmark operator, as we want to catch both the success and failure branches here.
                     // Both branches may be used depending on the reply attached to the message. See reply_on.
-                    let sub_res = dispatch_submessage(vm, &info, msg, gas_limit, event_handler);
+                    let sub_res = dispatch_submessage(
+                        vm,
+                        &env.contract.address,
+                        msg,
+                        gas_limit,
+                        event_handler,
+                    );
 
                     log::debug!("Submessage result: {:?}", sub_res);
 
