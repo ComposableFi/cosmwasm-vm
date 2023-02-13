@@ -1,4 +1,5 @@
 use super::VmError;
+use alloc::{string::String, vec::Vec};
 use bech32::{self, FromBase32, ToBase32, Variant};
 use sha2::{Digest, Sha256};
 
