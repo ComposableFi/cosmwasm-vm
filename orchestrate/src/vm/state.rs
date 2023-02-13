@@ -3,7 +3,12 @@ use super::{
     Account, AddressHandler, Context, CustomHandler, Db, ExecutionType, Gas, IbcChannelId,
     IbcState, VmError, WasmContractInfo,
 };
-use alloc::collections::{BTreeMap, VecDeque};
+use alloc::{
+    collections::{BTreeMap, VecDeque},
+    string::String,
+    vec,
+    vec::Vec,
+};
 use core::fmt::Debug;
 use core::marker::PhantomData;
 use cosmwasm_std::{BlockInfo, Coin, ContractInfo, Env, MessageInfo, Timestamp, TransactionInfo};

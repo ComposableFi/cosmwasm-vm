@@ -11,6 +11,7 @@ pub use state::*;
 
 use super::ExecutionType;
 use alloc::collections::BTreeMap;
+use alloc::{format, string::String, vec, vec::Vec};
 use bank::Bank;
 use core::{fmt::Debug, num::NonZeroU32};
 use cosmwasm_std::{
@@ -30,6 +31,7 @@ use cosmwasm_vm::{
 use cosmwasm_vm_wasmi::{
     new_wasmi_vm, OwnedWasmiVM, WasmiContext, WasmiInput, WasmiModule, WasmiOutput, WasmiVMError,
 };
+use rand_core::SeedableRng;
 use serde::de::DeserializeOwned;
 use wasm_instrument::gas_metering::Rules;
 use wasmi::{Instance, Memory};
@@ -626,8 +628,15 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
         signature: &[u8],
         public_key: &[u8],
     ) -> Result<bool, Self::Error> {
-        cosmwasm_crypto::secp256k1_verify(message_hash, signature, public_key)
-            .map_err(|_| VmError::CryptoError)
+        let public_key = libsecp256k1::PublicKey::parse_slice(public_key, None)
+            .map_err(|_| VmError::CryptoError)?;
+        let message =
+            libsecp256k1::Message::parse_slice(message_hash).map_err(|_| VmError::CryptoError)?;
+        let mut signature = libsecp256k1::Signature::parse_standard_slice(signature)
+            .map_err(|_| VmError::CryptoError)?;
+        signature.normalize_s();
+
+        Ok(libsecp256k1::verify(&message, &signature, &public_key))
     }
 
     fn secp256k1_recover_pubkey(
@@ -636,10 +645,16 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
         signature: &[u8],
         recovery_param: u8,
     ) -> Result<Result<Vec<u8>, ()>, Self::Error> {
-        Ok(
-            cosmwasm_crypto::secp256k1_recover_pubkey(message_hash, signature, recovery_param)
-                .map_err(|_| ()),
-        )
+        let message =
+            libsecp256k1::Message::parse_slice(message_hash).map_err(|_| VmError::CryptoError)?;
+        let signature = libsecp256k1::Signature::parse_standard_slice(signature)
+            .map_err(|_| VmError::CryptoError)?;
+        let recovery_id =
+            libsecp256k1::RecoveryId::parse(recovery_param).map_err(|_| VmError::CryptoError)?;
+
+        Ok(libsecp256k1::recover(&message, &signature, &recovery_id)
+            .map(|pubkey| pubkey.serialize().to_vec())
+            .map_err(|_| ()))
     }
 
     fn ed25519_verify(
@@ -648,8 +663,15 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
         signature: &[u8],
         public_key: &[u8],
     ) -> Result<bool, Self::Error> {
-        cosmwasm_crypto::ed25519_verify(message, signature, public_key)
-            .map_err(|_| VmError::CryptoError)
+        let signature: [u8; 64] = signature.try_into().map_err(|_| VmError::CryptoError)?;
+        let pubkey: [u8; 32] = public_key.try_into().map_err(|_| VmError::CryptoError)?;
+
+        match ed25519_zebra::VerificationKey::try_from(pubkey)
+            .and_then(|vk| vk.verify(&ed25519_zebra::Signature::from(signature), message))
+        {
+            Ok(()) => Ok(true),
+            Err(_) => Ok(false),
+        }
     }
 
     fn ed25519_batch_verify(
@@ -658,8 +680,44 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
         signatures: &[&[u8]],
         public_keys: &[&[u8]],
     ) -> Result<bool, Self::Error> {
-        cosmwasm_crypto::ed25519_batch_verify(messages, signatures, public_keys)
-            .map_err(|_| VmError::CryptoError)
+        let messages_len = messages.len();
+        let signatures_len = signatures.len();
+        let public_keys_len = public_keys.len();
+
+        let mut messages = messages.to_vec();
+        let mut public_keys = public_keys.to_vec();
+        if messages_len == signatures_len && messages_len == public_keys_len { // We're good to go
+        } else if messages_len == 1 && signatures_len == public_keys_len {
+            // Replicate message, for multisig
+            messages = messages.repeat(signatures_len);
+        } else if public_keys_len == 1 && messages_len == signatures_len {
+            // Replicate pubkey
+            public_keys = public_keys.repeat(messages_len);
+        } else {
+            return Err(VmError::CryptoError);
+        }
+
+        let mut batch = ed25519_zebra::batch::Verifier::new();
+
+        for ((&message, &signature), &public_key) in messages
+            .iter()
+            .zip(signatures.iter())
+            .zip(public_keys.iter())
+        {
+            // Validation
+            let signature: [u8; 64] = signature.try_into().map_err(|_| VmError::CryptoError)?;
+            let pubkey: [u8; 32] = public_key.try_into().map_err(|_| VmError::CryptoError)?;
+
+            // Enqueing
+            batch.queue((pubkey.into(), signature.into(), message));
+        }
+
+        let rng: rand_chacha::ChaChaRng = rand_chacha::ChaChaCore::seed_from_u64(1).into();
+        // Batch verification
+        match batch.verify(rng) {
+            Ok(()) => Ok(true),
+            Err(_) => Ok(false),
+        }
     }
 
     fn addr_validate(&mut self, input: &str) -> Result<Result<(), Self::Error>, Self::Error> {

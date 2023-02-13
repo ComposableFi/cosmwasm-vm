@@ -2,10 +2,10 @@ use crate::vm::{
     Account, AddressHandler, Context, CustomHandler, IbcChannelId, JunoAddressHandler, State,
     SubstrateAddressHandler, VmError, VmState, WasmAddressHandler,
 };
-use alloc::collections::BTreeMap;
+use alloc::{collections::BTreeMap, vec, vec::Vec};
 use core::marker::PhantomData;
 use cosmwasm_std::{
-    from_binary, Addr, Binary, BlockInfo, Coin, ContractInfo, Env, Event, IbcChannelConnectMsg,
+    Addr, Binary, BlockInfo, Coin, ContractInfo, Env, Event, IbcChannelConnectMsg,
     IbcChannelOpenMsg, IbcPacketAckMsg, IbcPacketReceiveMsg, IbcPacketTimeoutMsg, MessageInfo,
     Timestamp, TransactionInfo,
 };
@@ -402,7 +402,7 @@ where
     ) -> Result<R, VmError> {
         let message = serde_json::to_vec(&message).map_err(|_| VmError::CannotSerialize)?;
         let QueryResult(value) = Self::query_raw(vm_state, env, &message)?;
-        from_binary::<R>(&value.into_result().map_err(VmError::Generic)?)
+        serde_json::from_slice::<R>(value.into_result().map_err(VmError::Generic)?.as_ref())
             .map_err(|_| VmError::CannotDeserialize)
     }
 

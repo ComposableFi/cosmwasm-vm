@@ -2,6 +2,7 @@ use crate::{
     vm::{Account, AddressHandler, Context, CustomHandler, IbcState, State, VmError},
     Api as IApi, Direct, Dispatch,
 };
+use alloc::{format, string::String, vec::Vec};
 use cosmwasm_std::{
     Binary, Env, Event, Ibc3ChannelOpenResponse, IbcAcknowledgement, IbcChannel,
     IbcChannelConnectMsg, IbcChannelOpenMsg, IbcEndpoint, IbcOrder, IbcPacketAckMsg,

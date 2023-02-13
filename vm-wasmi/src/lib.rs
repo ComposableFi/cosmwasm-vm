@@ -29,8 +29,7 @@ use cosmwasm_vm::{
     vm::{VMBase, VmErrorOf, VmGas, VmQueryCustomOf},
 };
 use wasmi::{
-    core::Value as RuntimeValue, AsContextMut, Engine, Extern, Instance, Linker, Memory, Module,
-    Store,
+    AsContextMut, Engine, Extern, Instance, Linker, Memory, Module, Store, Value as RuntimeValue,
 };
 
 /// A wasmi module reference
@@ -97,7 +96,7 @@ where
         WasmiOutput(WasmiFunctionResult(values), _): WasmiOutput<WasmiVM<V, S>>,
     ) -> Result<Self, Self::Error> {
         match values.as_slice() {
-            &[run_val] => Ok(run_val),
+            [ref run_val] => Ok(run_val.clone()),
             _ => Err(WasmiVMError::UnexpectedReturnType.into()),
         }
     }

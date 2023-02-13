@@ -1,5 +1,5 @@
 use super::{AddressHandler, VmError};
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 use core::fmt::Display;
 use cosmwasm_std::{Addr, Binary, CanonicalAddr};
 use sha2::{Digest, Sha256};
