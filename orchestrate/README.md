@@ -14,4 +14,4 @@ CosmWasm Orchestrate is a tool for simulating and testing CosmWasm contracts on 
 - **Flexible**: The framework is also very flexible and lets you define your own mechanism to handle custom messages, handle different address formats and even implement your own host functions and VM.
 
 
-To learn more, go to the [documentation](https://docs.composable.finance/products/cosmwasm-orchestrate).
+To learn more, go to the [documentation](https://docs.composable.finance/developer-guides/cosmwasm-orchestrate).
