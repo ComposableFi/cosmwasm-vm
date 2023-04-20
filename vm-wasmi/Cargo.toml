@@ -29,11 +29,11 @@ cosmwasm-std = { git = "https://github.com/ComposableFi/cosmwasm", rev = "34af48
 ] }
 cosmwasm-vm = { path = "../vm", default-features = false }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
+cosmwasm-crypto = { git = "https://github.com/ComposableFi/cosmwasm", rev = "7d288c23772d03e8cd666b76cb5bbdc5952721dd" }
 
 [dev-dependencies]
 wat = "1.0"
 env_logger = "0.9"
-cosmwasm-crypto = { git = "https://github.com/ComposableFi/cosmwasm", rev = "7d288c23772d03e8cd666b76cb5bbdc5952721dd" }
 cw20-ics20 = { git = "https://github.com/CosmWasm/cw-plus", rev = "53dc88fdb81888cbd3dae8742e7318b35d3d0c0f", default-features = false, features = [
   "library",
 ] }

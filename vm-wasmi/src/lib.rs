@@ -1,6 +1,6 @@
 #![no_std]
 #![feature(trait_alias)]
-#![cfg_attr(test, feature(assert_matches))]
+#![feature(assert_matches)]
 
 extern crate alloc;
 
@@ -15,8 +15,9 @@ mod vm;
 pub use error::*;
 pub use vm::*;
 
-#[cfg(test)]
-mod semantic;
+pub mod semantic;
+// TODO clean this up and move it
+pub use semantic::*;
 
 use alloc::{format, string::String, vec, vec::Vec};
 use core::marker::PhantomData;
