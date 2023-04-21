@@ -202,6 +202,35 @@ pub struct SimpleWasmiVMExtension {
     pub gas: Gas,
 }
 
+impl SimpleWasmiVMExtension {
+    pub fn new(gas: Gas, next_account_id: BankAccount) -> Self {
+        SimpleWasmiVMExtension {
+            gas,
+            next_account_id,
+            ..Default::default()
+        }
+    }
+
+    pub fn add_contract(
+        &mut self,
+        address: BankAccount,
+        code_id: CosmwasmCodeId,
+        bytecode: Vec<u8>,
+        admin: Option<BankAccount>,
+        label: String,
+    ) {
+        self.codes.insert(code_id, bytecode);
+        self.contracts.insert(
+            address,
+            CosmwasmContractMeta {
+                code_id,
+                admin,
+                label,
+            },
+        );
+    }
+}
+
 pub struct SimpleWasmiVM<'a> {
     executing_module: Option<WasmiModule>,
     env: Env,
