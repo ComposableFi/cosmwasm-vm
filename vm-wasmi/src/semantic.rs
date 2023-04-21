@@ -193,13 +193,13 @@ pub struct SimpleIBCState {
 #[derive(Default, Clone)]
 pub struct SimpleWasmiVMExtension {
     #[cfg(feature = "stargate")]
-    pub ibc: BTreeMap<BankAccount, SimpleIBCState>,
-    pub storage: BTreeMap<BankAccount, SimpleWasmiVMStorage>,
-    pub codes: BTreeMap<CosmwasmCodeId, Vec<u8>>,
-    pub contracts: BTreeMap<BankAccount, CosmwasmContractMeta<BankAccount>>,
-    pub next_account_id: BankAccount,
-    pub transaction_depth: u32,
-    pub gas: Gas,
+    ibc: BTreeMap<BankAccount, SimpleIBCState>,
+    storage: BTreeMap<BankAccount, SimpleWasmiVMStorage>,
+    codes: BTreeMap<CosmwasmCodeId, Vec<u8>>,
+    contracts: BTreeMap<BankAccount, CosmwasmContractMeta<BankAccount>>,
+    next_account_id: BankAccount,
+    transaction_depth: u32,
+    gas: Gas,
 }
 
 impl SimpleWasmiVMExtension {
@@ -228,6 +228,10 @@ impl SimpleWasmiVMExtension {
                 label,
             },
         );
+    }
+
+    pub fn storage(&self) -> &BTreeMap<BankAccount, SimpleWasmiVMStorage> {
+        &self.storage
     }
 }
 
@@ -843,7 +847,7 @@ impl BankAccount {
         BankAccount(amount)
     }
 
-    pub const fn credit(&self) -> u128 {
+    pub const fn id(&self) -> u128 {
         self.0
     }
 }

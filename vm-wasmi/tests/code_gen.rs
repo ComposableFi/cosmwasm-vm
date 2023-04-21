@@ -1,19 +1,15 @@
 #![feature(assert_matches)]
 use core::assert_matches::assert_matches;
 
-extern crate alloc;
-use alloc::collections::BTreeMap;
-
 use cosmwasm_std::{ContractResult, Empty, Response};
 use cosmwasm_vm::executor::{
     cosmwasm_call, CosmwasmExecutionResult, ExecuteCall, ExecuteResult, InstantiateCall,
     InstantiateResult,
 };
-use cosmwasm_vm::system::CosmwasmContractMeta;
+
 use cosmwasm_vm_wasmi::code_gen::{ModuleDefinition, WasmModule};
 use cosmwasm_vm_wasmi::{
-    create_simple_vm, BankAccount, Gas, OwnedWasmiVM, SimpleVMError, SimpleWasmiVM,
-    SimpleWasmiVMExtension, WasmiVMError,
+    create_simple_vm, BankAccount, Gas, OwnedWasmiVM, SimpleWasmiVM, SimpleWasmiVMExtension,
 };
 
 #[test]
@@ -22,22 +18,12 @@ fn basic() {
     let sender = BankAccount::new(100);
     let address = BankAccount::new(10_000);
     let funds = vec![];
-    let mut extension = SimpleWasmiVMExtension {
-        storage: BTreeMap::default(),
-        codes: BTreeMap::from([(0x1337, module.code)]),
-        contracts: BTreeMap::from([(
-            address,
-            CosmwasmContractMeta {
-                code_id: 0x1337,
-                admin: None,
-                label: String::new(),
-            },
-        )]),
-        next_account_id: BankAccount::new(10_001),
-        transaction_depth: 0,
-        gas: Gas::new(100_000_000),
-        ..Default::default()
-    };
+
+    let mut extension =
+        SimpleWasmiVMExtension::new(Gas::new(100_000_000), BankAccount::new(10_001));
+
+    extension.add_contract(address, 0x1337, module.code, None, String::new());
+
     let mut vm = create_simple_vm(sender, address, funds, &mut extension).unwrap();
     let result =
         cosmwasm_call::<InstantiateCall, OwnedWasmiVM<SimpleWasmiVM>>(&mut vm, r#"{}"#.as_bytes())
@@ -60,22 +46,12 @@ fn instantiate_response() {
     let sender = BankAccount::new(100);
     let address = BankAccount::new(10_000);
     let funds = vec![];
-    let mut extension = SimpleWasmiVMExtension {
-        storage: BTreeMap::default(),
-        codes: BTreeMap::from([(0x1337, module.code)]),
-        contracts: BTreeMap::from([(
-            address,
-            CosmwasmContractMeta {
-                code_id: 0x1337,
-                admin: None,
-                label: String::new(),
-            },
-        )]),
-        next_account_id: BankAccount::new(10_001),
-        transaction_depth: 0,
-        gas: Gas::new(100_000_000),
-        ..Default::default()
-    };
+
+    let mut extension =
+        SimpleWasmiVMExtension::new(Gas::new(100_000_000), BankAccount::new(10_001));
+
+    extension.add_contract(address, 0x1337, module.code, None, String::new());
+
     let mut vm = create_simple_vm(sender, address, funds, &mut extension).unwrap();
     let result =
         cosmwasm_call::<InstantiateCall, OwnedWasmiVM<SimpleWasmiVM>>(&mut vm, r#"{}"#.as_bytes())

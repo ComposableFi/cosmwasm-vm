@@ -1,9 +1,6 @@
-extern crate alloc;
-use alloc::collections::BTreeMap;
-
 use cosmwasm_std::Attribute;
 use cosmwasm_vm::executor::{ExecuteCall, InstantiateCall};
-use cosmwasm_vm::system::{cosmwasm_system_entrypoint, CosmwasmContractMeta};
+use cosmwasm_vm::system::cosmwasm_system_entrypoint;
 use cosmwasm_vm_wasmi::{
     create_simple_vm, instrument_contract, BankAccount, Gas, OwnedWasmiVM, SimpleWasmiVM,
     SimpleWasmiVMExtension,
@@ -17,32 +14,13 @@ fn test_reply() {
     let address = BankAccount::new(10_000);
     let hackatom_address = BankAccount::new(10_001);
     let funds = vec![];
-    let mut extension = SimpleWasmiVMExtension {
-        storage: BTreeMap::default(),
-        codes: BTreeMap::from([(0x1337, code), (0x1338, code_hackatom)]),
-        contracts: BTreeMap::from([
-            (
-                address,
-                CosmwasmContractMeta {
-                    code_id: 0x1337,
-                    admin: None,
-                    label: String::new(),
-                },
-            ),
-            (
-                hackatom_address,
-                CosmwasmContractMeta {
-                    code_id: 0x1338,
-                    admin: None,
-                    label: String::new(),
-                },
-            ),
-        ]),
-        next_account_id: BankAccount::new(10_002),
-        transaction_depth: 0,
-        gas: Gas::new(100_000_000),
-        ..Default::default()
-    };
+
+    let mut extension =
+        SimpleWasmiVMExtension::new(Gas::new(100_000_000), BankAccount::new(10_002));
+
+    extension.add_contract(address, 0x1337, code, None, String::new());
+    extension.add_contract(hackatom_address, 0x1338, code_hackatom, None, String::new());
+
     {
         let mut vm =
             create_simple_vm(address, hackatom_address, funds.clone(), &mut extension).unwrap();
@@ -57,7 +35,7 @@ fn test_reply() {
             value: "hacking begin".into()
         })));
     }
-    log::debug!("{:?}", extension.storage);
+    log::debug!("{:?}", extension.storage());
     {
         let mut vm = create_simple_vm(sender, address, funds, &mut extension).unwrap();
         let _ = cosmwasm_system_entrypoint::<InstantiateCall, OwnedWasmiVM<SimpleWasmiVM>>(

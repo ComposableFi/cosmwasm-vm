@@ -1,9 +1,6 @@
 #![feature(assert_matches)]
 use core::assert_matches::assert_matches;
 
-extern crate alloc;
-
-use alloc::collections::BTreeMap;
 use cosmwasm_std::Empty;
 use cosmwasm_vm_wasmi::{
     create_simple_vm, instrument_contract, BankAccount, Gas, OwnedWasmiVM, SimpleWasmiVM,
@@ -12,12 +9,9 @@ use cosmwasm_vm_wasmi::{
 
 use cosmwasm_std::Binary;
 
-use cosmwasm_vm::{
-    executor::{
-        cosmwasm_call, CosmwasmExecutionResult, CosmwasmQueryResult, InstantiateCall,
-        InstantiateResult, QueryCall, QueryResult,
-    },
-    system::CosmwasmContractMeta,
+use cosmwasm_vm::executor::{
+    cosmwasm_call, CosmwasmExecutionResult, CosmwasmQueryResult, InstantiateCall,
+    InstantiateResult, QueryCall, QueryResult,
 };
 
 #[test]
