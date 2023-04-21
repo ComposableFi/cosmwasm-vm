@@ -25,9 +25,7 @@ fn test_bare() {
 
     let mut extension = SimpleWasmiVMExtension::new(Gas::new(100_000_000), next_account_id);
 
-    let code_id = 0x1337;
-
-    extension.add_contract(address, code_id, bytecode, None, String::from("test"));
+    extension.add_contract(address, bytecode, None, String::from("test"));
 
     let mut vm = create_simple_vm(sender, address, funds, &mut extension).unwrap();
     assert_matches!(

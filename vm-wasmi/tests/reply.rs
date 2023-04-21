@@ -18,8 +18,8 @@ fn test_reply() {
     let mut extension =
         SimpleWasmiVMExtension::new(Gas::new(100_000_000), BankAccount::new(10_002));
 
-    extension.add_contract(address, 0x1337, code, None, String::new());
-    extension.add_contract(hackatom_address, 0x1338, code_hackatom, None, String::new());
+    extension.add_contract(address, code, None, String::new());
+    extension.add_contract(hackatom_address, code_hackatom, None, String::new());
 
     {
         let mut vm =

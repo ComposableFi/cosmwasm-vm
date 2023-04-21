@@ -22,7 +22,7 @@ fn basic() {
     let mut extension =
         SimpleWasmiVMExtension::new(Gas::new(100_000_000), BankAccount::new(10_001));
 
-    extension.add_contract(address, 0x1337, module.code, None, String::new());
+    extension.add_contract(address, module.code, None, String::new());
 
     let mut vm = create_simple_vm(sender, address, funds, &mut extension).unwrap();
     let result =
@@ -50,7 +50,7 @@ fn instantiate_response() {
     let mut extension =
         SimpleWasmiVMExtension::new(Gas::new(100_000_000), BankAccount::new(10_001));
 
-    extension.add_contract(address, 0x1337, module.code, None, String::new());
+    extension.add_contract(address, module.code, None, String::new());
 
     let mut vm = create_simple_vm(sender, address, funds, &mut extension).unwrap();
     let result =

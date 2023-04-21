@@ -1,4 +1,5 @@
 extern crate std;
+use core::hash::{Hash, Hasher};
 
 use super::{
     new_wasmi_vm, OwnedWasmiVM, VMBase, WasmiContext, WasmiInput, WasmiModule, WasmiOutput,
@@ -214,11 +215,15 @@ impl SimpleWasmiVMExtension {
     pub fn add_contract(
         &mut self,
         address: BankAccount,
-        code_id: CosmwasmCodeId,
         bytecode: Vec<u8>,
         admin: Option<BankAccount>,
         label: String,
     ) {
+        // TODO, use correct way of calculating the code_id;
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        bytecode.hash(&mut h);
+        let code_id = h.finish();
+
         self.codes.insert(code_id, bytecode);
         self.contracts.insert(
             address,

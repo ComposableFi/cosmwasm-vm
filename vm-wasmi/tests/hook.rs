@@ -17,7 +17,7 @@ fn test_hook() {
     let mut extension =
         SimpleWasmiVMExtension::new(Gas::new(100_000_000), BankAccount::new(10_001));
 
-    extension.add_contract(address, 0x1337, code, None, String::new());
+    extension.add_contract(address, code, None, String::new());
 
     let mut vm = create_simple_vm(sender, address, funds, &mut extension).unwrap();
     let _ = cosmwasm_system_entrypoint_hook::<InstantiateCall, OwnedWasmiVM<SimpleWasmiVM>>(
