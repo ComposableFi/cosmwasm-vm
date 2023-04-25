@@ -70,6 +70,8 @@ pub enum SimpleVMError {
     Crypto,
 }
 
+impl std::error::Error for SimpleVMError {}
+
 impl HostError for SimpleVMError {}
 
 impl From<wasmi::Error> for SimpleVMError {
@@ -219,7 +221,7 @@ impl SimpleWasmiVMExtension {
         admin: Option<BankAccount>,
         label: String,
     ) {
-        // TODO, use correct way of calculating the code_id;
+        // TODO, use correct way of calculating the code_id
         let mut h = std::collections::hash_map::DefaultHasher::new();
         bytecode.hash(&mut h);
         let code_id = h.finish();
@@ -706,6 +708,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         }
 
         let mut tmp: Vec<u8> = addr.clone().into();
+
         // Shuffle two more times which restored the original value (24 elements are back to original after 20 rounds)
         for _ in 0..SHUFFLES_DECODE {
             tmp = riffle_shuffle(&tmp);
@@ -715,6 +718,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         tmp.rotate_right(rotate_by);
         // Remove NULL bytes (i.e. the padding)
         let trimmed = tmp.into_iter().filter(|&x| x != 0x00).collect();
+
         // decode UTF-8 bytes into string
         let Ok(human) = String::from_utf8(trimmed) else { return Ok(Err(SimpleVMError::InvalidAddress)) };
         Ok(
@@ -854,6 +858,12 @@ impl BankAccount {
 
     pub const fn id(&self) -> u128 {
         self.0
+    }
+}
+
+impl Into<String> for BankAccount {
+    fn into(self) -> String {
+        format!("{}", self.0)
     }
 }
 
