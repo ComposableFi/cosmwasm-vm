@@ -861,12 +861,6 @@ impl BankAccount {
     }
 }
 
-impl Into<String> for BankAccount {
-    fn into(self) -> String {
-        format!("{}", self.0)
-    }
-}
-
 impl TryFrom<Addr> for BankAccount {
     type Error = SimpleVMError;
     fn try_from(value: Addr) -> Result<Self, Self::Error> {
