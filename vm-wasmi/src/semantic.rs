@@ -240,6 +240,10 @@ impl SimpleWasmiVMExtension {
     pub fn storage(&self) -> &BTreeMap<BankAccount, SimpleWasmiVMStorage> {
         &self.storage
     }
+
+    pub fn next_account_id(&self) -> &BankAccount {
+        &self.next_account_id
+    }
 }
 
 pub struct SimpleWasmiVM<'a> {
@@ -706,7 +710,6 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         if addr.0.len() != CANONICAL_LENGTH {
             return Ok(Err(SimpleVMError::InvalidAddress));
         }
-
         let mut tmp: Vec<u8> = addr.clone().into();
 
         // Shuffle two more times which restored the original value (24 elements are back to original after 20 rounds)
@@ -721,6 +724,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
 
         // decode UTF-8 bytes into string
         let Ok(human) = String::from_utf8(trimmed) else { return Ok(Err(SimpleVMError::InvalidAddress)) };
+
         Ok(
             BankAccount::try_from(Addr::unchecked(human))
                 .map_err(|_| SimpleVMError::InvalidAddress),

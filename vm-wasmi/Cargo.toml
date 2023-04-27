@@ -39,3 +39,4 @@ cw20-ics20 = { git = "https://github.com/CosmWasm/cw-plus", rev = "53dc88fdb8188
 ] }
 
 cw4-group = { version = "1.0.1" }
+cw4 = { version = "1.0.1" }

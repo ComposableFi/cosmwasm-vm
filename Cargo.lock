@@ -326,6 +326,7 @@ dependencies = [
  "cosmwasm-std 1.2.0",
  "cosmwasm-vm",
  "cw20-ics20",
+ "cw4",
  "cw4-group",
  "either",
  "env_logger 0.9.3",
