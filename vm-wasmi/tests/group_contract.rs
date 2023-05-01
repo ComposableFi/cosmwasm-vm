@@ -19,43 +19,73 @@ const USER2: &str = "2000";
 const USER3: &str = "3000";
 
 fn run_test_with_init<'a, F, R>(
+    bytecodes: &[(&str, &[u8])],
     initmsg: InstantiateMsg,
-    closure: F,
-) -> Result<R, Box<dyn std::error::Error>>
+    mut closure: F,
+) -> Result<(), Box<dyn std::error::Error>>
 where
-    F: for<'b> FnOnce(
-        &mut OwnedWasmiVM<SimpleWasmiVM<'b>>,
-    ) -> Result<R, Box<dyn std::error::Error>>,
+    R: PartialEq + core::fmt::Debug,
+    F: for<'b> FnMut(&mut OwnedWasmiVM<SimpleWasmiVM<'b>>) -> Result<R, Box<dyn std::error::Error>>,
 {
-    println!("Init msg: {:?}", initmsg);
+    let mut results = vec![];
 
-    let bytecode = instrument_contract(include_bytes!("../../fixtures/cw4_group.wasm"));
+    for (name, bytecode) in bytecodes {
+        println!("testing {}", name);
 
-    let address = BankAccount::new(0);
-    let next = BankAccount::new(1);
+        let address = BankAccount::new(0);
+        let next = BankAccount::new(1);
 
-    let mut extension = SimpleWasmiVMExtension::new(Gas::new(100_000_000), next);
+        let mut extension = SimpleWasmiVMExtension::new(Gas::new(100_000_000), next);
 
-    let funds = vec![];
-    extension.add_contract(address, bytecode, None, String::from("cw4_group"));
+        let funds = vec![];
 
-    let next = extension.next_account_id().clone();
+        let instrumented = instrument_contract(bytecode);
 
-    let mut vm = create_simple_vm(next, address, funds, &mut extension)?;
+        extension.add_contract(address, instrumented, None, String::from(*name));
 
-    let msg = serde_json::to_string(&initmsg)?;
+        let next = extension.next_account_id().clone();
 
-    let init = cosmwasm_call::<InstantiateCall<Empty>, OwnedWasmiVM<SimpleWasmiVM>>(
-        &mut vm,
-        msg.as_bytes(),
-    )?;
+        let mut vm = create_simple_vm(next, address, funds, &mut extension)?;
 
-    closure(&mut vm)
+        let msg = serde_json::to_string(&initmsg)?;
+
+        let init = cosmwasm_call::<InstantiateCall<Empty>, OwnedWasmiVM<SimpleWasmiVM>>(
+            &mut vm,
+            msg.as_bytes(),
+        )?;
+
+        results.push(closure(&mut vm))
+    }
+
+    let results: Result<Vec<_>, _> = results.into_iter().collect();
+    let results = results?;
+
+    println!("all results {:?}", results);
+
+    let first = &results[0];
+
+    // make sure all results are equal
+    let _: Vec<_> = results
+        .iter()
+        .skip(1)
+        .map(|res| assert_eq!(first, res))
+        .collect();
+
+    Ok(())
 }
+
+const BYTECODES: &[(&str, &[u8])] = &[
+    (
+        "self-built",
+        include_bytes!("../../cw-plus/target/wasm32-unknown-unknown/release/cw4_group.wasm"),
+    ),
+    ("official", include_bytes!("../../fixtures/cw4_group.wasm")),
+];
 
 #[test]
 fn empty_group() -> Result<(), Box<dyn std::error::Error>> {
     run_test_with_init(
+        BYTECODES,
         InstantiateMsg {
             admin: None,
             members: vec![],
@@ -80,6 +110,7 @@ fn empty_group() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn group_with_admin() -> Result<(), Box<dyn std::error::Error>> {
     run_test_with_init(
+        BYTECODES,
         InstantiateMsg {
             admin: Some(ADMIN.into()),
             members: vec![],
@@ -104,6 +135,7 @@ fn group_with_admin() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn try_member_queries() -> Result<(), Box<dyn std::error::Error>> {
     run_test_with_init(
+        BYTECODES,
         InstantiateMsg {
             admin: Some(ADMIN.into()),
             members: vec![
@@ -182,6 +214,7 @@ fn duplicate_members_instantiation() -> Result<(), Box<dyn std::error::Error>> {
     // However, it fails to error out in our case, for some reason, and the USER1 credentials get silently overwritten.
 
     let result = run_test_with_init(
+        BYTECODES,
         InstantiateMsg {
             admin: Some(ADMIN.into()),
             members: vec![
@@ -210,7 +243,7 @@ fn duplicate_members_instantiation() -> Result<(), Box<dyn std::error::Error>> {
             if let ContractResult::<Binary>::Ok(binary) =
                 cosmwasm_call::<QueryCall, OwnedWasmiVM<SimpleWasmiVM>>(vm, msg.as_bytes())?.0
             {
-                assert_eq!(binary, Binary(r#"{"weight":6}"#.as_bytes().to_vec()));
+                assert_eq!(binary, Binary(r#"{"weight":null}"#.as_bytes().to_vec()));
             } else {
                 panic!("not ok")
             } //

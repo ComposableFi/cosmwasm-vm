@@ -336,7 +336,6 @@ dependencies = [
  "serde_json",
  "wasm-instrument",
  "wasmi",
- "wasmi-validation",
  "wat",
 ]
 
@@ -2129,15 +2128,6 @@ dependencies = [
  "wasmi_arena",
  "wasmi_core",
  "wasmparser-nostd",
-]
-
-[[package]]
-name = "wasmi-validation"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91ff416ad1ff0c42e5a926ed5d5fab74c0f098749aa0ad8b2a34b982ce0e867b"
-dependencies = [
- "parity-wasm",
 ]
 
 [[package]]

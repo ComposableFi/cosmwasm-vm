@@ -214,10 +214,10 @@ impl SimpleWasmiVMExtension {
         }
     }
 
-    pub fn add_contract(
+    pub fn add_contract<BC: Hash + Into<Vec<u8>>>(
         &mut self,
         address: BankAccount,
-        bytecode: Vec<u8>,
+        bytecode: BC,
         admin: Option<BankAccount>,
         label: String,
     ) {
@@ -226,7 +226,7 @@ impl SimpleWasmiVMExtension {
         bytecode.hash(&mut h);
         let code_id = h.finish();
 
-        self.codes.insert(code_id, bytecode);
+        self.codes.insert(code_id, bytecode.into());
         self.contracts.insert(
             address,
             CosmwasmContractMeta {

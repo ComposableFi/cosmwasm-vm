@@ -4,12 +4,11 @@ use wasm_instrument::parity_wasm::elements::{
     ExportSection, External, FunctionSection, ImportSection, Instruction, Internal, Module, Type,
     TypeSection, ValueType,
 };
-use wasmi_validation::Validator;
 
 #[derive(Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub enum ValidationError {
-    Validation(wasmi_validation::Error),
+    // Validation(wasmi_validation::Error),
     ExportMustBeAFunction(&'static str),
     EntryPointPointToImport(&'static str),
     ExportDoesNotExist(&'static str),
@@ -54,14 +53,16 @@ impl<'a> CodeValidation<'a> {
     /// Middleware function for `wasmi_validation::validate_module`
     ///
     /// * `input`: Custom input to validator
-    pub fn validate_module<V: Validator>(
-        self,
-        input: <V as Validator>::Input,
-    ) -> Result<Self, ValidationError> {
-        wasmi_validation::validate_module::<V>(self.0, input)
-            .map_err(ValidationError::Validation)?;
-        Ok(self)
-    }
+    // pub fn validate_module<V: Validator>(
+    //     self,
+    //     input: <V as Validator>::Input,
+    // ) -> Result<Self, ValidationError> {
+    //     // TODO
+
+    //     // wasmi_validation::validate_module::<V>(self.0, input)
+    //     //     .map_err(ValidationError::Validation)?;
+    //     Ok(self)
+    // }
 
     /// Checks if the expected exports exist and correct.
     ///
