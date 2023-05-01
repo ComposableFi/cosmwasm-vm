@@ -1,13 +1,11 @@
 #![feature(assert_matches)]
 
-use cosmwasm_std::{Binary, ContractResult, Empty};
-use cosmwasm_vm::executor::QueryCall;
-use cosmwasm_vm_wasmi::{
-    create_simple_vm, instrument_contract, BankAccount, Gas, OwnedWasmiVM, SimpleWasmiVM,
-    SimpleWasmiVMExtension,
-};
+mod helpers;
+use helpers::run_test_with_init;
 
-use cosmwasm_vm::executor::{cosmwasm_call, InstantiateCall};
+use cosmwasm_std::{Binary, ContractResult};
+use cosmwasm_vm::executor::{cosmwasm_call, QueryCall};
+use cosmwasm_vm_wasmi::{OwnedWasmiVM, SimpleVMError, SimpleWasmiVM};
 
 use cw4::Member;
 use cw4_group::msg::InstantiateMsg;
@@ -17,62 +15,6 @@ const ADMIN: &str = "0000";
 const USER1: &str = "1000";
 const USER2: &str = "2000";
 const USER3: &str = "3000";
-
-fn run_test_with_init<'a, F, R>(
-    bytecodes: &[(&str, &[u8])],
-    initmsg: InstantiateMsg,
-    mut closure: F,
-) -> Result<(), Box<dyn std::error::Error>>
-where
-    R: PartialEq + core::fmt::Debug,
-    F: for<'b> FnMut(&mut OwnedWasmiVM<SimpleWasmiVM<'b>>) -> Result<R, Box<dyn std::error::Error>>,
-{
-    let mut results = vec![];
-
-    for (name, bytecode) in bytecodes {
-        println!("testing {}", name);
-
-        let address = BankAccount::new(0);
-        let next = BankAccount::new(1);
-
-        let mut extension = SimpleWasmiVMExtension::new(Gas::new(100_000_000), next);
-
-        let funds = vec![];
-
-        let instrumented = instrument_contract(bytecode);
-
-        extension.add_contract(address, instrumented, None, String::from(*name));
-
-        let next = extension.next_account_id().clone();
-
-        let mut vm = create_simple_vm(next, address, funds, &mut extension)?;
-
-        let msg = serde_json::to_string(&initmsg)?;
-
-        let init = cosmwasm_call::<InstantiateCall<Empty>, OwnedWasmiVM<SimpleWasmiVM>>(
-            &mut vm,
-            msg.as_bytes(),
-        )?;
-
-        results.push(closure(&mut vm))
-    }
-
-    let results: Result<Vec<_>, _> = results.into_iter().collect();
-    let results = results?;
-
-    println!("all results {:?}", results);
-
-    let first = &results[0];
-
-    // make sure all results are equal
-    let _: Vec<_> = results
-        .iter()
-        .skip(1)
-        .map(|res| assert_eq!(first, res))
-        .collect();
-
-    Ok(())
-}
 
 const BYTECODES: &[(&str, &[u8])] = &[
     (
@@ -101,7 +43,8 @@ fn empty_group() -> Result<(), Box<dyn std::error::Error>> {
                 assert_eq!(binary, Binary(r#"{"weight":0}"#.as_bytes().to_vec()));
                 Ok(())
             } else {
-                panic!("not ok")
+                // stand-in error for now
+                Err(SimpleVMError::Crypto)
             }
         },
     )
@@ -126,7 +69,8 @@ fn group_with_admin() -> Result<(), Box<dyn std::error::Error>> {
                 assert_eq!(binary, Binary(r#"{"weight":0}"#.as_bytes().to_vec()));
                 Ok(())
             } else {
-                panic!("not ok")
+                // stand-in error for now
+                Err(SimpleVMError::Crypto)
             }
         },
     )
@@ -155,7 +99,7 @@ fn try_member_queries() -> Result<(), Box<dyn std::error::Error>> {
                 at_height: None,
             };
 
-            let msg = serde_json::to_string(&qmsg)?;
+            let msg = serde_json::to_string(&qmsg).map_err(|_| SimpleVMError::Crypto)?;
 
             if let ContractResult::<Binary>::Ok(binary) =
                 cosmwasm_call::<QueryCall, OwnedWasmiVM<SimpleWasmiVM>>(vm, msg.as_bytes())?.0
@@ -172,7 +116,7 @@ fn try_member_queries() -> Result<(), Box<dyn std::error::Error>> {
                 at_height: None,
             };
 
-            let msg = serde_json::to_string(&qmsg)?;
+            let msg = serde_json::to_string(&qmsg).map_err(|_| SimpleVMError::Crypto)?;
 
             if let ContractResult::<Binary>::Ok(binary) =
                 cosmwasm_call::<QueryCall, OwnedWasmiVM<SimpleWasmiVM>>(vm, msg.as_bytes())?.0
@@ -189,17 +133,16 @@ fn try_member_queries() -> Result<(), Box<dyn std::error::Error>> {
                 at_height: None,
             };
 
-            let msg = serde_json::to_string(&qmsg)?;
+            let msg = serde_json::to_string(&qmsg).map_err(|_| SimpleVMError::Crypto)?;
 
             if let ContractResult::<Binary>::Ok(binary) =
                 cosmwasm_call::<QueryCall, OwnedWasmiVM<SimpleWasmiVM>>(vm, msg.as_bytes())?.0
             {
                 assert_eq!(binary, Binary(r#"{"weight":null}"#.as_bytes().to_vec()));
+                Ok(())
             } else {
-                panic!("not ok")
+                Err(SimpleVMError::Crypto)
             }
-
-            Ok(())
         },
     )
 }
@@ -238,16 +181,17 @@ fn duplicate_members_instantiation() -> Result<(), Box<dyn std::error::Error>> {
                 at_height: None,
             };
 
-            let msg = serde_json::to_string(&qmsg)?;
+            let msg = serde_json::to_string(&qmsg).map_err(|_| SimpleVMError::Crypto)?;
 
             if let ContractResult::<Binary>::Ok(binary) =
                 cosmwasm_call::<QueryCall, OwnedWasmiVM<SimpleWasmiVM>>(vm, msg.as_bytes())?.0
             {
                 assert_eq!(binary, Binary(r#"{"weight":null}"#.as_bytes().to_vec()));
+                Ok(())
             } else {
-                panic!("not ok")
-            } //
-            Ok(())
+                // stand-in error for now
+                Err(SimpleVMError::Crypto)
+            }
         },
     );
 
