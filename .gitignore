@@ -2,3 +2,8 @@
 /target
 /result
 /.direnv
+
+flamegraph.svg
+*.log
+*.data
+*.data.old

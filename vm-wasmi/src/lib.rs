@@ -1,6 +1,8 @@
 #![no_std]
 #![feature(trait_alias)]
 #![cfg_attr(test, feature(assert_matches))]
+#![allow(soft_unstable)]
+#![feature(test)]
 
 extern crate alloc;
 
@@ -8,9 +10,9 @@ pub mod code_gen;
 pub mod validation;
 pub mod version;
 
-mod error;
-mod host_functions;
-mod vm;
+pub (crate)  mod error;
+pub (crate)  mod host_functions;
+pub (crate) mod vm;
 
 pub use error::*;
 pub use vm::*;

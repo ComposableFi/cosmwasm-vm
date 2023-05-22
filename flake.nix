@@ -21,14 +21,11 @@
           overlays = [ rust-overlay.overlays.default ];
         };
       in let
-        # Nightly rust used for wasm runtime compilation
         rust-nightly =
           pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 
-        # Crane lib instantiated with current nixpkgs
         crane-lib = crane.mkLib pkgs;
 
-        # Crane pinned to nightly Rust
         crane-nightly = crane-lib.overrideToolchain rust-nightly;
 
         src = pkgs.lib.cleanSourceWith {
@@ -40,7 +37,6 @@
           };
         };
 
-        # Default args to crane
         common-args = {
           inherit src;
           buildInputs = [ pkgs.pkg-config pkgs.openssl ]
@@ -48,9 +44,7 @@
               (with pkgs.darwin.apple_sdk.frameworks; [ Security ]));
         };
 
-        # Common dependencies used for caching
         common-deps = crane-nightly.buildDepsOnly common-args;
-
         common-cached-args = common-args // { cargoArtifacts = common-deps; };
 
       in rec {
@@ -67,7 +61,7 @@
         };
         devShell = pkgs.mkShell {
           buildInputs = [ rust-nightly ]
-            ++ (with pkgs; [ openssl openssl.dev pkgconfig taplo nixfmt bacon ]);
+            ++ (with pkgs; [ openssl openssl.dev pkgconfig taplo nixfmt bacon flamegraph cargo-flamegraph]);
         };
       });
 }
