@@ -12,7 +12,9 @@ Experimental, minimalistic, `no_std` friendly abstract virtual machine for CosmW
 
 Install `flamegraph` (in nix shell already installed)
 
-`RUST_LOG=trace cargo run --bin research --release 2>&1 | tee research.log` and see some output.
+`RUST_LOG=trace cargo run --bin research --release 2>&1 | tee research.log` and see some output for deep logging.
+
+`RUST_LOG=info cargo run --bin research --release` and see some output long run with coarse grain output.
 
 `flamegraph target/release/research`
 

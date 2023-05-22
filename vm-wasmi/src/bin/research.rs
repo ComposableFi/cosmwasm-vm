@@ -130,6 +130,7 @@ impl Gas {
             checkpoints: vec![initial_value],
         }
     }
+    
     fn current(&self) -> &u64 {
         self.checkpoints.last().expect("impossible")
     }
@@ -975,6 +976,7 @@ fn create_simple_vm(
 }
 
 fn main() {
+    let iter = 100;
     let cw20_base_code = instrument_contract(include_bytes!("../../../fixtures/cw20_base.wasm"));
     let hackatom_code = instrument_contract(include_bytes!("../../../fixtures/hackatom.wasm"));
     let reflect_code = instrument_contract(include_bytes!("../../../fixtures/reflect.wasm"));
@@ -1019,11 +1021,11 @@ fn main() {
         ]),
         next_account_id: BankAccount(10_004),
         transaction_depth: 0,
-        gas: Gas::new(100_000_000),
+        gas: Gas::new(u64::MAX),
         ..Default::default()
     };
 
-    let iter = 10;
+
     {
         {
             let mut vm =
@@ -1100,7 +1102,7 @@ fn main() {
                 r#"{"verifier": "10000", "beneficiary": "10000"}"#.as_bytes(),
             )
             .unwrap();
-            for _ in 0..0 {
+            for _ in 0..iter {
                 cosmwasm_call::<QueryCall, OwnedWasmiVM<SimpleWasmiVM>>(
                     &mut vm,
                     r#"{ "recurse": { "depth": 10, "work": 10 }}"#.as_bytes(),
