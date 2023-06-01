@@ -50,6 +50,14 @@ pub trait WasmiContext {
 
     /// Sets the executing module
     fn set_wasmi_context(&mut self, instance: Instance, memory: Memory);
+
+    /// Returns function call depth counter.
+    ///
+    /// Counts how many times we’ve moved from host code to inside of the WASM
+    /// code.  This is tracked to avoid unbound recursion caused by malicious
+    /// contract calling host function which calls back into WASM code.  See
+    /// https://github.com/JumpCrypto/security-research/blob/master/advisories/2023-003-cosmwasm.md
+    fn call_depth_mut(&mut self) -> &mut u32;
 }
 
 /// Output of wasmi functions

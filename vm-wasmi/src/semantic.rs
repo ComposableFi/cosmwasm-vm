@@ -207,6 +207,7 @@ struct SimpleWasmiVM<'a> {
     env: Env,
     info: MessageInfo,
     extension: &'a mut SimpleWasmiVMExtension,
+    call_depth: u32,
 }
 
 impl<'a> WasmiContext for SimpleWasmiVM<'a> {
@@ -216,6 +217,10 @@ impl<'a> WasmiContext for SimpleWasmiVM<'a> {
 
     fn set_wasmi_context(&mut self, instance: wasmi::Instance, memory: wasmi::Memory) {
         self.executing_module = Some(WasmiModule { instance, memory });
+    }
+
+    fn call_depth_mut(&mut self) -> &mut u32 {
+        &mut self.call_depth
     }
 }
 
@@ -253,6 +258,7 @@ impl<'a> SimpleWasmiVM<'a> {
                 funds,
             },
             extension: self.extension,
+            call_depth: 0,
         };
         let sub_vm = new_wasmi_vm::<SimpleWasmiVM>(&code, sub_vm)?;
         Ok(sub_vm)
@@ -908,6 +914,7 @@ fn create_vm(
         env,
         info,
         extension,
+        call_depth: 0,
     };
     let vm = new_wasmi_vm::<SimpleWasmiVM>(&code, vm)?;
     Ok(vm)
@@ -989,6 +996,44 @@ fn test_bare() {
                 .as_bytes()
                 .to_vec()
         )))
+    );
+}
+
+/// Tests behaviour of the runtime when malicious contract causes infinite
+/// recursion.
+///
+/// It’s possible for a contract to cause an infinite recursion within the
+/// *host* stack.  This is because host functions call contract’s `allocate` and
+/// `deallocate` functions to manage memory within contract’s address space.
+/// Unconditionally calling host function inside of an `allocate` can easily
+/// lead to host recusing indefinitely and eventually crashing.
+///
+/// This test checks whether recursion depth limit is correctly implemented.
+#[test]
+fn test_recursion() {
+    let code = instrument_contract(include_bytes!("../../fixtures/recursion_test.wasm"));
+    let sender = BankAccount(100);
+    let address = BankAccount(10_000);
+    let funds = vec![];
+    let mut extension = SimpleWasmiVMExtension {
+        storage: BTreeMap::default(),
+        codes: BTreeMap::from([(0x1337, code)]),
+        contracts: BTreeMap::from([(
+            address,
+            CosmwasmContractMeta {
+                code_id: 0x1337,
+                admin: None,
+                label: String::new(),
+            },
+        )]),
+        next_account_id: BankAccount(10_001),
+        gas: Gas::new(100_000_000),
+        ..Default::default()
+    };
+    let mut vm = create_simple_vm(sender, address, funds, &mut extension).unwrap();
+    assert_eq!(
+        cosmwasm_call::<InstantiateCall<Empty>, OwnedWasmiVM<SimpleWasmiVM>>(&mut vm, b"{}"),
+        Err(SimpleVMError::Interpreter)
     );
 }
 
