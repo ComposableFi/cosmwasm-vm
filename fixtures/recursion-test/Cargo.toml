@@ -1,0 +1,23 @@
+[package]
+authors = ["Composable Developers"]
+description = "Recursion test"
+edition = "2021"
+name = "recursion-test"
+repository = "https://github.com/ComposableFi/cosmwasm-vm.git"
+version = "0.1.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+
+[profile.release]
+codegen-units = 1
+debug = false
+debug-assertions = false
+lto = true
+opt-level = "s"
+overflow-checks = true
+panic = "abort"
+rpath = false
+strip = true

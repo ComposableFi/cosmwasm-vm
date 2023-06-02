@@ -26,6 +26,17 @@ use cosmwasm_vm::{
 };
 use wasmi::{AsContextMut, Extern, Store};
 
+/// Maximum number of recursive calls from host to contract.
+///
+/// To manage memory host calls `allocate` and `deallocate` contract functions.
+/// If those functions are written incorrectly or maliciously they may invoke
+/// host function which then tries to call `allocate` or `deallocate` again
+/// leading to infinite recursion.
+///
+/// This parameter limits how deep such recursion can be.  Note that initial
+/// invocation of a contract function is counted.
+const MAX_CALL_DEPTH: u32 = 2;
+
 /// Base traits that are needed to be implemented to work with `WasmiVM`.
 pub trait WasmiBaseVM = Sized
     + VMBase<
@@ -505,7 +516,21 @@ where
             .and_then(Extern::into_func)
             .ok_or(WasmiVMError::FunctionNotFound)?;
 
-        export.call(self.0.as_context_mut(), &params, &mut result)?;
+        // Avoid DOS caused by infinite recursion.
+        let mut ctx = self.0.as_context_mut();
+        let depth = ctx.data_mut().call_depth_mut();
+        if *depth >= MAX_CALL_DEPTH {
+            return Err(WasmiVMError::MaxCallDepthExceeded.into());
+        }
+        *depth += 1;
+
+        let res = export.call(ctx, &params, &mut result);
+
+        let mut ctx = self.0.as_context_mut();
+        let depth = ctx.data_mut().call_depth_mut();
+        *depth = depth.checked_sub(1).expect("depth to be positive");
+
+        res?;
 
         O::try_from(WasmiOutput(WasmiFunctionResult(result), PhantomData))
     }

@@ -216,6 +216,10 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> WasmiContext for Context<'a, CH,
     fn set_wasmi_context(&mut self, instance: Instance, memory: Memory) {
         self.executing_module = Some(WasmiModule { instance, memory });
     }
+
+    fn call_depth_mut(&mut self) -> &mut u32 {
+        &mut self.state.call_depth
+    }
 }
 
 impl<'a, CH: CustomHandler, AH: AddressHandler> Context<'a, CH, AH> {
