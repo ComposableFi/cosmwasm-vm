@@ -10,9 +10,11 @@ The most prevalent virtual machine for executing contracts is the Ethereum Virtu
 Here we specify the inner workings of our CosmWasm Virtual Machine, an actor-based VM for web assembly contracts.
 
 # Status of This Memo
+This specification regards a virtual machine implementation made by Composable in Q2 2022.
 This specification describes an already implemented virtual machine. New features are not accepted in this document but require a separate RFC.
-Discrepancies between the specification and the implementation will be resolved, however.
 It has been authored and approved by the core Composable team.
+
+It describes the semantics of the VM in a slightly more structured way than the original [spec](https://github.com/CosmWasm/wasmvm/blob/main/spec/Specification.md) by Confio.
 
 # Table of contents
 
