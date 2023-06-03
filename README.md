@@ -5,6 +5,8 @@ Experimental, minimalistic, `no_std` friendly abstract virtual machine for CosmW
 Based on `wasmi` interpeter and can be run in other VM. Allows to host CosmWasm VM inside other Wasm VM. 
 In contrast, Cosmos `wasmd` VM can run only on native host.
 
+[Specification](SPEC.md)
+
 ### Getting started
 
 - [Install Nix](https://zero-to-nix.com/start/install) and enter the dev env with: `nix develop`.
