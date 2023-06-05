@@ -3,12 +3,7 @@ use super::{
     Account, AddressHandler, Context, CustomHandler, Db, ExecutionType, Gas, IbcChannelId,
     IbcState, VmError, WasmContractInfo,
 };
-use alloc::{
-    collections::{BTreeMap, VecDeque},
-    string::String,
-    vec,
-    vec::Vec,
-};
+use alloc::collections::BTreeMap;
 use core::fmt::Debug;
 use core::marker::PhantomData;
 use cosmwasm_std::{BlockInfo, Coin, ContractInfo, Env, MessageInfo, Timestamp, TransactionInfo};
@@ -114,7 +109,7 @@ where
 
 #[derive(Clone)]
 pub struct State<CH, AH> {
-    pub transactions: VecDeque<Db<CH>>,
+    pub transactions: Vec<Db<CH>>,
     pub db: Db<CH>,
     pub codes: BTreeMap<CosmwasmCodeId, (Vec<u8>, Vec<u8>)>,
     pub gas: Gas,
@@ -363,7 +358,7 @@ impl<CH: CustomHandler, AH: AddressHandler> State<CH, AH> {
                 custom_handler,
                 ..Default::default()
             },
-            transactions: VecDeque::default(),
+            transactions: Default::default(),
             call_depth: 0,
             _marker: PhantomData,
         }

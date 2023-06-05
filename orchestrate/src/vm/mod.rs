@@ -898,17 +898,17 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> Has<MessageInfo> for Context<'a,
 impl<'a, CH: CustomHandler, AH: AddressHandler> Transactional for Context<'a, CH, AH> {
     type Error = VmError;
     fn transaction_begin(&mut self) -> Result<(), Self::Error> {
-        self.state.transactions.push_back(self.state.db.clone());
+        self.state.transactions.push(self.state.db.clone());
         log::debug!("> Transaction begin: {}", self.state.transactions.len());
         Ok(())
     }
     fn transaction_commit(&mut self) -> Result<(), Self::Error> {
-        let _ = self.state.transactions.pop_back().expect("impossible");
+        let _ = self.state.transactions.pop().expect("impossible");
         log::debug!("< Transaction commit: {}", self.state.transactions.len());
         Ok(())
     }
     fn transaction_rollback(&mut self) -> Result<(), Self::Error> {
-        self.state.db = self.state.transactions.pop_back().expect("impossible");
+        self.state.db = self.state.transactions.pop().expect("impossible");
         log::debug!("< Transaction abort: {}", self.state.transactions.len());
         Ok(())
     }
