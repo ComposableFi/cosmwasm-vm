@@ -1,5 +1,7 @@
 extern crate std;
 
+use crate::version::{Version, Version1x};
+
 use super::{
     code_gen, new_wasmi_vm, OwnedWasmiVM, VMBase, WasmiContext, WasmiInput, WasmiModule,
     WasmiOutput, WasmiVMError,
@@ -41,7 +43,7 @@ use cosmwasm_vm::{
     transaction::Transactional,
     vm::{VmErrorOf, VmGas, VmGasCheckpoint},
 };
-use wasm_instrument::gas_metering::Rules;
+use wasm_instrument::gas_metering::{host_function, Rules};
 use wasmi::core::HostError;
 
 const CANONICAL_LENGTH: usize = 54;
@@ -881,14 +883,21 @@ impl Rules for ConstantCostRules {
             NonZeroU32::new(1024).expect("impossible"),
         )
     }
+
+    fn call_per_local_cost(&self) -> u32 {
+        0
+    }
 }
 
 fn instrument_contract(code: &[u8]) -> Vec<u8> {
     let module =
         wasm_instrument::parity_wasm::elements::Module::from_bytes(code).expect("impossible");
-    let instrumented_module =
-        wasm_instrument::gas_metering::inject(module, &ConstantCostRules, "env")
-            .expect("impossible");
+    let instrumented_module = wasm_instrument::gas_metering::inject(
+        module,
+        host_function::Injector::new(Version1x::ENV_MODULE, Version1x::ENV_GAS),
+        &ConstantCostRules,
+    )
+    .expect("impossible");
     instrumented_module.into_bytes().expect("impossible")
 }
 
