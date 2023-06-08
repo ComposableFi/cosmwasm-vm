@@ -10,9 +10,9 @@ pub mod code_gen;
 pub mod validation;
 pub mod version;
 
-pub (crate) mod error;
-pub (crate) mod host_functions;
-pub (crate) mod vm;
+pub(crate) mod error;
+pub(crate) mod host_functions;
+pub(crate) mod vm;
 
 pub use error::*;
 pub use vm::*;
