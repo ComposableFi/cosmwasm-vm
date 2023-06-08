@@ -7,3 +7,4 @@ flamegraph.svg
 *.log
 *.data
 *.data.old
+.vscode/

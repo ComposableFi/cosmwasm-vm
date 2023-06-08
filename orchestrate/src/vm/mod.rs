@@ -928,4 +928,8 @@ impl Rules for ConstantCostRules {
             NonZeroU32::new(1024).expect("impossible"),
         )
     }
+
+    fn call_per_local_cost(&self) -> u32 {
+        0
+    }
 }

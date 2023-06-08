@@ -3,12 +3,17 @@ name = "cosmwasm-vm-wasmi"
 version = "0.2.0"
 edition = "2021"
 
+
+[[bin]]
+name = "research"
+test = true
+
 [features]
 default = ["iterator", "stargate", "ibc3"]
 iterator = ["cosmwasm-vm/iterator"]
 stargate = ["cosmwasm-vm/stargate"]
 ibc3 = ["cosmwasm-vm/ibc3"]
-std = ["cosmwasm-std/std", "cosmwasm-vm/std"]
+std = ["cosmwasm-std/std"]
 
 [dependencies]
 serde = { workspaace = true, default-features = false, features = ["derive"] }
@@ -25,11 +30,19 @@ cosmwasm-std = { workspace = true, default-features = false, features = [
 cosmwasm-vm = { path = "../vm", default-features = false }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
 
+# benches
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tracing-opentelemetry = "*"
+opentelemetry = "*"
+
+wyndex = { git = "https://github.com/wynddao/wynddex", rev = "a578f8b645433e108a10613e85ae49385c2fc63c", default-features = false }
+
 [dev-dependencies]
 wat = "1.0"
 env_logger = "0.9"
-cosmwasm-crypto = { workspace = true }
+cosmwasm-crypto = { git = "https://github.com/ComposableFi/cosmwasm", rev = "7d288c23772d03e8cd666b76cb5bbdc5952721dd" }
 
-cw20-ics20 = { git = "https://github.com/CosmWasm/cw-plus", rev = "53dc88fdb81888cbd3dae8742e7318b35d3d0c0f", default-features = false, features = [
-  "library",
-] }
+# cw20-ics20 = { git = "https://github.com/CosmWasm/cw-plus", rev = "53dc88fdb81888cbd3dae8742e7318b35d3d0c0f", default-features = false, features = [
+#   "library",
+# ] }

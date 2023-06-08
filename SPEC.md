@@ -16,74 +16,6 @@ It has been authored and approved by the core Composable team.
 
 It describes the semantics of the VM in a slightly more structured way than the original [spec](https://github.com/CosmWasm/wasmvm/blob/main/spec/Specification.md) by Confio.
 
-# Table of contents
-
-- [Abstract](#abstract)
-- [Status of This Memo](#status-of-this-memo)
-- [Copyright Notice](#copyright-notice)
-- [Table of Contents](#table-of-contents)
-- [1. Overview](#1-overview)
-  - [1.1. Document Structure](#11-document-structure)
-  - [1.2. Terms and Definitions](#12-terms-and-definitions)
-  - [1.3.  Notational Conventions](#13-notational-conventions)
-- [2. Smart Contracts](#2-smart-contracts)
-    - [2.1. Exports](#21-exports)
-        - [2.1.1. Base exports](#211-base-exports)
-        - [2.1.2. IBC exports](#212-ibc-exports)
-    - [2.2. Interface Version](#22-interface-version)
-    - [2.3. Allocating](#23-allocating)
-    - [2.4. Deallocating](#24-deallocating)
-    - [2.5. Instantiation](#25-instantiation)
-        - [2.5.1. Environment Pointer](#251-environment-pointer)
-        - [2.5.2. Information Pointer](#252-information-pointer)
-        - [2.5.3. Regions](#253-regions)
-    - [2.6. Execute](#26-execute)
-    - [2.7. Query](#27-query)
-    - [2.8. Migrate](#28-migrate)
-    - [2.9. Reply](#29-reply)
-    - [2.10. Sudo](#210-sudo)
-    - [2.11. IBC Channel Open](#211-ibc-channel-open)
-    - [2.12. IBC Channel Connect](#212-ibc-channel-connect)
-    - [2.13. IBC Channel Close](#213-ibc-channel-close)
-    - [2.14. IBC Packet Receive](#214-ibc-packet-receive)
-    - [2.15. IBC Packet Ack](#215-ibc-packet-ack)
-    - [2.16. IBC Packet Timeout](#216-ibc-packet-timeout)
-- [3. Host Functions](#3-host-functions)
-    - [3.1. DB Read](#31-db-read)
-    - [3.2. DB Write](#32-db-write)
-    - [3.3. DB Remove](#33-db-remove)
-    - [3.4. DB Scan](#34-db-scan)
-    - [3.5. DB Next](#35-db-next)
-    - [3.6. Address Validate](#36-address-validate)
-    - [3.7. Address Canonicalize](#37-address-canonicalize)
-    - [3.8. Address Humanize](#38-address-humanize)
-    - [3.9. Secp256k1 Verify](#39-secp256k1-verify)
-    - [3.10. Secp256k1 Recovery](#310-secp256k1-recovery)
-    - [3.11. Ed25519 Verify](#311-ed25519-verify)
-    - [3.12. Ed25519 Batch Verify](#312-ed25519-batch-verify)
-    - [3.13. Debug](#313-debug)
-    - [3.14. Query Chain](#314-query-chain)
-        - [3.14.1 Bank Query](#3141-bank-query)
-        - [3.14.2 Wasm Query](#3142-wasm-query)
-- [4. Virtual Machine](#4-virtual-machine)
-    - [4.1. Gas Metering](#41-gas-metering)
-        - [4.1.1. Gas to Weight](#411-gas-to-weight)
-    - [4.2. Messaging](#42-messaging)
-        - [4.2.1 Submessages](#421-submessages)
-        - [4.2.2 Query](#422-query)
-    - [4.3. Calling a Contract](#43-calling-a-contract)
-    - [4.4. Contract Call Graph](#44-contract-call-graph)
-    - [4.5. Custom Message](#45-custom-message)
-    - [4.6. Custom Query](#46-custom-query)
-- [5. Serialization Format](#5-serialization-format)
-- [6. IBC](#6-ibc)
-    - [6.1. Enabling IBC](#61-enabling-ibc)
-    - [6.2. Host Functions](#62-host-functions)
-        - [6.2.1. IBC Transfer](#621-ibc-transfer)
-        - [6.2.2. IBC Packet Send](#622-ibc-packet-send)
-        - [6.2.3. IBC Channel Close](#623-ibc-channel-close)
-- [7. Contributors](#7-contributors)
-
 # 1. Overview
 CosmWasm is a web assembly (wasm) based standard for smart contracts.
 In this document, we define and provide a specification for our implementation of CosmWasm.
@@ -1227,7 +1159,6 @@ Contributors that made our CosmWasm implementation possible are here listed in a
 
 - Hussein Ait Lahcen - XCVM Principal Engineering - Composable Finance
 - Abdullah Eryuzlu - Rust Developer - Composable Finance
-- Dzmitry Lahoda - Rust Developer - Composable Finance
 - Cor Pruijs - Rust Developer - Composable Finance
 
 [2.5.1.]: #251-environment-pointer

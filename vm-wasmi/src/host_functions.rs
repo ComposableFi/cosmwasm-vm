@@ -5,8 +5,12 @@
 )]
 use super::{
     format, AsContextMut, String, Tagged, VMBase, Vec, VmErrorOf, VmGas, VmQueryCustomOf,
-    WasmiBaseVM, WasmiVM, WasmiVMError,
+    WasmiBaseVM, WasmiVM,
 };
+
+#[cfg(feature = "iterator")]
+use super::WasmiVMError;
+
 #[cfg(feature = "iterator")]
 use cosmwasm_std::Order;
 use cosmwasm_std::QueryRequest;
@@ -453,7 +457,7 @@ where
 }
 
 /// Charges `value` amount of gas.
-pub fn env_gas<V, S>(mut vm: WasmiVM<V, S>, value: i32) -> Result<(), VmErrorOf<V>>
+pub fn env_gas<V, S>(mut vm: WasmiVM<V, S>, value: i64) -> Result<(), VmErrorOf<V>>
 where
     V: WasmiBaseVM,
     S: AsContextMut<UserState = V>,
@@ -560,6 +564,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
             ),
         )
         .map_err(Into::<wasmi::Error>::into)?;
+    #[cfg(feature = "iterator")]
     linker
         .define(
             "env",
@@ -576,6 +581,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
             ),
         )
         .map_err(Into::<wasmi::Error>::into)?;
+    #[cfg(feature = "iterator")]
     linker
         .define(
             "env",
@@ -762,7 +768,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
             "gas",
             Func::wrap(
                 ctx.as_context_mut(),
-                |caller: Caller<'_, V>, value: i32| -> Result<(), Trap> {
+                |caller: Caller<'_, V>, value: i64| -> Result<(), Trap> {
                     env_gas(WasmiVM(caller), value).map_err(Into::into)
                 },
             ),

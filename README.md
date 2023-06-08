@@ -1,3 +1,4 @@
+
 # CosmWasm VM
 
 Experimental, minimalistic, `no_std` friendly abstract virtual machine for CosmWasm contracts execution.
@@ -25,3 +26,10 @@ Install `flamegraph` (in nix shell already installed)
 
 Modify `research.rs` as needed.
 
+## Authors
+  "Hussein Ait Lahcen hussein.aitlahcen@gmail.com"
+  "Abdullah Eryuzlu abdullaheryuzlu@gmail.com"
+  "Composable Developers"
+##  homepage
+
+https://composable.finance

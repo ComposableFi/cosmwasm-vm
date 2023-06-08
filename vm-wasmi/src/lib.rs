@@ -249,7 +249,7 @@ pub fn new_wasmi_vm<V: WasmiBaseVM>(code: &[u8], data: V) -> Result<OwnedWasmiVM
     let module = Module::new(&engine, code).map_err(Into::<wasmi::Error>::into)?;
 
     let mut store = Store::new(&engine, data);
-    let mut linker = <Linker<V>>::new();
+    let mut linker = <Linker<V>>::new(&engine);
 
     host_functions::define(store.as_context_mut(), &mut linker)?;
 
