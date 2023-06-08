@@ -7,16 +7,8 @@ extern crate alloc;
 
 extern crate std;
 
+use cosmwasm_vm::vm::VMBase;
 
-use cosmwasm_vm::{
-    vm::VMBase
-};
-
-
-use cosmwasm_vm_wasmi::{
-    code_gen, new_wasmi_vm, OwnedWasmiVM, WasmiContext, WasmiInput, WasmiModule,
-    WasmiOutput, WasmiVMError,
-};
 use alloc::{
     collections::BTreeMap,
     format,
@@ -24,8 +16,6 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use tracing::instrument::WithSubscriber;
-use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use core::{
     assert_matches::assert_matches,
     fmt::{Debug, Display},
@@ -56,6 +46,12 @@ use cosmwasm_vm::{
     transaction::Transactional,
     vm::{VmErrorOf, VmGas, VmGasCheckpoint},
 };
+use cosmwasm_vm_wasmi::{
+    code_gen, new_wasmi_vm, OwnedWasmiVM, WasmiContext, WasmiInput, WasmiModule, WasmiOutput,
+    WasmiVMError,
+};
+use tracing::instrument::WithSubscriber;
+use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use wasm_instrument::gas_metering::Rules;
 use wasmi::core::HostError;
 
@@ -130,7 +126,7 @@ impl Gas {
             checkpoints: vec![initial_value],
         }
     }
-    
+
     fn current(&self) -> &u64 {
         self.checkpoints.last().expect("impossible")
     }
@@ -525,7 +521,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
     }
 
     #[cfg(feature = "iterator")]
-    #[tracing::instrument(skip(self,_order))]
+    #[tracing::instrument(skip(self, _order))]
     fn db_scan(
         &mut self,
         _start: Option<Self::StorageKey>,
@@ -909,16 +905,18 @@ pub fn initialize() {
         builder.format_timestamp_nanos();
         builder.try_init().unwrap();
 
-
         let collector = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::TRACE)
-        .finish();        
-        let collector = tracing_subscriber::fmt::layer().with_level(true).with_line_number(true);
+            .with_max_level(tracing::Level::TRACE)
+            .finish();
+        let collector = tracing_subscriber::fmt::layer()
+            .with_level(true)
+            .with_line_number(true);
         let tracer = opentelemetry::sdk::export::trace::stdout::new_pipeline().install_simple();
         let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-        let subscriber = tracing_subscriber::Registry::default().with(telemetry).with(collector);
+        let subscriber = tracing_subscriber::Registry::default()
+            .with(telemetry)
+            .with(collector);
         tracing::subscriber::set_global_default(subscriber).unwrap();
-        
     });
 }
 
@@ -1024,7 +1022,6 @@ fn main() {
         gas: Gas::new(u64::MAX),
         ..Default::default()
     };
-
 
     {
         {
