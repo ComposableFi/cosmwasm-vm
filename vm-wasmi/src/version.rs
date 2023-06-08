@@ -1,9 +1,11 @@
 use super::validation::ExportRequirement;
+#[cfg(feature = "ibc3")]
+use cosmwasm_vm::executor::ibc::{
+    IbcChannelCloseCall, IbcChannelConnectCall, IbcChannelOpenCall, IbcPacketAckCall,
+    IbcPacketReceiveCall, IbcPacketTimeoutCall,
+};
+
 use cosmwasm_vm::executor::{
-    ibc::{
-        IbcChannelCloseCall, IbcChannelConnectCall, IbcChannelOpenCall, IbcPacketAckCall,
-        IbcPacketReceiveCall, IbcPacketTimeoutCall,
-    },
     AllocateCall, AsFunctionName, DeallocateCall, ExecuteCall, InstantiateCall, MigrateCall,
     QueryCall, ReplyCall,
 };
@@ -17,6 +19,7 @@ pub trait Version {
     const ENV_MODULE: &'static str = "env";
     const ENV_GAS: &'static str = "gas";
     const EXPORTS: &'static [Export];
+    #[cfg(feature = "ibc3")]
     const IBC_EXPORTS: &'static [Export];
 }
 
@@ -85,6 +88,7 @@ impl Version for Version1x {
     // extern "C" fn ibc_packet_receive(env_ptr: u32, msg_ptr: u32) -> u32;
     // extern "C" fn ibc_packet_ack(env_ptr: u32, msg_ptr: u32) -> u32;
     // extern "C" fn ibc_packet_timeout(env_ptr: u32, msg_ptr: u32) -> u32;
+    #[cfg(feature = "ibc3")]
     const IBC_EXPORTS: &'static [Export] = &[
         (
             ExportRequirement::Mandatory,

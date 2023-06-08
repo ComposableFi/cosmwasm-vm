@@ -1,7 +1,5 @@
 // transaction.rs ---
 
-
-
 pub type TransactionalErrorOf<T> = <T as Transactional>::Error;
 
 pub trait Transactional {

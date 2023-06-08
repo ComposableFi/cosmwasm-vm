@@ -1,7 +1,5 @@
 // system.rs ---
 
-
-
 #[cfg(feature = "stargate")]
 use crate::executor::ibc::{
     IbcChannelCloseCall, IbcChannelConnectCall, IbcPacketAckCall, IbcPacketReceiveCall,

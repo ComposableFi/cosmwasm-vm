@@ -1,7 +1,5 @@
 // tagged.rs ---
 
-
-
 use core::marker::PhantomData;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]

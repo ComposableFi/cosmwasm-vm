@@ -560,6 +560,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
             ),
         )
         .map_err(Into::<wasmi::Error>::into)?;
+    #[cfg(feature = "iterator")]
     linker
         .define(
             "env",
@@ -576,6 +577,7 @@ pub(crate) fn define<V: WasmiBaseVM>(
             ),
         )
         .map_err(Into::<wasmi::Error>::into)?;
+    #[cfg(feature = "iterator")]
     linker
         .define(
             "env",

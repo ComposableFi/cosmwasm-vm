@@ -1,7 +1,3 @@
-// executor.rs ---
-
-
-
 use crate::{
     has::Has,
     input::Input,
