@@ -28,6 +28,23 @@
 
         crane-nightly = crane-lib.overrideToolchain rust-nightly;
 
+        features = " --features iterator";
+        package="cosmwasm-vm";
+        check-no-std = pkgs.writeShellApplication rec {
+          name = "check-no-std";
+          runtimeInputs = [ rust-nightly ];
+          text = ''
+            cargo build --locked --no-default-features --target thumbv7em-none-eabi --package ${package} ${features}
+          '';
+        };
+        check-wasm-std = pkgs.writeShellApplication rec {
+          name = "check-wasm-std";
+          runtimeInputs = [ rust-nightly ];
+          text = ''
+            cargo build --target wasm32-unknown-unknown --locked ${features},std --package ${package}
+          '';
+        };
+        
         src = pkgs.lib.cleanSourceWith {
           filter = pkgs.lib.cleanSourceFilter;
           src = pkgs.lib.cleanSourceWith {
@@ -61,7 +78,7 @@
         };
         devShell = pkgs.mkShell {
           buildInputs = [ rust-nightly ]
-            ++ (with pkgs; [ openssl openssl.dev pkgconfig taplo nixfmt bacon flamegraph cargo-flamegraph]);
+            ++ (with pkgs; [ openssl openssl.dev pkgconfig taplo nixfmt bacon flamegraph cargo-flamegraph check-no-std check-wasm-std]);
         };
       });
 }

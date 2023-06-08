@@ -217,6 +217,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cosmwasm-derive"
+version = "1.2.5"
+source = "git+https://github.com/dzmitry-lahoda-forks/cosmwasm?rev=f483c3c4695fcb094539b5aead223d54cb0e23b2#f483c3c4695fcb094539b5aead223d54cb0e23b2"
+dependencies = [
+ "syn",
+]
+
+[[package]]
 name = "cosmwasm-orchestrate"
 version = "0.1.0"
 dependencies = [
@@ -306,10 +314,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "cosmwasm-std"
+version = "1.2.5"
+source = "git+https://github.com/dzmitry-lahoda-forks/cosmwasm?rev=f483c3c4695fcb094539b5aead223d54cb0e23b2#f483c3c4695fcb094539b5aead223d54cb0e23b2"
+dependencies = [
+ "base64",
+ "cosmwasm-derive 1.2.5",
+ "derivative",
+ "forward_ref",
+ "hex",
+ "schemars",
+ "serde",
+ "serde-json-wasm 0.5.1",
+ "sha2 0.10.6",
+ "thiserror-core",
+ "uint",
+]
+
+[[package]]
 name = "cosmwasm-vm"
 version = "0.1.0"
 dependencies = [
- "cosmwasm-std 1.2.0",
+ "cosmwasm-std 1.2.5",
  "env_logger 0.9.3",
  "log",
  "num",
@@ -320,7 +346,7 @@ dependencies = [
 
 [[package]]
 name = "cosmwasm-vm-wasmi"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cosmwasm-crypto 1.1.5",
  "cosmwasm-std 1.2.0",
@@ -1585,6 +1611,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-json-wasm"
+version = "0.5.1"
+source = "git+https://github.com/dzmitry-lahoda-forks/serde-json-wasm?rev=8a7e522c0e4de36a6dfb535766f26a9941017d81#8a7e522c0e4de36a6dfb535766f26a9941017d81"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "serde_derive"
 version = "1.0.152"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1751,6 +1785,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a9cd18aa97d5c45c6603caea1da6628790b37f7a34b6ca89522331c5180fed0"
 dependencies = [
  "thiserror-impl",
+]
+
+[[package]]
+name = "thiserror-core"
+version = "1.0.38"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d97345f6437bb2004cd58819d8a9ef8e36cdd7661c2abc4bbde0a7c40d9f497"
+dependencies = [
+ "thiserror-core-impl",
+]
+
+[[package]]
+name = "thiserror-core-impl"
+version = "1.0.38"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10ac1c5050e43014d16b2f94d0d2ce79e65ffdd8b38d8048f9c8f6a8a6da62ac"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
