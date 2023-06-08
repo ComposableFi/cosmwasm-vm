@@ -188,30 +188,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "cosmwasm-crypto"
-version = "1.2.0"
-source = "git+https://github.com/ComposableFi/cosmwasm?rev=34af48221c90e6818fe341d6d5b15116dfeab671#34af48221c90e6818fe341d6d5b15116dfeab671"
-dependencies = [
- "digest 0.10.6",
- "ed25519-zebra",
- "k256",
- "rand_core 0.6.4",
- "thiserror",
-]
-
-[[package]]
 name = "cosmwasm-derive"
 version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6fca30d51f7e5fbfa6440d8b10d7df0231bdf77e97fd3fe5d0cb79cc4822e50c"
-dependencies = [
- "syn",
-]
-
-[[package]]
-name = "cosmwasm-derive"
-version = "1.2.0"
-source = "git+https://github.com/ComposableFi/cosmwasm?rev=34af48221c90e6818fe341d6d5b15116dfeab671#34af48221c90e6818fe341d6d5b15116dfeab671"
 dependencies = [
  "syn",
 ]
@@ -232,7 +212,7 @@ dependencies = [
  "base64",
  "bech32",
  "bs58",
- "cosmwasm-std 1.2.0",
+ "cosmwasm-std 1.2.5",
  "cosmwasm-vm",
  "cosmwasm-vm-wasmi",
  "ed25519-zebra",
@@ -290,25 +270,6 @@ dependencies = [
  "schemars",
  "serde",
  "serde-json-wasm 0.4.1",
- "thiserror",
- "uint",
-]
-
-[[package]]
-name = "cosmwasm-std"
-version = "1.2.0"
-source = "git+https://github.com/ComposableFi/cosmwasm?rev=34af48221c90e6818fe341d6d5b15116dfeab671#34af48221c90e6818fe341d6d5b15116dfeab671"
-dependencies = [
- "base64",
- "cosmwasm-crypto 1.2.0",
- "cosmwasm-derive 1.2.0",
- "derivative",
- "forward_ref",
- "hex",
- "schemars",
- "serde",
- "serde-json-wasm 0.5.0",
- "sha2 0.10.6",
  "thiserror",
  "uint",
 ]
@@ -1597,15 +1558,6 @@ name = "serde-json-wasm"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "479b4dbc401ca13ee8ce902851b834893251404c4f3c65370a49e047a6be09a5"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "serde-json-wasm"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a15bee9b04dd165c3f4e142628982ddde884c2022a89e8ddf99c4829bf2c3a58"
 dependencies = [
  "serde",
 ]

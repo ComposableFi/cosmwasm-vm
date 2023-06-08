@@ -5,12 +5,12 @@ edition = "2021"
 
 [features]
 default = ["std"]
-std = ["reqwest", "cosmwasm-std/std"]
+std = ["reqwest", "cosmwasm-std/std", "cosmwasm-vm/std", "cosmwasm-vm-wasmi/std"]
 
 [dependencies]
 cosmwasm-vm = { path = "../vm" }
 cosmwasm-vm-wasmi = { path = "../vm-wasmi" }
-cosmwasm-std = { git = "https://github.com/ComposableFi/cosmwasm", rev = "34af48221c90e6818fe341d6d5b15116dfeab671", default-features = false, features = [
+cosmwasm-std = {workspace = true, default-features = false, features = [
   "stargate",
   "ibc3",
   "staking", 
@@ -18,8 +18,8 @@ cosmwasm-std = { git = "https://github.com/ComposableFi/cosmwasm", rev = "34af48
 ] }
 ed25519-zebra = { version = "3.1.0", default-features = false }
 libsecp256k1 = { version = "0.7.1", default-features = false, features = [ "hmac", "static-context" ] }
-serde_json = { version = "1.0", default-features = false, features = [ "alloc" ] }
-serde = { version = "1.0", default-features = false, features = [ "derive", "alloc" ] }
+serde_json = { workspace = true, default-features = false, features = [ "alloc" ] }
+serde = { workspace = true, default-features = false, features = [ "derive", "alloc" ] }
 wasmi = { version = "0.26", default-features = false }
 wasm-instrument = { version = "0.2", default-features = false }
 log = "0.4"
