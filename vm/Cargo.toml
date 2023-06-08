@@ -1,13 +1,7 @@
 [package]
 name = "cosmwasm-vm"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-authors = [
-  "Hussein Ait Lahcen hussein.aitlahcen@gmail.com",
-  "Abdullah Eryuzlu abdullaheryuzlu@gmail.com",
-  "Composable Developers",
-]
-homepage = "https://composable.finance"
 
 [features]
 default = ["iterator", "stargate", "ibc3"]

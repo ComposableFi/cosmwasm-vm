@@ -333,7 +333,7 @@ dependencies = [
 
 [[package]]
 name = "cosmwasm-vm"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cosmwasm-std 1.2.5",
  "env_logger 0.9.3",
@@ -349,7 +349,7 @@ name = "cosmwasm-vm-wasmi"
 version = "0.2.0"
 dependencies = [
  "cosmwasm-crypto 1.1.5",
- "cosmwasm-std 1.2.0",
+ "cosmwasm-std 1.2.5",
  "cosmwasm-vm",
  "cw20-ics20",
  "either",

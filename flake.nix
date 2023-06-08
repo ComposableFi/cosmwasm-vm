@@ -28,20 +28,18 @@
 
         crane-nightly = crane-lib.overrideToolchain rust-nightly;
 
-        features = " --features iterator";
-        package="cosmwasm-vm";
-        check-no-std = pkgs.writeShellApplication rec {
-          name = "check-no-std";
+        check-crate = pkgs.writeShellApplication rec {
+          name = "check-crate";
           runtimeInputs = [ rust-nightly ];
           text = ''
-            cargo build --locked --no-default-features --target thumbv7em-none-eabi --package ${package} ${features}
-          '';
-        };
-        check-wasm-std = pkgs.writeShellApplication rec {
-          name = "check-wasm-std";
-          runtimeInputs = [ rust-nightly ];
-          text = ''
-            cargo build --target wasm32-unknown-unknown --locked ${features},std --package ${package}
+            EXTRA_FEATURES=""
+            if [[ -n "''${2-}" ]]; then
+              EXTRA_FEATURES="--features $2"
+            fi
+            # shellcheck disable=SC2086
+            cargo build --target wasm32-unknown-unknown --locked --all-features --package "$1" $EXTRA_FEATURES
+            # shellcheck disable=SC2086
+            cargo build --locked --no-default-features --target thumbv7em-none-eabi --package "$1" $EXTRA_FEATURES
           '';
         };
         
@@ -68,6 +66,7 @@
         packages = rec {
           cosmwasm-vm = crane-nightly.buildPackage common-cached-args;
           default = cosmwasm-vm;
+          inherit check-crate;
         };
         checks = {
           package = packages.default;
@@ -78,7 +77,7 @@
         };
         devShell = pkgs.mkShell {
           buildInputs = [ rust-nightly ]
-            ++ (with pkgs; [ openssl openssl.dev pkgconfig taplo nixfmt bacon flamegraph cargo-flamegraph check-no-std check-wasm-std]);
+            ++ (with pkgs; [ openssl openssl.dev pkgconfig taplo nixfmt bacon flamegraph cargo-flamegraph check-crate]);
         };
       });
 }
