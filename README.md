@@ -30,7 +30,8 @@ Modify `research.rs` as needed.
 
 Until release of CW for `no_std`, which is planned with CW 2.0 in September, need maintain no_std forks in this order:
 - serde-json-wasm
-- cosmwasm-std
+- cosmwasm (cosmwasm-std)
+- cw-utils
 - cw-stroage-plus
 - cw-plus (package with interfaces, not contracts)
 
