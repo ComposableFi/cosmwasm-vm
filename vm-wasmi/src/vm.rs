@@ -35,7 +35,7 @@ use wasmi::{AsContextMut, Extern, Store};
 ///
 /// This parameter limits how deep such recursion can be.  Note that initial
 /// invocation of a contract function is counted.
-const MAX_CALL_DEPTH: u32 = u32::MAX; // low numbers fail all benchmarks in host, please make it configurable or fix other way
+const MAX_CALL_DEPTH: u32 = 2;
 
 /// Base traits that are needed to be implemented to work with `WasmiVM`.
 pub trait WasmiBaseVM = Sized
