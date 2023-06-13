@@ -14,6 +14,5 @@ pub mod vm;
 mod wasm_builder;
 
 pub use api::*;
-pub use cosmwasm_std;
 #[cfg(feature = "std")]
 pub use wasm_builder::*;
