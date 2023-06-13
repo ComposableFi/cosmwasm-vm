@@ -1,5 +1,5 @@
 [workspace]
-members = ["vm", "vm-wasmi", "orchestrate"]
+members = ["vm", "vm-wasmi", "orchestrate", "research"]
 exclude = ["fixtures/recursion-test"]
 resolver = "2"
 

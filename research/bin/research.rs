@@ -27,30 +27,26 @@ use cosmwasm_std::IbcTimeout;
 #[cfg(feature = "iterator")]
 use cosmwasm_std::Order;
 use cosmwasm_std::{
-    Addr, Attribute, Binary, BlockInfo, CanonicalAddr, CodeInfoResponse, Coin, ContractInfo,
-    ContractInfoResponse, ContractResult, Empty, Env, Event, MessageInfo, Reply, SystemResult,
-    Timestamp,
+    Addr, Binary, BlockInfo, CanonicalAddr, CodeInfoResponse, Coin, ContractInfo,
+    ContractInfoResponse, Empty, Env, Event, MessageInfo, Reply, SystemResult, Timestamp,
 };
 use cosmwasm_vm::{
     executor::{
-        cosmwasm_call, CosmwasmExecutionResult, CosmwasmQueryResult, ExecuteCall, ExecuteResult,
-        ExecutorError, InstantiateCall, InstantiateResult, MigrateCall, QueryCall, QueryResult,
-        ReplyCall,
+        cosmwasm_call, CosmwasmExecutionResult, CosmwasmQueryResult, ExecuteCall, ExecutorError,
+        InstantiateCall, InstantiateResult, MigrateCall, QueryCall, QueryResult, ReplyCall,
     },
     has::Has,
     memory::{MemoryReadError, MemoryWriteError},
     system::{
-        cosmwasm_system_entrypoint, cosmwasm_system_entrypoint_hook, cosmwasm_system_run,
-        CosmwasmCodeId, CosmwasmContractMeta, SystemError,
+        cosmwasm_system_entrypoint, cosmwasm_system_run, CosmwasmCodeId, CosmwasmContractMeta,
+        SystemError,
     },
     transaction::Transactional,
     vm::{VmErrorOf, VmGas, VmGasCheckpoint},
 };
 use cosmwasm_vm_wasmi::{
-    code_gen, new_wasmi_vm, OwnedWasmiVM, WasmiContext, WasmiInput, WasmiModule, WasmiOutput,
-    WasmiVMError,
+    new_wasmi_vm, OwnedWasmiVM, WasmiContext, WasmiInput, WasmiModule, WasmiOutput, WasmiVMError,
 };
-use tracing::instrument::WithSubscriber;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use wasm_instrument::gas_metering::Rules;
 use wasmi::core::HostError;
@@ -204,6 +200,7 @@ struct SimpleWasmiVMExtension {
     next_account_id: BankAccount,
     transaction_depth: u32,
     gas: Gas,
+    call_depth: u32,
 }
 
 struct SimpleWasmiVM<'a> {
@@ -221,6 +218,10 @@ impl<'a> WasmiContext for SimpleWasmiVM<'a> {
 
     fn set_wasmi_context(&mut self, instance: wasmi::Instance, memory: wasmi::Memory) {
         self.executing_module = Some(WasmiModule { instance, memory });
+    }
+
+    fn call_depth_mut(&mut self) -> &mut u32 {
+        &mut self.extension.call_depth
     }
 }
 
@@ -879,15 +880,19 @@ impl Rules for ConstantCostRules {
             NonZeroU32::new(1024).expect("impossible"),
         )
     }
+
+    fn call_per_local_cost(&self) -> u32 {
+        0
+    }
 }
 
 fn instrument_contract(code: &[u8]) -> Vec<u8> {
-    let module =
-        wasm_instrument::parity_wasm::elements::Module::from_bytes(code).expect("impossible");
-    let instrumented_module =
-        wasm_instrument::gas_metering::inject(module, &ConstantCostRules, "env")
-            .expect("impossible");
-    instrumented_module.into_bytes().expect("impossible")
+    let module = wasm_instrument::parity_wasm::elements::Module::from_bytes(code).unwrap();
+    let backend = wasm_instrument::gas_metering::host_function::Injector::new("env", "gas");
+    wasm_instrument::gas_metering::inject(module, backend, &ConstantCostRules)
+        .unwrap()
+        .into_bytes()
+        .unwrap()
 }
 
 pub fn initialize() {
@@ -899,9 +904,6 @@ pub fn initialize() {
         builder.format_timestamp_nanos();
         builder.try_init().unwrap();
 
-        let collector = tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::TRACE)
-            .finish();
         let collector = tracing_subscriber::fmt::layer()
             .with_level(true)
             .with_line_number(true);
@@ -969,9 +971,9 @@ fn create_simple_vm(
 
 fn main() {
     let iter = 100;
-    let cw20_base_code = instrument_contract(include_bytes!("../../../fixtures/cw20_base.wasm"));
-    let hackatom_code = instrument_contract(include_bytes!("../../../fixtures/hackatom.wasm"));
-    let reflect_code = instrument_contract(include_bytes!("../../../fixtures/reflect.wasm"));
+    let cw20_base_code = instrument_contract(include_bytes!("../../fixtures/cw20_base.wasm"));
+    let hackatom_code = instrument_contract(include_bytes!("../../fixtures/hackatom.wasm"));
+    let reflect_code = instrument_contract(include_bytes!("../../fixtures/reflect.wasm"));
 
     let sender = BankAccount(100);
     let cw20_address = BankAccount(10_000);
@@ -1057,10 +1059,9 @@ fn main() {
             .unwrap();
 
             for _ in 0..iter {
-                let (_, events) =
-                    cosmwasm_system_entrypoint::<ExecuteCall, OwnedWasmiVM<SimpleWasmiVM>>(
-                        &mut vm,
-                        r#"{
+                cosmwasm_system_entrypoint::<ExecuteCall, OwnedWasmiVM<SimpleWasmiVM>>(
+                    &mut vm,
+                    r#"{
                       "reflect_sub_msg": {
                         "msgs": [{
                           "id": 10,
@@ -1078,17 +1079,16 @@ fn main() {
                         }]
                       }
                     }"#
-                        .as_bytes(),
-                    )
-                    .unwrap();
+                    .as_bytes(),
+                )
+                .unwrap();
             }
         }
 
         {
-            let mut vm =
-                create_simple_vm(sender, hackatom_address, funds.clone(), &mut extension).unwrap();
+            let mut vm = create_simple_vm(sender, hackatom_address, funds, &mut extension).unwrap();
 
-            let (_, events) = cosmwasm_system_entrypoint::<InstantiateCall, _>(
+            cosmwasm_system_entrypoint::<InstantiateCall, _>(
                 &mut vm,
                 r#"{"verifier": "10000", "beneficiary": "10000"}"#.as_bytes(),
             )
