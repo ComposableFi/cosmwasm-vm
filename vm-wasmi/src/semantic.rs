@@ -661,10 +661,7 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
         // content-dependent rotate followed by shuffle to destroy
         let rotate_by = digit_sum(&out) % CANONICAL_LENGTH;
         out.rotate_left(rotate_by);
-        for _ in 0..SHUFFLES_ENCODE {
-            out = riffle_shuffle(&out);
-        }
-        Ok(Ok(out.try_into()?))
+        Ok(Ok(riffle_shuffle_n(out, SHUFFLES_ENCODE).try_into()?))
     }
 
     fn addr_humanize(
@@ -675,11 +672,8 @@ impl<'a> VMBase for SimpleWasmiVM<'a> {
             return Ok(Err(SimpleVMError::InvalidAddress));
         }
 
-        let mut tmp: Vec<u8> = addr.clone().into();
         // Shuffle two more times which restored the original value (24 elements are back to original after 20 rounds)
-        for _ in 0..SHUFFLES_DECODE {
-            tmp = riffle_shuffle(&tmp);
-        }
+        let mut tmp = riffle_shuffle_n(addr.clone().into(), SHUFFLES_DECODE);
         // Rotate back
         let rotate_by = digit_sum(&tmp) % CANONICAL_LENGTH;
         tmp.rotate_right(rotate_by);
@@ -1132,19 +1126,41 @@ pub fn digit_sum(input: &[u8]) -> usize {
     input.iter().map(|v| *v as usize).sum()
 }
 
-pub fn riffle_shuffle<T: Clone>(input: &[T]) -> Vec<T> {
+fn riffle_shuffle_n(mut input: Vec<u8>, n: usize) -> Vec<u8> {
     assert!(
         input.len() % 2 == 0,
         "Method only defined for even number of elements"
     );
     let mid = input.len() / 2;
-    let (left, right) = input.split_at(mid);
-    let mut out = Vec::<T>::with_capacity(input.len());
-    for i in 0..mid {
-        out.push(right[i].clone());
-        out.push(left[i].clone());
+    let mut tmp = Vec::with_capacity(input.len());
+    for _ in 0..n {
+        tmp.clear();
+        let (left, right) = input.split_at(mid);
+        for (l, r) in left.iter().zip(right.iter()) {
+            tmp.push(*r);
+            tmp.push(*l);
+        }
+        core::mem::swap(&mut input, &mut tmp);
     }
-    out
+    input
+}
+
+#[test]
+fn test_riffle_shuffle() {
+    let input = [0, 1, 2, 3, 4, 5, 6, 7];
+    let out1 = riffle_shuffle_n(input.to_vec(), 1);
+    let out2 = riffle_shuffle_n(input.to_vec(), 2);
+    let out3 = riffle_shuffle_n(input.to_vec(), 3);
+    assert_eq!(&[4, 0, 5, 1, 6, 2, 7, 3], out1.as_slice());
+    assert_eq!(&[6, 4, 2, 0, 7, 5, 3, 1], out2.as_slice());
+    assert_eq!(&[7, 6, 5, 4, 3, 2, 1, 0], out3.as_slice());
+}
+
+#[test]
+fn test_riffle_shuffle_encode_decode() {
+    let input: Vec<u8> = (0..CANONICAL_LENGTH as u8).collect();
+    let output = riffle_shuffle_n(input.clone(), SHUFFLES_ENCODE + SHUFFLES_DECODE);
+    assert_eq!(input, output);
 }
 
 #[test]
