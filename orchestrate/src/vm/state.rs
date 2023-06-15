@@ -113,7 +113,6 @@ pub struct State<CH, AH> {
     pub db: Db<CH>,
     pub codes: BTreeMap<CosmwasmCodeId, (Vec<u8>, Vec<u8>)>,
     pub gas: Gas,
-    pub call_depth: u32,
     _marker: PhantomData<AH>,
 }
 
@@ -359,7 +358,6 @@ impl<CH: CustomHandler, AH: AddressHandler> State<CH, AH> {
                 ..Default::default()
             },
             transactions: Default::default(),
-            call_depth: 0,
             _marker: PhantomData,
         }
     }
@@ -395,6 +393,7 @@ fn create_vm<CH: CustomHandler, AH: AddressHandler>(
             env,
             info,
             state: extension,
+            call_depth: 0,
         },
     )
     .unwrap()
