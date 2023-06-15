@@ -18,6 +18,7 @@ use cosmwasm_vm::{
     vm::{VmErrorOf, VmInputOf, VmMessageCustomOf},
 };
 use cosmwasm_vm_wasmi::{new_wasmi_vm, OwnedWasmiVM, WasmiBaseVM};
+use rand::Rng;
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 
@@ -136,11 +137,9 @@ where
         let contract_addr = if let Some(contract) = contract {
             contract
         } else {
-            let (_, code_hash) = self
-                .codes
-                .get(&code_id)
-                .ok_or(VmError::CodeNotFound(code_id))?;
-            Account::generate::<AH>(&Account(info.sender.clone()), code_hash, b"salt")?
+            // Each time code is instantiated, it needs a new address.
+            let seed = rand::thread_rng().gen::<[u8; 16]>();
+            Account::generate_from_seed::<AH>(&seed[..])?
         };
         self.gas = Gas::new(gas);
         if self.db.contracts.contains_key(&contract_addr) {

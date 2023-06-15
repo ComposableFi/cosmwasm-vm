@@ -220,6 +220,7 @@ dependencies = [
  "hex",
  "libsecp256k1",
  "log",
+ "rand",
  "rand_chacha",
  "rand_core 0.6.4",
  "reqwest",
@@ -413,8 +414,8 @@ source = "git+https://github.com/CosmWasm/cw-plus?rev=53dc88fdb81888cbd3dae8742e
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std 1.2.6",
- "cw-storage-plus 0.16.0",
- "cw-utils 0.16.0",
+ "cw-storage-plus",
+ "cw-utils",
  "schemars",
  "serde",
  "thiserror",
@@ -431,39 +432,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "cw-storage-plus"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f0e92a069d62067f3472c62e30adedb4cab1754725c0f2a682b3128d2bf3c79"
-dependencies = [
- "cosmwasm-std 1.2.6",
- "schemars",
- "serde",
-]
-
-[[package]]
 name = "cw-utils"
 version = "0.16.0"
 source = "git+https://github.com/CosmWasm/cw-plus?rev=53dc88fdb81888cbd3dae8742e7318b35d3d0c0f#53dc88fdb81888cbd3dae8742e7318b35d3d0c0f"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std 1.2.6",
- "cw2 0.16.0",
- "schemars",
- "semver",
- "serde",
- "thiserror",
-]
-
-[[package]]
-name = "cw-utils"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c80e93d1deccb8588db03945016a292c3c631e6325d349ebb35d2db6f4f946f7"
-dependencies = [
- "cosmwasm-schema",
- "cosmwasm-std 1.2.6",
- "cw2 1.0.1",
+ "cw2",
  "schemars",
  "semver",
  "serde",
@@ -477,20 +452,7 @@ source = "git+https://github.com/CosmWasm/cw-plus?rev=53dc88fdb81888cbd3dae8742e
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std 1.2.6",
- "cw-storage-plus 0.16.0",
- "schemars",
- "serde",
-]
-
-[[package]]
-name = "cw2"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fb70cee2cf0b4a8ff7253e6bc6647107905e8eb37208f87d54f67810faa62f8"
-dependencies = [
- "cosmwasm-schema",
- "cosmwasm-std 1.2.6",
- "cw-storage-plus 1.1.0",
+ "cw-storage-plus",
  "schemars",
  "serde",
 ]
@@ -502,40 +464,9 @@ source = "git+https://github.com/CosmWasm/cw-plus?rev=53dc88fdb81888cbd3dae8742e
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std 1.2.6",
- "cw-utils 0.16.0",
+ "cw-utils",
  "schemars",
  "serde",
-]
-
-[[package]]
-name = "cw20"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91666da6c7b40c8dd5ff94df655a28114efc10c79b70b4d06f13c31e37d60609"
-dependencies = [
- "cosmwasm-schema",
- "cosmwasm-std 1.2.6",
- "cw-utils 1.0.1",
- "schemars",
- "serde",
-]
-
-[[package]]
-name = "cw20-base"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afcd279230b08ed8afd8be5828221622bd5b9ce25d0b01d58bad626c6ce0169c"
-dependencies = [
- "cosmwasm-schema",
- "cosmwasm-std 1.2.6",
- "cw-storage-plus 1.1.0",
- "cw-utils 1.0.1",
- "cw2 1.0.1",
- "cw20 1.0.1",
- "schemars",
- "semver",
- "serde",
- "thiserror",
 ]
 
 [[package]]
@@ -546,10 +477,10 @@ dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std 1.2.6",
  "cw-controllers",
- "cw-storage-plus 0.16.0",
- "cw-utils 0.16.0",
- "cw2 0.16.0",
- "cw20 0.16.0",
+ "cw-storage-plus",
+ "cw-utils",
+ "cw2",
+ "cw20",
  "schemars",
  "semver",
  "serde",
@@ -1108,15 +1039,6 @@ dependencies = [
  "io-lifetimes",
  "rustix",
  "windows-sys",
-]
-
-[[package]]
-name = "itertools"
-version = "0.10.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
-dependencies = [
- "either",
 ]
 
 [[package]]
@@ -1699,7 +1621,6 @@ dependencies = [
  "wasmi",
  "wasmi-validation",
  "wat",
- "wyndex",
 ]
 
 [[package]]
@@ -2631,22 +2552,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "80d0f4e272c85def139476380b12f9ac60926689dd2e01d4923222f40580869d"
 dependencies = [
  "winapi",
-]
-
-[[package]]
-name = "wyndex"
-version = "2.1.0"
-source = "git+https://github.com/wynddao/wynddex?rev=a578f8b645433e108a10613e85ae49385c2fc63c#a578f8b645433e108a10613e85ae49385c2fc63c"
-dependencies = [
- "cosmwasm-schema",
- "cosmwasm-std 1.2.6",
- "cw-storage-plus 1.1.0",
- "cw-utils 1.0.1",
- "cw20 1.0.1",
- "cw20-base",
- "itertools",
- "thiserror",
- "uint",
 ]
 
 [[package]]
