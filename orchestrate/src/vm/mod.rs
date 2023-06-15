@@ -206,6 +206,7 @@ pub struct Context<'a, CH: CustomHandler, AH: AddressHandler> {
     pub env: Env,
     pub info: MessageInfo,
     pub state: &'a mut State<CH, AH>,
+    call_depth: u32,
 }
 
 impl<'a, CH: CustomHandler, AH: AddressHandler> WasmiContext for Context<'a, CH, AH> {
@@ -218,7 +219,7 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> WasmiContext for Context<'a, CH,
     }
 
     fn call_depth_mut(&mut self) -> &mut u32 {
-        &mut self.state.call_depth
+        &mut self.call_depth
     }
 }
 
@@ -263,6 +264,7 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> Context<'a, CH, AH> {
                     funds,
                 },
                 state: self.state,
+                call_depth: 0,
             },
         )?;
         Ok(f(&mut sub_vm))
