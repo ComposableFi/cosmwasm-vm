@@ -112,7 +112,7 @@ impl Account {
     }
 
     /// Generates an `Account` based on the provided `seed`
-    pub fn generate_from_seed<AH: AddressHandler>(seed: &str) -> Result<Self, VmError> {
+    pub fn generate_from_seed<AH: AddressHandler>(seed: impl AsRef<[u8]>) -> Result<Self, VmError> {
         let addr = AH::addr_generate([seed.as_ref()])?;
         Ok(Self::unchecked(addr))
     }
