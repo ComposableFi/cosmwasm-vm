@@ -2,7 +2,7 @@ use crate::{
     vm::{Account, AddressHandler, Context, CustomHandler, IbcState, State, VmError},
     Api as IApi, Direct, Dispatch,
 };
-use alloc::{format, string::String, vec::Vec};
+use alloc::{string::String, vec::Vec};
 use cosmwasm_std::{
     Binary, Env, Event, Ibc3ChannelOpenResponse, IbcAcknowledgement, IbcChannel,
     IbcChannelConnectMsg, IbcChannelOpenMsg, IbcEndpoint, IbcOrder, IbcPacketAckMsg,
@@ -117,11 +117,11 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> IbcNetwork<'a, CH, AH> {
         let contract_counterparty = Account::try_from(env_counterparty.contract.address.clone())?;
         let mut channel = IbcChannel::new(
             IbcEndpoint {
-                port_id: format!("{contract}"),
+                port_id: contract.to_string(),
                 channel_id: channel_id.clone(),
             },
             IbcEndpoint {
-                port_id: format!("{contract_counterparty}"),
+                port_id: contract_counterparty.to_string(),
                 channel_id: channel_id.clone(),
             },
             channel_ordering,

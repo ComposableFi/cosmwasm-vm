@@ -20,7 +20,11 @@ pub use vm::*;
 #[cfg(test)]
 mod semantic;
 
-use alloc::{format, string::String, vec, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 use core::marker::PhantomData;
 use cosmwasm_vm::{
     executor::{
