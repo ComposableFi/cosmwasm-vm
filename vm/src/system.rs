@@ -27,7 +27,7 @@ use core::fmt::Debug;
 use cosmwasm_std::{
     Addr, AllBalanceResponse, Attribute, BalanceResponse, BankMsg, BankQuery, Binary,
     ContractResult, CosmosMsg, Env, Event, MessageInfo, QueryRequest, Reply, ReplyOn, Response,
-    SubMsg, SubMsgResponse, SubMsgResult, SupplyResponse, SystemResult, WasmMsg, WasmQuery,
+    SubMsgResponse, SubMsgResult, SupplyResponse, SystemResult, WasmMsg, WasmQuery,
 };
 #[cfg(feature = "stargate")]
 use cosmwasm_std::{Empty, IbcMsg};
@@ -511,9 +511,9 @@ fn ensure_admin<V: CosmwasmBaseVM>(
 }
 
 fn sanitize_custom_attributes(
-    attributes: &mut Vec<Attribute>,
+    mut attributes: Vec<Attribute>,
     contract_address: String,
-) -> Result<(), SystemError> {
+) -> Result<Vec<Attribute>, SystemError> {
     for attr in attributes.iter_mut() {
         let new_key = attr.key.trim();
         if new_key.is_empty() {
@@ -543,7 +543,7 @@ fn sanitize_custom_attributes(
         .into(),
     );
 
-    Ok(())
+    Ok(attributes)
 }
 
 #[allow(clippy::too_many_lines)]
@@ -721,11 +721,10 @@ where
     })
 }
 
-#[allow(clippy::too_many_lines)]
 pub fn cosmwasm_system_run_hook<I, V>(
     vm: &mut V,
     message: &[u8],
-    mut event_handler: &mut dyn FnMut(Event),
+    event_handler: &mut dyn FnMut(Event),
     hook: impl FnOnce(
         &mut V,
         &[u8],
@@ -745,154 +744,145 @@ where
     let output = hook(vm, message).map(Into::into);
     log::debug!("Output: {:?}", output);
     match output {
-        Ok(ContractResult::Ok(Response {
-            messages,
-            mut attributes,
-            events,
-            data,
-            ..
-        })) => {
-            let CosmwasmContractMeta { code_id, .. } = vm.running_contract_meta()?;
-            let event = I::generate_event(env.contract.address.clone().into_string(), code_id);
-            event_handler(event);
-
-            // https://github.com/CosmWasm/wasmd/blob/ac92fdcf37388cc8dc24535f301f64395f8fb3da/x/wasm/keeper/events.go#L16
-            if !attributes.is_empty() {
-                sanitize_custom_attributes(
-                    &mut attributes,
-                    env.contract.address.clone().into_string(),
-                )?;
-                event_handler(Event::new(WASM_MODULE_EVENT_TYPE).add_attributes(attributes));
-            }
-
-            // Embed ophan attributes in a custom contract event.
-            // https://github.com/CosmWasm/wasmd/blob/ac92fdcf37388cc8dc24535f301f64395f8fb3da/x/wasm/keeper/events.go#L29
-            for Event {
-                ty, mut attributes, ..
-            } in events
-            {
-                let ty = ty.trim();
-                if ty.len() < CUSTOM_CONTRACT_EVENT_TYPE_MIN_LENGTH {
-                    return Err(SystemError::EventTypeIsTooShort.into());
-                }
-                sanitize_custom_attributes(
-                    &mut attributes,
-                    env.contract.address.clone().into_string(),
-                )?;
-                event_handler(
-                    Event::new(format!("{CUSTOM_CONTRACT_EVENT_PREFIX}{ty}"))
-                        .add_attributes(attributes),
-                );
-            }
-
-            // Fold dispatch over the submessages. If an exception occur (unless expected reply on error), we abort.
-            // Otherwise, it's up to the parent contract to decide in each case.
-            messages.into_iter().try_fold(
-                data,
-                |current,
-                 SubMsg {
-                     id,
-                     msg,
-                     gas_limit,
-                     reply_on,
-                 }|
-                 -> Result<Option<Binary>, VmErrorOf<V>> {
-                    log::debug!("Executing submessages");
-
-                    // For each submessages, we might rollback and reply the
-                    // failure to the parent contract. Hence, a new state tx
-                    // must be created prior to the call.
-                    vm.transaction_begin()?;
-
-                    // The result MUST be captured to determine whether we rollback or commit the local transaction.
-                    // We MUST not return using something like the questionmark operator, as we want to catch both the success and failure branches here.
-                    // Both branches may be used depending on the reply attached to the message. See reply_on.
-                    let sub_res = dispatch_submessage(
-                        vm,
-                        &env.contract.address,
-                        msg,
-                        gas_limit,
-                        event_handler,
-                    );
-
-                    log::debug!("Submessage result: {:?}", sub_res);
-
-                    let sub_cont = match (sub_res, reply_on) {
-                        // If the submessage suceeded and no reply was asked or
-                        // only on error, the call is considered successful and
-                        // state change is comitted.
-                        (Ok((data, _)), ReplyOn::Never | ReplyOn::Error) => {
-                            log::debug!("Commit & Continue");
-                            vm.transaction_commit()?;
-                            SubCallContinuation::Continue(data)
-                        }
-                        // Similarly to previous case, if the submessage
-                        // suceeded and we ask for a reply, the call is
-                        // considered successful and we redispatch a reply to
-                        // the parent contract.
-                        (Ok((data, events)), ReplyOn::Always | ReplyOn::Success) => {
-                            log::debug!("Commit & Reply");
-                            vm.transaction_commit()?;
-                            SubCallContinuation::Reply(SubMsgResult::Ok(SubMsgResponse {
-                                events,
-                                data,
-                            }))
-                        }
-                        // If the submessage failed and a reply is required,
-                        // rollback the state change and dispatch a reply to the
-                        // parent contract. The transaction is not aborted
-                        // unless the reply also fails (cascading).
-                        (Err(e), ReplyOn::Always | ReplyOn::Error) => {
-                            log::debug!("Rollback & Reply");
-                            vm.transaction_rollback()?;
-                            SubCallContinuation::Reply(SubMsgResult::Err(format!("{e:?}")))
-                        }
-                        // If an error happen and we did not expected it, abort
-                        // the whole transaction.
-                        (Err(e), ReplyOn::Never | ReplyOn::Success) => {
-                            log::debug!("Rollback & Abort");
-                            vm.transaction_rollback()?;
-                            SubCallContinuation::Abort(e)
-                        }
-                    };
-
-                    log::debug!("Submessage cont: {:?}", sub_cont);
-
-                    match sub_cont {
-                        // If the submessage execution suceeded and we don't
-                        // want to reply, proceed by overwritting the current
-                        // `data` field if a new one has been yield by the
-                        // current call.
-                        SubCallContinuation::Continue(v) => Ok(v.or(current)),
-                        // An exception occured and we did not expected it (no
-                        // reply on error), abort the current execution.
-                        SubCallContinuation::Abort(e) => Err(e),
-                        // The parent contract is expected to get a reply, try
-                        // to execute the reply and optionally overwrite the
-                        // current data with with the one yield by the reply.
-                        SubCallContinuation::Reply(response) => {
-                            vm.continue_reply(
-                                Reply {
-                                    id,
-                                    result: response.clone(),
-                                },
-                                &mut event_handler,
-                            )
-                            .map(|v| {
-                                // Tricky situation, either the reply provide a
-                                // new value that we use, or we use the
-                                // submessage value or we keep the current one.
-                                v.or_else(|| Result::from(response).ok().and_then(|x| x.data))
-                                    .or(current)
-                            })
-                        }
-                    }
-                },
-            )
+        Ok(ContractResult::Ok(response)) => {
+            handle_ok_run_response(vm, event_handler, env, response)
         }
         Ok(ContractResult::Err(e)) => Err(SystemError::ContractExecutionFailure(e).into()),
         Err(e) => Err(e),
     }
+}
+
+fn handle_ok_run_response<I, V>(
+    vm: &mut V,
+    event_handler: &mut dyn FnMut(Event),
+    env: Env,
+    response: Response<VmMessageCustomOf<V>>,
+) -> Result<Option<Binary>, VmErrorOf<V>>
+where
+    V: CosmwasmCallVM<I> + StargateCosmwasmCallVM,
+{
+    let CosmwasmContractMeta { code_id, .. } = vm.running_contract_meta()?;
+    let event = I::generate_event(env.contract.address.clone().into_string(), code_id);
+    event_handler(event);
+
+    // https://github.com/CosmWasm/wasmd/blob/ac92fdcf37388cc8dc24535f301f64395f8fb3da/x/wasm/keeper/events.go#L16
+    if !response.attributes.is_empty() {
+        let attributes = sanitize_custom_attributes(
+            response.attributes,
+            env.contract.address.clone().into_string(),
+        )?;
+        event_handler(Event::new(WASM_MODULE_EVENT_TYPE).add_attributes(attributes));
+    }
+
+    // Embed orphan attributes in a custom contract event.
+    // https://github.com/CosmWasm/wasmd/blob/ac92fdcf37388cc8dc24535f301f64395f8fb3da/x/wasm/keeper/events.go#L29
+    for event in response.events {
+        let ty = event.ty.trim();
+        if ty.len() < CUSTOM_CONTRACT_EVENT_TYPE_MIN_LENGTH {
+            return Err(SystemError::EventTypeIsTooShort.into());
+        }
+        let attributes = sanitize_custom_attributes(
+            event.attributes,
+            env.contract.address.clone().into_string(),
+        )?;
+        let ty = [CUSTOM_CONTRACT_EVENT_PREFIX, ty].concat();
+        event_handler(Event::new(ty).add_attributes(attributes));
+    }
+
+    // Fold dispatch over the submessages. If an exception occur (unless
+    // expected reply on error), we abort.  Otherwise, it's up to the parent
+    // contract to decide in each case.
+    let mut data = response.data;
+    for submsg in response.messages {
+        log::debug!("Executing submessages");
+
+        // For each submessages, we might rollback and reply the failure to the
+        // parent contract. Hence, a new state tx must be created prior to the
+        // call.
+        vm.transaction_begin()?;
+
+        // The result MUST be captured to determine whether we rollback or
+        // commit the local transaction.  We MUST not return using something
+        // like the questionmark operator, as we want to catch both the success
+        // and failure branches here.  Both branches may be used depending on
+        // the reply attached to the message. See reply_on.
+        let sub_res = dispatch_submessage(
+            vm,
+            &env.contract.address,
+            submsg.msg,
+            submsg.gas_limit,
+            event_handler,
+        );
+
+        log::debug!("Submessage result: {:?}", sub_res);
+
+        let sub_cont = match (sub_res, submsg.reply_on) {
+            // If the submessage suceeded and no reply was asked or only on
+            // error, the call is considered successful and state change is
+            // comitted.
+            (Ok((data, _)), ReplyOn::Never | ReplyOn::Error) => {
+                log::debug!("Commit & Continue");
+                vm.transaction_commit()?;
+                SubCallContinuation::Continue(data)
+            }
+            // Similarly to previous case, if the submessage suceeded and we ask
+            // for a reply, the call is considered successful and we redispatch
+            // a reply to the parent contract.
+            (Ok((data, events)), ReplyOn::Always | ReplyOn::Success) => {
+                log::debug!("Commit & Reply");
+                vm.transaction_commit()?;
+                SubCallContinuation::Reply(SubMsgResult::Ok(SubMsgResponse { events, data }))
+            }
+            // If the submessage failed and a reply is required, rollback the
+            // state change and dispatch a reply to the parent contract. The
+            // transaction is not aborted unless the reply also fails
+            // (cascading).
+            (Err(e), ReplyOn::Always | ReplyOn::Error) => {
+                log::debug!("Rollback & Reply");
+                vm.transaction_rollback()?;
+                SubCallContinuation::Reply(SubMsgResult::Err(format!("{e:?}")))
+            }
+            // If an error happen and we did not expected it, abort the whole
+            // transaction.
+            (Err(e), ReplyOn::Never | ReplyOn::Success) => {
+                log::debug!("Rollback & Abort");
+                vm.transaction_rollback()?;
+                SubCallContinuation::Abort(e)
+            }
+        };
+
+        log::debug!("Submessage cont: {:?}", sub_cont);
+
+        data = match sub_cont {
+            // If the submessage execution suceeded and we don't want to reply,
+            // proceed by overwritting the current `data` field if a new one has
+            // been yield by the current call.
+            SubCallContinuation::Continue(new_data) => new_data.or(data),
+            // An exception occured and we did not expected it (no reply on
+            // error), abort the current execution.
+            SubCallContinuation::Abort(e) => return Err(e),
+            // The parent contract is expected to get a reply, try to execute
+            // the reply and optionally overwrite the current data with with the
+            // one yield by the reply.
+            SubCallContinuation::Reply(response) => {
+                let new_data = vm.continue_reply(
+                    Reply {
+                        id: submsg.id,
+                        result: response.clone(),
+                    },
+                    event_handler,
+                )?;
+                // Tricky situation, either the reply provide a new value that
+                // we use, or we use the submessage value or we keep the current
+                // one.
+                new_data
+                    .or_else(|| Result::from(response).ok().and_then(|x| x.data))
+                    .or(data)
+            }
+        }
+    }
+
+    Ok(data)
 }
 
 /// High level query for a `CosmWasm` VM.
