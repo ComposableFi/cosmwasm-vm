@@ -4,7 +4,7 @@
     clippy::cast_sign_loss
 )]
 use super::{
-    format, AsContextMut, String, Tagged, VMBase, Vec, VmErrorOf, VmGas, VmQueryCustomOf,
+    AsContextMut, String, Tagged, ToString, VMBase, Vec, VmErrorOf, VmGas, VmQueryCustomOf,
     WasmiBaseVM, WasmiVM,
 };
 
@@ -164,7 +164,7 @@ where
         Ok(address) => address,
         Err(e) => {
             let Tagged(value_pointer, _) =
-                passthrough_in::<WasmiVM<V, S>, ()>(&mut vm, format!("{e}").as_bytes())?;
+                passthrough_in::<WasmiVM<V, S>, ()>(&mut vm, e.to_string().as_bytes())?;
             return Ok(value_pointer as i32);
         }
     };
@@ -173,7 +173,7 @@ where
         Ok(_) => Ok(0),
         Err(e) => {
             let Tagged(value_pointer, _) =
-                passthrough_in::<WasmiVM<V, S>, ()>(&mut vm, format!("{e}").as_bytes())?;
+                passthrough_in::<WasmiVM<V, S>, ()>(&mut vm, e.to_string().as_bytes())?;
             Ok(value_pointer as i32)
         }
     }
@@ -203,7 +203,7 @@ where
         Ok(address) => address,
         Err(e) => {
             let Tagged(value_pointer, _) =
-                passthrough_in::<WasmiVM<V, S>, ()>(&mut vm, format!("{e}").as_bytes())?;
+                passthrough_in::<WasmiVM<V, S>, ()>(&mut vm, e.to_string().as_bytes())?;
             return Ok(value_pointer as i32);
         }
     };
@@ -219,7 +219,7 @@ where
         }
         Err(e) => {
             let Tagged(value_pointer, _) =
-                passthrough_in::<WasmiVM<V, S>, ()>(&mut vm, format!("{e}").as_bytes())?;
+                passthrough_in::<WasmiVM<V, S>, ()>(&mut vm, e.to_string().as_bytes())?;
             Ok(value_pointer as i32)
         }
     }
@@ -257,7 +257,7 @@ where
         }
         Err(e) => {
             let Tagged(value_pointer, _) =
-                passthrough_in::<WasmiVM<V, S>, ()>(&mut vm, format!("{e}").as_bytes())?;
+                passthrough_in::<WasmiVM<V, S>, ()>(&mut vm, e.to_string().as_bytes())?;
             Ok(value_pointer as i32)
         }
     }

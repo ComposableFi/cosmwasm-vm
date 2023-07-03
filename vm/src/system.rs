@@ -22,7 +22,13 @@ use crate::{
         VmQueryCustomOf, VM,
     },
 };
-use alloc::{fmt::Display, format, string::String, vec, vec::Vec};
+use alloc::{
+    fmt::Display,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 use core::fmt::Debug;
 use cosmwasm_std::{
     Addr, AllBalanceResponse, Attribute, BalanceResponse, BankMsg, BankQuery, Binary,
@@ -133,7 +139,7 @@ impl Display for SystemEventType {
 
 impl From<SystemEvent> for Event {
     fn from(sys_event: SystemEvent) -> Self {
-        Event::new(format!("{}", sys_event.ty)).add_attributes(
+        Event::new(sys_event.ty.to_string()).add_attributes(
             sys_event
                 .attributes
                 .into_iter()
@@ -250,7 +256,7 @@ where
                 addr_attr,
                 SystemAttribute {
                     key: SystemAttributeKey::CodeID,
-                    value: format!("{code_id}"),
+                    value: code_id.to_string(),
                 },
             ]
         } else {

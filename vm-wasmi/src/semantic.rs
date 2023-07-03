@@ -829,7 +829,7 @@ impl TryFrom<String> for BankAccount {
 
 impl From<BankAccount> for Addr {
     fn from(BankAccount(account): BankAccount) -> Self {
-        Addr::unchecked(format!("{account}"))
+        Addr::unchecked(account.to_string())
     }
 }
 

@@ -392,15 +392,15 @@ fn tendermint_signatures_batch_verify_works() {
 
     let messages: Vec<_> = [ED25519_MESSAGE_HEX, ED25519_MESSAGE2_HEX]
         .iter()
-        .map(|m| format!("{}", Binary(hex::decode(m).unwrap())))
+        .map(|m| Binary(hex::decode(m).unwrap()).to_string())
         .collect();
     let signatures: Vec<_> = [ED25519_SIGNATURE_HEX, ED25519_SIGNATURE2_HEX]
         .iter()
-        .map(|m| format!("{}", Binary(hex::decode(m).unwrap())))
+        .map(|m| Binary(hex::decode(m).unwrap()).to_string())
         .collect();
     let public_keys: Vec<_> = [ED25519_PUBLIC_KEY_HEX, ED25519_PUBLIC_KEY2_HEX]
         .iter()
-        .map(|m| format!("{}", Binary(hex::decode(m).unwrap())))
+        .map(|m| Binary(hex::decode(m).unwrap()).to_string())
         .collect();
 
     let verify_msg = format!(
@@ -431,17 +431,17 @@ fn tendermint_signatures_batch_verify_message_multisig_works() {
     // One message
     let messages: Vec<_> = [ED25519_MESSAGE_HEX]
         .iter()
-        .map(|m| format!("{}", Binary(hex::decode(m).unwrap())))
+        .map(|m| Binary(hex::decode(m).unwrap()).to_string())
         .collect();
     // Multiple signatures
     let signatures: Vec<_> = [ED25519_SIGNATURE_HEX, ED25519_SIGNATURE_HEX]
         .iter()
-        .map(|m| format!("{}", Binary(hex::decode(m).unwrap())))
+        .map(|m| Binary(hex::decode(m).unwrap()).to_string())
         .collect();
     // Multiple pubkeys
     let public_keys: Vec<_> = [ED25519_PUBLIC_KEY_HEX, ED25519_PUBLIC_KEY_HEX]
         .iter()
-        .map(|m| format!("{}", Binary(hex::decode(m).unwrap())))
+        .map(|m| Binary(hex::decode(m).unwrap()).to_string())
         .collect();
 
     let verify_msg = format!(
@@ -473,17 +473,17 @@ fn tendermint_signatures_batch_verify_single_public_key_works() {
     //FIXME: Use different messages / signatures
     let messages: Vec<_> = [ED25519_MESSAGE_HEX, ED25519_MESSAGE_HEX]
         .iter()
-        .map(|m| format!("{}", Binary(hex::decode(m).unwrap())))
+        .map(|m| Binary(hex::decode(m).unwrap()).to_string())
         .collect();
     // Multiple signatures
     let signatures: Vec<_> = [ED25519_SIGNATURE_HEX, ED25519_SIGNATURE_HEX]
         .iter()
-        .map(|m| format!("{}", Binary(hex::decode(m).unwrap())))
+        .map(|m| Binary(hex::decode(m).unwrap()).to_string())
         .collect();
     // One pubkey
     let public_keys: Vec<_> = [ED25519_PUBLIC_KEY_HEX]
         .iter()
-        .map(|m| format!("{}", Binary(hex::decode(m).unwrap())))
+        .map(|m| Binary(hex::decode(m).unwrap()).to_string())
         .collect();
 
     let verify_msg = format!(
@@ -513,15 +513,15 @@ fn tendermint_signatures_batch_verify_fails() {
 
     let messages: Vec<_> = ["1234", ED25519_MESSAGE2_HEX]
         .iter()
-        .map(|m| format!("{}", Binary(hex::decode(m).unwrap())))
+        .map(|m| Binary(hex::decode(m).unwrap()).to_string())
         .collect();
     let signatures: Vec<_> = [ED25519_SIGNATURE_HEX, ED25519_SIGNATURE2_HEX]
         .iter()
-        .map(|m| format!("{}", Binary(hex::decode(m).unwrap())))
+        .map(|m| Binary(hex::decode(m).unwrap()).to_string())
         .collect();
     let public_keys: Vec<_> = [ED25519_PUBLIC_KEY_HEX, ED25519_PUBLIC_KEY2_HEX]
         .iter()
-        .map(|m| format!("{}", Binary(hex::decode(m).unwrap())))
+        .map(|m| Binary(hex::decode(m).unwrap()).to_string())
         .collect();
 
     let verify_msg = format!(

@@ -11,7 +11,7 @@ pub use state::*;
 
 use super::ExecutionType;
 use alloc::collections::BTreeMap;
-use alloc::{format, string::String, vec, vec::Vec};
+use alloc::{string::String, vec, vec::Vec};
 use bank::Bank;
 use core::{fmt::Debug, num::NonZeroU32};
 use cosmwasm_std::{
@@ -542,9 +542,9 @@ impl<'a, CH: CustomHandler, AH: AddressHandler> VMBase for Context<'a, CH, AH> {
         contract_info_response.admin = contract_info.admin.clone().map(Into::into);
         contract_info_response.creator = contract_info.instantiator.clone().into();
 
-        let ibc_port_id = format!("{contract_address}");
+        let ibc_port_id = contract_address.to_string();
         if self.state.db.ibc.contains_key(&ibc_port_id) {
-            contract_info_response.ibc_port = Some(format!("{contract_address}"));
+            contract_info_response.ibc_port = Some(ibc_port_id);
         }
 
         Ok(contract_info_response)

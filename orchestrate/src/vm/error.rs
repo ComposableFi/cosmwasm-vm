@@ -1,5 +1,5 @@
 use super::{bank, Account};
-use alloc::{format, string::String};
+use alloc::string::String;
 use core::fmt::Display;
 use cosmwasm_vm::{
     executor::ExecutorError,
@@ -44,10 +44,10 @@ impl From<wasmi::Error> for VmError {
                 if let Some(err) = trap.downcast_ref::<VmError>() {
                     err.clone()
                 } else {
-                    Self::Interpreter(format!("{e}"))
+                    Self::Interpreter(e.to_string())
                 }
             }
-            e => Self::Interpreter(format!("{e}")),
+            e => Self::Interpreter(e.to_string()),
         }
     }
 }

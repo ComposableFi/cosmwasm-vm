@@ -11,7 +11,6 @@ use cosmwasm_vm::vm::VMBase;
 
 use alloc::{
     collections::BTreeMap,
-    format,
     string::{String, ToString},
     vec,
     vec::Vec,
@@ -832,7 +831,7 @@ impl TryFrom<String> for BankAccount {
 
 impl From<BankAccount> for Addr {
     fn from(BankAccount(account): BankAccount) -> Self {
-        Addr::unchecked(format!("{account}"))
+        Addr::unchecked(account.to_string())
     }
 }
 
