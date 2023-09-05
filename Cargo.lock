@@ -319,6 +319,7 @@ dependencies = [
  "either",
  "env_logger 0.9.3",
  "hex",
+ "kani",
  "log",
  "serde",
  "serde_json",
@@ -1067,6 +1068,12 @@ dependencies = [
  "elliptic-curve",
  "sha2 0.10.6",
 ]
+
+[[package]]
+name = "kani"
+version = "0.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ec3aa1b9cb1effb3bc431cd5cef7947ab87997c82140c66c621e04fbc86c802"
 
 [[package]]
 name = "lazy_static"

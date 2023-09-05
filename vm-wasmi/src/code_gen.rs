@@ -505,3 +505,12 @@ impl From<ModuleDefinition> for WasmModule {
         Self { code }
     }
 }
+
+
+#[cfg(any(kani, feature = "kani"))]
+mod verification {
+    #[kani::proof]
+    pub fn mem() {
+
+    }
+}

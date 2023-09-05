@@ -4,11 +4,12 @@ version = "0.2.0"
 edition = "2021"
 
 [features]
-default = ["iterator", "stargate", "ibc3"]
+default = ["iterator", "stargate", "ibc3", "kani"]
 iterator = ["cosmwasm-vm/iterator"]
 stargate = ["cosmwasm-vm/stargate"]
 ibc3 = ["cosmwasm-vm/ibc3"]
 std = ["cosmwasm-std/std", "cosmwasm-vm/std"]
+kani = ["dep:kani"]
 
 [dependencies]
 serde = { workspace = true, default-features = false, features = ["derive"] }
@@ -24,6 +25,7 @@ cosmwasm-std = { workspace = true, default-features = false, features = [
 ] }
 cosmwasm-vm = { path = "../vm", default-features = false }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
+kani = { version ="*", optional = true}
 
 [dev-dependencies]
 wat = "1.0"
