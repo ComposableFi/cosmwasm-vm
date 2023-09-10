@@ -1,7 +1,7 @@
 
 # Cosmwasm Orchestrate
 
-CosmWasm Orchestrate is a tool for simulating and testing CosmWasm contracts on a virtual machine. Although this is the first version of the tool, it already provides a very close simulation experience to running your contracts on an actual chain.
+CosmWasm Orchestrate is a tool for simulating and testing CosmWasm contracts on a virtual machine. Provides a very close simulation experience to running your contracts on an actual chain.
 
 ## Why use this?
 
